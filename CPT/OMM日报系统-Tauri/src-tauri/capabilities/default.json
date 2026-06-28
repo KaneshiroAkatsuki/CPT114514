@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "identifier": "default",
+  "description": "Default permissions for OMM日报系统",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:default",
+    "dialog:default",
+    "fs:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/generate_report",
+          "cmd": "$RESOURCE/generate_report.exe",
+          "args": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+# Dependencies
+**/node_modules/
+**/.venv/
+**/venv/
+
+# Build outputs
+**/dist/
+**/build/
+**/target/
+**/releases/
+**/test-output/
+**/src-tauri/binaries/*.exe
+**/src-tauri/gen/
+
+# Python caches
+**/__pycache__/
+**/*.py[cod]
+
+# Logs and local runtime files
+**/*.log
+**/*.tmp
+**/*stderr*.txt
+**/*stdin*.txt
+**/*version*.txt
+**/.DS_Store
+Thumbs.db
+
+# Reference data should not include runnable cleanup/admin scripts
+CPT/日期文件夹/**/*.ps1
+CPT/日期文件夹/**/*.bat
+CPT/日期文件夹/**/*.cmd
+CPT/日期文件夹/**/*.exe
+CPT/日期文件夹/**/*.dll
+
+# Local secrets/config
+**/.env
+**/.env.*
+
+# Packaged binaries and archives
+**/*.zip
+**/*.7z
+**/*.rar
+**/*_x64-setup.exe

@@ -1,0 +1,229 @@
+import { useState, useEffect, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { FolderRecord, ReviewInfo } from "@/types/record";
+import { FIELD_LABELS, FIELD_HINTS } from "@/types/record";
+
+interface ReviewDialogProps {
+  open: boolean;
+  records: FolderRecord[];
+  reviewMap: Record<string, ReviewInfo>;
+  onConfirm: (updatedRecords: FolderRecord[], skippedFolders: string[]) => void;
+  onSkip: (skippedFolders: string[], updatedRecords: FolderRecord[]) => void;
+  onCancel: () => void;
+}
+
+const EDITABLE_FIELDS = [
+  "quantity",
+  "manual_duration",
+  "station",
+  "product",
+  "sender",
+  "work_order",
+  "mold",
+  "machine",
+  "test_type",
+  "send_date",
+  "send_time",
+] as const;
+
+type EditableField = (typeof EDITABLE_FIELDS)[number];
+
+function isEditableField(field: string): field is EditableField {
+  return (EDITABLE_FIELDS as readonly string[]).includes(field);
+}
+
+function fieldValue(record: FolderRecord, field: EditableField): string {
+  const value = record[field];
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function setFieldValue(
+  record: FolderRecord,
+  field: EditableField,
+  value: string
+): FolderRecord {
+  const updated = { ...record };
+  if (field === "quantity") {
+    const num = Number(value);
+    (updated as Record<string, unknown>)[field] =
+      value === "" || Number.isNaN(num) ? "/" : num;
+  } else if (field === "manual_duration") {
+    const num = Number(value);
+    (updated as Record<string, unknown>)[field] =
+      value === "" || Number.isNaN(num) ? null : num;
+  } else {
+    (updated as Record<string, unknown>)[field] = value;
+  }
+  return updated;
+}
+
+export function ReviewDialog({
+  open,
+  records,
+  reviewMap,
+  onConfirm,
+  onSkip,
+  onCancel,
+}: ReviewDialogProps) {
+  const [editedRecords, setEditedRecords] = useState<FolderRecord[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [pendingFolders, setPendingFolders] = useState<string[]>([]);
+  const [skippedFolders, setSkippedFolders] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      const folders = Object.keys(reviewMap).filter(
+        (k) => reviewMap[k].missing.length > 0 || reviewMap[k].placeholders.length > 0
+      );
+      setEditedRecords(records.map((r) => ({ ...r })));
+      setPendingFolders(folders);
+      setCurrentIndex(0);
+      setSkippedFolders([]);
+    }
+  }, [open, records, reviewMap]);
+
+  const handleFieldChange = useCallback(
+    (folder: string, field: EditableField, value: string) => {
+      setEditedRecords((prev) =>
+        prev.map((r) =>
+          r.folder === folder ? setFieldValue(r, field, value) : r
+        )
+      );
+    },
+    []
+  );
+
+  const handleConfirm = () => {
+    const currentFolder = pendingFolders[currentIndex];
+    const newPending = pendingFolders.filter((f) => f !== currentFolder);
+    setPendingFolders(newPending);
+
+    if (newPending.length === 0) {
+      onConfirm(editedRecords, skippedFolders);
+    } else if (currentIndex >= newPending.length) {
+      setCurrentIndex(newPending.length - 1);
+    }
+  };
+
+  const handleSkip = () => {
+    const currentFolder = pendingFolders[currentIndex];
+    const newSkipped = [...skippedFolders, currentFolder];
+    setSkippedFolders(newSkipped);
+    const newPending = pendingFolders.filter((f) => f !== currentFolder);
+    setPendingFolders(newPending);
+
+    if (newPending.length === 0) {
+      onSkip(newSkipped, editedRecords);
+    } else if (currentIndex >= newPending.length) {
+      setCurrentIndex(newPending.length - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentIndex < pendingFolders.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
+  if (!open) return null;
+  if (pendingFolders.length === 0) return null;
+
+  const currentFolder = pendingFolders[currentIndex];
+  const record = editedRecords.find((r) => r.folder === currentFolder);
+  if (!record) return null;
+  const info = reviewMap[currentFolder];
+  const problemFields = [...info.missing, ...info.placeholders];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col mx-4">
+        <CardHeader className="shrink-0 border-b">
+          <CardTitle className="flex items-center justify-between">
+            <span>审核缺失字段</span>
+            <span className="text-sm font-normal text-slate-500">
+              审核 {currentIndex + 1}/{pendingFolders.length}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex-1 overflow-y-auto pt-4">
+          <div className="border rounded-md p-3 space-y-2">
+            <div className="font-medium text-sm text-slate-900">
+              {currentFolder}
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {problemFields.map((field) => {
+                if (!isEditableField(field)) return null;
+                const label = FIELD_LABELS[field] || field;
+                const hint = FIELD_HINTS[field] || "";
+                const isMissing = info.missing.includes(field);
+                const isPlaceholder = info.placeholders.includes(field);
+
+                return (
+                  <div key={field} className="space-y-0.5">
+                    <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
+                      {label}
+                      {isMissing && (
+                        <span className="text-red-500 text-[10px]">
+                          缺失
+                        </span>
+                      )}
+                      {isPlaceholder && (
+                        <span className="text-amber-500 text-[10px]">
+                          占位
+                        </span>
+                      )}
+                    </label>
+                    <Input
+                      value={fieldValue(record, field)}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          currentFolder,
+                          field,
+                          e.target.value
+                        )
+                      }
+                      placeholder={hint}
+                      className="text-sm h-8"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </CardContent>
+        <div className="shrink-0 border-t p-4 flex justify-end gap-3">
+          <Button variant="outline" onClick={onCancel}>
+            取消
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handlePrev}
+            disabled={currentIndex === 0}
+          >
+            上一个
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleNext}
+            disabled={currentIndex === pendingFolders.length - 1}
+          >
+            下一个
+          </Button>
+          <Button variant="outline" onClick={handleSkip}>
+            跳过此包
+          </Button>
+          <Button onClick={handleConfirm}>确认并继续</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}

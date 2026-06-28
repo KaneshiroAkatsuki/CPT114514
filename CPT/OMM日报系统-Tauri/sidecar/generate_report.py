@@ -1,0 +1,1910 @@
+import os
+import sys
+import re
+import shutil
+import subprocess
+import math
+import openpyxl
+from openpyxl.cell.rich_text import CellRichText, TextBlock
+from openpyxl.cell.text import InlineFont
+from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
+from openpyxl.formatting.rule import CellIsRule
+from datetime import datetime, time as dtime
+
+
+def format_minutes(minutes):
+    """将分钟格式化为 xhxxm 字符串。"""
+    if minutes is None:
+        return ''
+    minutes = int(minutes)
+    h = minutes // 60
+    m = minutes % 60
+    if h > 0:
+        return f'{h}h{m:02d}m'
+    return f'{m}m'
+
+
+# ==================== 配置 ====================
+# 工作目录：
+# - 脚本运行时优先使用环境变量 YX_WORK_DIR 或 GUI 传入的值
+# - 否则回退到脚本/EXE 所在目录
+if getattr(sys, 'frozen', False):
+    _DEFAULT_WORK_DIR = os.path.dirname(sys.executable)
+else:
+    _DEFAULT_WORK_DIR = os.path.dirname(os.path.abspath(__file__))
+
+WORK_DIR = os.environ.get('YX_WORK_DIR', _DEFAULT_WORK_DIR)
+OUTPUT_DIR = os.path.join(WORK_DIR, "TEST")
+OPERATOR_NAME = "禹欣"
+
+
+_TEMPLATE_CANDIDATES = [
+    "滁州量测室总体日报汇总表-OMM-禹欣1.xlsx",
+    "滁州量测室总体日报汇总表-OMM.xlsx",
+    "滁州量测室总体日报汇总表-OMM",
+]
+
+
+def _bundled_template_candidates():
+    """推导便携版/开发模式下可能存在的内置模板路径。"""
+    bases = []
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        bases.extend([
+            exe_dir,
+            os.path.dirname(exe_dir),  # 便携版中 sidecar 常位于 binaries/
+        ])
+    else:
+        sidecar_dir = os.path.dirname(os.path.abspath(__file__))
+        bases.extend([
+            sidecar_dir,
+            os.path.dirname(sidecar_dir),
+            os.path.join(os.path.dirname(sidecar_dir), 'src-tauri'),
+        ])
+
+    seen = set()
+    for base in bases:
+        if not base or base in seen:
+            continue
+        seen.add(base)
+        yield os.path.join(base, 'resources', 'template.xlsx')
+        yield os.path.join(base, 'template.xlsx')
+
+
+def _find_template(work_dir):
+    """在工作目录中查找模板文件。
+
+    查找优先级：
+    1. 环境变量 YX_USER_TEMPLATE（用户通过「替换模板」按钮指定的自定义模板）
+    2. 工作目录根的候选名精确匹配
+    3. 工作目录直接子目录的候选名精确匹配
+    4. 兜底：任意含"日报汇总表"的 .xlsx 文件
+    5. 软件内置模板：环境变量 YX_BUNDLED_TEMPLATE 或 exe/resources/template.xlsx
+    """
+    # 0. 用户自定义模板（通过设置界面「替换模板」按钮指定，最高优先级）
+    user_tpl = os.environ.get('YX_USER_TEMPLATE')
+    if user_tpl and os.path.isfile(user_tpl):
+        return user_tpl
+
+    # 1. 工作目录查找（用户放在工作目录的模板仍优先于内置模板）
+    if work_dir and os.path.isdir(work_dir):
+        # 1a. 精确匹配候选名
+        for name in _TEMPLATE_CANDIDATES:
+            p = os.path.join(work_dir, name)
+            if os.path.isfile(p):
+                return p
+        # 1b. 所有直接子目录（精确匹配）
+        try:
+            for sub in os.listdir(work_dir):
+                sub_path = os.path.join(work_dir, sub)
+                if not os.path.isdir(sub_path):
+                    continue
+                for name in _TEMPLATE_CANDIDATES:
+                    p = os.path.join(sub_path, name)
+                    if os.path.isfile(p):
+                        return p
+        except OSError:
+            pass
+        # 1c. 兜底：任意含"日报汇总表"的 .xlsx 文件
+        try:
+            for fname in os.listdir(work_dir):
+                fpath = os.path.join(work_dir, fname)
+                if os.path.isfile(fpath) and fname.lower().endswith('.xlsx') and '日报汇总表' in fname:
+                    return fpath
+        except OSError:
+            pass
+
+    # 2. 软件内置打包模板（最终兜底，保证无工作目录模板时也能生成）
+    bundled_tpl = os.environ.get('YX_BUNDLED_TEMPLATE')
+    if bundled_tpl and os.path.isfile(bundled_tpl):
+        return bundled_tpl
+    for bundled_tpl in _bundled_template_candidates():
+        if os.path.isfile(bundled_tpl):
+            return bundled_tpl
+
+    return None
+
+
+TEMPLATE_PATH = _find_template(WORK_DIR)
+
+
+def refresh_template():
+    """重新解析模板路径（用户替换模板后调用）。返回最新模板路径或 None。"""
+    global TEMPLATE_PATH
+    TEMPLATE_PATH = _find_template(WORK_DIR)
+    return TEMPLATE_PATH
+
+
+def set_work_dir(work_dir):
+    """设置/切换工作目录，供 GUI 调用。返回是否成功。"""
+    global WORK_DIR, TEMPLATE_PATH, OUTPUT_DIR
+    if not work_dir or not os.path.isdir(work_dir):
+        return False
+    WORK_DIR = os.path.abspath(work_dir)
+    TEMPLATE_PATH = _find_template(WORK_DIR)
+    OUTPUT_DIR = os.path.join(WORK_DIR, "TEST")
+    os.environ['YX_WORK_DIR'] = WORK_DIR
+    return True
+
+
+def get_work_dir():
+    return WORK_DIR
+
+
+def _is_zhengxing_cnc(folder_name):
+    """判断原始文件夹名是否同时包含'整形'和'CNC'。"""
+    if not folder_name:
+        return False
+    return '整形' in folder_name and 'CNC' in folder_name
+
+SHIFTS = {
+    'A': {
+        'breaks': [(120, 130), (220, 280), (430, 440), (540, 580)],
+        'start_offset': 480,
+        'name': '白班',
+        'early_max': 560,  # 17:20 = 560min from 8:00
+        'early_breaks': [(120, 130), (220, 280), (430, 440)],
+    },
+    'B': {
+        'breaks': [(120, 130), (200, 260), (430, 440), (580, 620)],
+        'start_offset': 1200,
+        'name': '夜班',
+        'early_max': 560,  # 05:20 = 560min from 20:00
+        'early_breaks': [(120, 130), (200, 260), (430, 440)],
+    },
+}
+MAX_SHIFT = 720
+TARGET_WORK_NORMAL = 570
+TARGET_WORK_EARLY = 450
+TARGET_END_NORMAL = 720
+MIN_TPP = 2.5
+EARLY_MAX = 560
+TPP_MIN_DEFAULT = 3.0
+TPP_MAX_DEFAULT = 7.0
+PKG_REST_DEFAULT = 0
+
+
+def _field_strong_pattern_detected(field, folder_name, parts):
+    """判断文件夹名中是否包含某字段的强识别特征（表示用户很可能写了该字段）。"""
+    fn = folder_name
+    fnu = folder_name.upper()
+    if field == 'station':
+        return any(k in fn for k in ('射出', '烧结', '整形', 'CNC', '镭雕', 'BIN2', 'BIN4',
+                                      'FAI', '测试片', '测试', '孔内直径', '外径', '内径',
+                                      '直径', '圆度', 'cam件')) or \
+               re.search(r'\b[A-Z]QC\b', fnu) is not None
+    if field == 'product':
+        return bool(re.match(r'^(\d{3})\b', folder_name)) or bool(re.search(r'(\d{5})', folder_name))
+    if field == 'work_order':
+        return 'WW' in fnu or any(k in p for p in parts for k in ('工单号', '工单', '单号'))
+    if field == 'mold':
+        return 'BIN' in fnu or '模' in fn or any(k in p for p in parts for k in ('模号',))
+    if field == 'machine':
+        return '#' in fn or re.search(r'\b(DC|DV|DT)\d', fn, re.I) is not None or \
+               any(k in p for p in parts for k in ('机台号', '机台', '台号'))
+    if field == 'test_type':
+        return any(k in fn for k in ('首件', '制程', '尺寸')) or \
+               any(k in p for p in parts for k in ('检测类型', '类型'))
+    if field == 'send_date':
+        return bool(re.search(r'\d+\.\d+', fn)) or any(k in p for p in parts for k in ('送测日期', '日期', '送测日'))
+    if field == 'send_time':
+        return bool(re.search(r'\d{1,2}[点:：]\d{0,2}', fn)) or \
+               any(k in p for p in parts for k in ('送测时间', '时间', '送测时'))
+    if field == 'quantity':
+        return bool(re.search(r'PCS|个|件', fn, re.I)) or any(k in p for p in parts for k in ('数量', '数', '量'))
+    return False
+
+
+def parse_folder_name(folder_name, parent_shift_suffix='', parent_date=''):
+    result = {
+        'station': '/', 'product': '/', 'sender': '/', 'work_order': '无工单号',
+        'mold': '/', 'machine': '/', 'test_type': '/',
+        'send_date': '/', 'send_time': '/', 'quantity_str': '/',
+        'operator': '/',
+    }
+
+    parts = folder_name.split('-')
+
+    def has_placeholder(*keywords):
+        return any(kw in p for kw in keywords for p in parts)
+
+    has_sender_placeholder = has_placeholder('送测人', '送测人员', '送测')
+    has_work_order_placeholder = has_placeholder('工单号', '工单', '单号')
+    has_mold_placeholder = has_placeholder('模号', '模')
+    has_machine_placeholder = has_placeholder('机台号', '机台', '台号')
+    has_date_placeholder = has_placeholder('送测日期', '日期', '送测日')
+    has_time_placeholder = has_placeholder('送测时间', '时间', '送测时')
+    has_quantity_placeholder = has_placeholder('数量', '数', '量')
+    has_test_type_placeholder = has_placeholder('检测类型', '类型')
+
+    if 'CNC' in folder_name:
+        result['station'] = 'CNC'
+    elif '射出' in folder_name:
+        result['station'] = '射出'
+    elif '镭雕' in folder_name or 'BIN2' in folder_name or 'BIN4' in folder_name:
+        result['station'] = '镭雕'
+    elif '整形' in folder_name:
+        result['station'] = '整形'
+    elif '烧结' in folder_name:
+        result['station'] = '烧结'
+    elif 'IQC' in folder_name.upper():
+        result['station'] = 'IQC'
+    elif 'OQC' in folder_name.upper():
+        result['station'] = 'OQC'
+    elif re.search(r'\b[A-Z]QC\b', folder_name.upper()):
+        result['station'] = re.search(r'\b([A-Z]QC)\b', folder_name.upper()).group(1)
+    elif 'FAI' in folder_name.upper():
+        result['station'] = '开发'
+    elif any(k in folder_name for k in ('测试片', '测试', '孔内直径', '外径', '内径', '直径', '圆度', 'cam件')):
+        result['station'] = '开发'
+
+    # 没有任何生产工站特征时，默认归为开发，避免大量无意义弹窗
+    if result['station'] == '/' and not _field_strong_pattern_detected('station', folder_name, parts):
+        result['station'] = '开发'
+
+    # 开发/IQC/OQC/XQC 等特殊工站通常没有机台号，不强制缺失
+    is_dev = result['station'] in ('开发', 'IQC', 'OQC') or re.match(r'^[A-Z]QC$', result['station'])
+
+    # 产品：优先识别开头三位数字（如 035-CNC...），否则从五位数取后三位
+    m = re.match(r'^(\d{3})\b', folder_name)
+    if m:
+        result['product'] = m.group(1)
+    else:
+        m = re.search(r'(\d{5})(?:-\d{2})', folder_name)
+        if m:
+            result['product'] = m.group(1)[-3:]
+        else:
+            m2 = re.search(r'(\d{5})', folder_name)
+            if m2:
+                result['product'] = m2.group(1)[-3:]
+
+    # 测量人员：最后一个 OMM 后面的人名/首字母，支持 omm-姓名、omm姓名、om-姓名、om姓名、omm-yx、om-yx 等
+    # 同时容错 O 和 M 重复的情况（如 OOMM、OMMM）
+    op_match = re.search(r'O{1,3}M{1,3}[\-_]?([\u4e00-\u9fa5]{2,4}|[A-Za-z]{1,6})', folder_name, re.IGNORECASE)
+    if op_match:
+        result['operator'] = op_match.group(1)
+
+    # 送测人识别（多策略）
+    # 常见工站名/检测类型/工序名，不能当成人名
+    _STATION_WORDS = {
+        '首件', '制程', '尺寸', '全尺寸', '射出', '烧结', '整形', '镭雕',
+        'CNC', 'CMM', 'OMM', '开发', '测量', '送测', '生成', '制作',
+        '数量', '复测', '检测', '测试', '送测人员', '送测人', '人员',
+    }
+    # 送测关键词（"送测"及常见误打）
+    _SENDER_KEYWORDS = r'(?:送测|生成|制作|送检|提交|上交|填写)'
+
+    normalized_for_sender = folder_name.replace('：', ':').replace('；', ';')
+    # 先剥离"送测人员"/"送测人"前缀，避免"员彭立娜"被误匹配
+    normalized_for_sender = re.sub(r'送测人员?', '', normalized_for_sender, count=1)
+
+    def _is_valid_sender(name):
+        """判断识别到的候选是否是有效人名（非工站名等）。"""
+        if not name or name in _STATION_WORDS:
+            return False
+        # 纯中文 2-4 字
+        if re.match(r'^[\u4e00-\u9fa5]{2,4}$', name):
+            return True
+        # 英文名 2-20 字母（可含点和连字符）
+        if re.match(r'^[A-Za-z][A-Za-z.\-]{1,19}$', name):
+            return True
+        return False
+
+    # 策略1：姓名(时间)?送测关键词 —— "张三送测" / "张三14:00送测" / "张三生成"
+    sender_match = re.search(
+        r'([\u4e00-\u9fa5]{2,4}|[A-Za-z]{2,20})(?:\d{1,2}[:.点]\d{0,2}(?:分)?)?' + _SENDER_KEYWORDS,
+        normalized_for_sender
+    )
+    if sender_match and _is_valid_sender(sender_match.group(1)):
+        result['sender'] = sender_match.group(1)
+    else:
+        # 策略2：送测关键词?姓名(时间)? —— "送测人员彭立娜送测" / "送测张三"
+        sender_match2 = re.search(
+            _SENDER_KEYWORDS + r'(?:人员|人)?([\u4e00-\u9fa5]{2,4}|[A-Za-z]{2,20})',
+            normalized_for_sender
+        )
+        if sender_match2 and _is_valid_sender(sender_match2.group(1)):
+            result['sender'] = sender_match2.group(1)
+
+    if result['sender'] == '/':
+        # 策略3：时间+姓名（无关键词） —— "22:40张三" / "4:00刘前程送测" / "6.5B周琳4:20送测"
+        # 匹配 时间(可选分隔符)中文姓名 的模式
+        m_time_name = re.search(
+            r'\d{1,2}[:.]\d{0,2}(?:分)?[\s\-]*([\u4e00-\u9fa5]{2,4})',
+            normalized_for_sender
+        )
+        if m_time_name and _is_valid_sender(m_time_name.group(1)):
+            result['sender'] = m_time_name.group(1)
+
+    if result['sender'] == '/':
+        # 策略4：姓名-PCS数量 —— "陈大勇-16PCS" / "陈大勇16PCS" / "张三-数量"
+        m_name_pcs = re.search(
+            r'([\u4e00-\u9fa5]{2,4})(?:[\-]?\d+PCS|[\-]?\d+pcs|[\-]?数量)',
+            normalized_for_sender, re.IGNORECASE
+        )
+        if m_name_pcs and _is_valid_sender(m_name_pcs.group(1)):
+            result['sender'] = m_name_pcs.group(1)
+
+    if result['sender'] == '/':
+        # 策略5：回退 —— 在 OMM/CMM 之前找中文或英文名，跳过工站名和短代码
+        omm_idx = next((i for i, p in enumerate(parts) if p.upper() in ('OMM', 'CMM')), -1)
+        cmm_idx = next((i for i, p in enumerate(parts) if p.upper() == 'CMM'), -1)
+        search_end = omm_idx
+        if cmm_idx != -1 and (omm_idx == -1 or cmm_idx < omm_idx):
+            search_end = cmm_idx
+        if search_end > 0:
+            for j in range(search_end - 1, -1, -1):
+                candidate = parts[j].strip()
+                if candidate in ('数量',) or candidate == result['operator']:
+                    continue
+                if _is_valid_sender(candidate):
+                    # 额外检查：候选里不能含数字/PCS/#等
+                    if not re.search(r'\d|PCS|#|ww|WW', candidate, re.IGNORECASE):
+                        result['sender'] = candidate
+                        break
+
+    # 工单号
+    m = re.search(r'(ww\d+-\d+)', folder_name, re.IGNORECASE)
+    if m:
+        result['work_order'] = m.group(1).upper()
+    elif '无工单号' in folder_name:
+        result['work_order'] = '无工单号'
+
+    # 模号：优先识别显式模号；CNC 工站未识别到时默认 T1
+    m_bin = re.search(r'(BIN[24])', folder_name, re.IGNORECASE)
+    m_code = re.search(r'-(M[a-zA-Z0-9]+)-', folder_name)
+    if not m_code:
+        m_code = re.search(r'-([DT]\d+)-', folder_name)
+    if not m_code:
+        m_code = re.search(r'-(\d+模)-', folder_name)
+    if m_bin:
+        result['mold'] = m_bin.group(1).upper()
+    elif m_code:
+        result['mold'] = m_code.group(1).upper() if '模' not in m_code.group(1) else m_code.group(1)
+    elif result['station'] == 'CNC':
+        result['mold'] = 'T1'
+
+    # 机台号
+    m = re.search(r'([A-Z0-9]+#)', folder_name)
+    if not m:
+        m = re.search(r'-((?:DC|DV)\d{2})-', folder_name)
+    if not m:
+        # D0E3、T1、T2 等开发/特殊机台号
+        m = re.search(r'-([DT][A-Z0-9]{1,4})-', folder_name)
+    if m:
+        result['machine'] = m.group(1)
+
+    # 检测类型
+    if '首件' in folder_name:
+        result['test_type'] = '首件'
+    elif '制程' in folder_name:
+        result['test_type'] = '制程'
+    elif '尺寸' in folder_name:
+        result['test_type'] = '尺寸'
+
+    # 日期
+    m = re.search(r'(\d+\.\d+[a-zA-Z]?)', folder_name)
+    if m:
+        result['send_date'] = m.group(1)
+
+    # 如果文件夹名里没有日期，尝试使用父文件夹日期
+    if result['send_date'] == '/' and parent_date:
+        result['send_date'] = parent_date
+
+    has_shift = result['send_date'][-1].upper() in 'AB' if result['send_date'] != '/' else False
+    if parent_shift_suffix and result['send_date'] != '/' and not has_shift:
+        result['send_date'] += parent_shift_suffix
+
+    # 送测时间
+    m = re.search(r'\d+\.\d+[a-zA-Z]?-([\d.：:；;点]+?)-', folder_name)
+    if not m:
+        m = re.search(r'-(\d{1,2}点\d{0,2}(?:分)?)-', folder_name)
+    if not m:
+        # 刘前程2点30送测 / 彭立娜14:00送测 这类无前后横杠的时间
+        m = re.search(r'(\d{1,2}[点:]\d{0,2}(?:分)?)送测', folder_name.replace('：', ':'))
+    if m:
+        candidate = m.group(1).replace('：', ':').replace('；', ';').replace('点', ':')
+        if re.match(r'^\d{1,2}[:;]\d{2}$', candidate) or re.match(r'^\d+\.\d+$', candidate):
+            result['send_time'] = candidate
+        elif re.match(r'^\d{1,2}:$', candidate):
+            result['send_time'] = candidate + '00'
+        elif re.match(r'^\d{1,2}:\d{1,2}分$', candidate):
+            result['send_time'] = candidate.rstrip('分')
+
+    # 数量
+    m = re.search(r'(\d+)\s*PCS', folder_name, re.IGNORECASE)
+    if m:
+        result['quantity_str'] = m.group(1)
+    else:
+        # 回退：看 OMM/CMM 左侧紧邻的纯 1~2 位数字（如 ...-12-omm-...）
+        normalized = re.sub(r'(?i)(omm|cmm)([\u4e00-\u9fa5]{2,4})', r'\1-\2', folder_name)
+        qty_parts = normalized.split('-')
+        omm_idx = next((i for i, p in enumerate(qty_parts) if p.upper() == 'OMM'), -1)
+        cmm_idx = next((i for i, p in enumerate(qty_parts) if p.upper() == 'CMM'), -1)
+        target_idx = -1
+        if omm_idx != -1 and cmm_idx != -1:
+            target_idx = min(omm_idx, cmm_idx)
+        elif omm_idx != -1:
+            target_idx = omm_idx
+        elif cmm_idx != -1:
+            target_idx = cmm_idx
+
+        qty_from_pos = None
+        if target_idx > 0:
+            left = qty_parts[target_idx - 1]
+            if re.match(r'^\d{1,2}$', left):
+                qty_from_pos = left
+
+        if qty_from_pos:
+            result['quantity_str'] = qty_from_pos
+
+    # ==================== 置信度模型：区分"确实没有"和"识别失败" ====================
+    missing = []
+    placeholders = []
+
+    # 关键字段：未识别即需要人工确认
+    if result['sender'] == '/':
+        if has_sender_placeholder:
+            placeholders.append('sender')
+        else:
+            missing.append('sender')
+
+    if result['quantity_str'] == '/':
+        if has_quantity_placeholder:
+            placeholders.append('quantity')
+        elif result['station'] == 'CNC':
+            # CNC 固定 30 分钟，没写数量时直接标 "/"，不弹窗
+            result['quantity_str'] = '/'
+        else:
+            missing.append('quantity')
+
+    # 非关键字段：只有强模式存在却识别失败时才弹窗；完全没有相关模式视为"确实没有"
+    has_explicit_no_wo = any('无工单号' in p for p in parts)
+    if result['work_order'] == '无工单号':
+        if has_work_order_placeholder and not has_explicit_no_wo:
+            placeholders.append('work_order')
+        elif _field_strong_pattern_detected('work_order', folder_name, parts) and not has_explicit_no_wo:
+            placeholders.append('work_order')
+
+    if result['mold'] == '/':
+        if has_mold_placeholder:
+            placeholders.append('mold')
+        elif _field_strong_pattern_detected('mold', folder_name, parts):
+            placeholders.append('mold')
+
+    if result['machine'] == '/':
+        if has_machine_placeholder:
+            placeholders.append('machine')
+        elif _field_strong_pattern_detected('machine', folder_name, parts):
+            placeholders.append('machine')
+
+    if result['test_type'] == '/':
+        if has_test_type_placeholder:
+            placeholders.append('test_type')
+        elif _field_strong_pattern_detected('test_type', folder_name, parts):
+            placeholders.append('test_type')
+
+    if result['send_date'] == '/':
+        if has_date_placeholder:
+            placeholders.append('send_date')
+        elif _field_strong_pattern_detected('send_date', folder_name, parts):
+            missing.append('send_date')
+
+    if result['send_time'] == '/':
+        if has_time_placeholder:
+            placeholders.append('send_time')
+        elif _field_strong_pattern_detected('send_time', folder_name, parts):
+            placeholders.append('send_time')
+
+    if result['station'] == '/':
+        if _field_strong_pattern_detected('station', folder_name, parts):
+            missing.append('station')
+
+    if result['product'] == '/':
+        if _field_strong_pattern_detected('product', folder_name, parts):
+            missing.append('product')
+
+    return result, missing, placeholders
+
+
+def _is_standard_template(ws):
+    """判断 worksheet 是否为公司标准首件尺寸报告模板。
+
+    标准特征：
+    - 第一行（或前 3 行）包含"安徽中耀智能科技有限公司"和"首件尺寸报告"
+    - 存在"测量值"单元格
+    """
+    header_text = ''
+    for row in range(1, min(4, ws.max_row + 1)):
+        for col in range(1, min(ws.max_column + 1, 50)):
+            v = ws.cell(row=row, column=col).value
+            if v:
+                header_text += str(v)
+
+    has_company = '安徽中耀智能科技有限公司' in header_text
+    has_report_title = '首件尺寸报告' in header_text
+
+    has_measure_value = False
+    for row in range(1, min(20, ws.max_row + 1)):
+        for col in range(1, min(ws.max_column + 1, 50)):
+            v = ws.cell(row=row, column=col).value
+            if v and '测量值' in str(v):
+                has_measure_value = True
+                break
+        if has_measure_value:
+            break
+
+    return has_company and has_report_title and has_measure_value
+
+
+def _count_sheet_quantity(ws):
+    """统计标准模板中实际测量的件数（按列统计，每列存在有效 OMM 测量数据即算 1 件）。
+
+    模板理解：
+    - 每个 sheet 中有一个主测量表，以"测量值"标题为起点。
+    - 主测量表右侧常接另一张"判定"或"偏差"表，通过标题行变化或编号重复来识别边界。
+    - 部分模板（如 EVT/全尺寸）有"检测工具"列，行内标记 OMM/CMM；只统计 OMM 行有数据的列。
+    - 部分模板（如 CNC）没有"检测工具"列，直接统计主测量表中有数据的列。
+    - 列头含复测/掉料/丢料/丢失/损坏/残废/报废/缺料等字样时跳过。
+
+    核心逻辑：
+    1. 定位"测量值"单元格，确定主测量表左右边界。
+    2. 若存在"检测工具"列，则只检查 OMM 行；否则检查任意数据行。
+    3. 每列有数据即 1 件。
+
+    如果传入的不是标准模板，返回 0，调用方应提示"非标准表格无法识别"。
+    """
+
+    if not _is_standard_template(ws):
+        return 0
+
+    INVALID_HEADER_MARKS = ('复测', '掉料', '丢料', '丢失', '损坏', '残废', '报废', '缺料')
+
+    def _is_numeric_data(val):
+        if val is None:
+            return False
+        if isinstance(val, (int, float)):
+            return True
+        s = str(val).strip()
+        if not s or s in ('送测', '复测', '测量值', '合格', '不合格', 'OK', 'NG'):
+            return False
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False
+
+    def _header_invalid(val):
+        if val is None:
+            return False
+        s = str(val).strip()
+        return any(k in s for k in INVALID_HEADER_MARKS)
+
+    def _is_omm_tool(val):
+        if val is None:
+            return False
+        s = str(val).strip().upper()
+        return 'OMM' in s and 'CMM' not in s
+
+    # ── 步骤 1：定位主测量表区域 ──
+    measure_row = measure_col = None
+    for row in range(1, min(20, ws.max_row + 1)):
+        for col in range(1, min(30, ws.max_column + 1)):
+            cell_val = ws.cell(row=row, column=col).value
+            if cell_val and '测量值' in str(cell_val):
+                measure_row, measure_col = row, col
+                break
+        if measure_row:
+            break
+
+    if not measure_row or not measure_col:
+        return None
+
+    # 自动定位编号行（可能在测量值下方若干行内）
+    id_row = None
+    for row in range(measure_row + 1, min(measure_row + 6, ws.max_row + 1)):
+        v = ws.cell(row=row, column=measure_col).value
+        if v is not None and str(v).strip() != '':
+            id_row = row
+            break
+
+    if id_row is None:
+        return None
+
+    data_start_row = id_row + 1
+    if data_start_row > ws.max_row:
+        return None
+
+    def _id_to_int(val):
+        if val is None:
+            return None
+        s = str(val).strip()
+        if not s:
+            return None
+        try:
+            return int(float(s))
+        except (ValueError, TypeError):
+            pass
+        m = re.match(r'^(\d+)', s)
+        if m:
+            try:
+                return int(m.group(1))
+            except (ValueError, TypeError):
+                pass
+        return None
+
+    # 确定主测量表的右边界：
+    # - 标题行（measure_row）出现新的非"测量值"表头
+    # - 编号行出现重复/回退
+    # - 编号行连续空列
+    last_id = -1
+    end_col = ws.max_column
+    for col in range(measure_col, ws.max_column + 1):
+        header_val = ws.cell(row=measure_row, column=col).value
+        if col > measure_col and header_val is not None:
+            hs = str(header_val).strip()
+            if hs and hs != '测量值':
+                end_col = col - 1
+                break
+
+        id_val = ws.cell(row=id_row, column=col).value
+        if id_val is None or str(id_val).strip() == '':
+            end_col = col - 1
+            break
+
+        nid = _id_to_int(id_val)
+        if nid is not None and nid <= last_id:
+            end_col = col - 1
+            break
+        if nid is not None:
+            last_id = nid
+
+    # ── 步骤 2：查找检测工具列（可选）──
+    tool_col = None
+    for row in range(1, min(20, ws.max_row + 1)):
+        for col in range(1, min(ws.max_column + 1, 60)):
+            cell_val = ws.cell(row=row, column=col).value
+            if cell_val:
+                s = str(cell_val)
+                if '检测' in s and '工具' in s:
+                    tool_col = col
+                    break
+        if tool_col:
+            break
+
+    # 收集 OMM 行（如果存在检测工具列）
+    omm_rows = set()
+    if tool_col:
+        for row in range(data_start_row, min(ws.max_row + 1, data_start_row + 500)):
+            if _is_omm_tool(ws.cell(row=row, column=tool_col).value):
+                omm_rows.add(row)
+
+    # ── 步骤 3：在主测量表区域内逐列统计 ──
+    count = 0
+    for col in range(measure_col, end_col + 1):
+        id_val = ws.cell(row=id_row, column=col).value
+        if id_val is None or str(id_val).strip() == '':
+            break
+        if _header_invalid(id_val):
+            continue
+
+        has_data = False
+        if omm_rows:
+            for row in omm_rows:
+                if _is_numeric_data(ws.cell(row=row, column=col).value):
+                    has_data = True
+                    break
+        else:
+            for row in range(data_start_row, min(ws.max_row + 1, data_start_row + 200)):
+                if _is_numeric_data(ws.cell(row=row, column=col).value):
+                    has_data = True
+                    break
+
+        if has_data:
+            count += 1
+
+    return count if count > 0 else None
+
+
+def read_xlsx_quantity(xlsx_path):
+    """读取 xlsx 中实际测量的件数；若非标准表格，返回 0。
+
+    返回值：
+    - int > 0：实际测量件数
+    - 0：存在 sheet，但非标准模板或没有可识别的有效数据
+    - None：读取文件失败
+    """
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    except Exception as e:
+        print(f"读取xlsx出错: {e}")
+        return None
+
+    total = 0
+    has_standard_sheet = False
+    for ws in wb.worksheets:
+        try:
+            if _is_standard_template(ws):
+                has_standard_sheet = True
+                qty = _count_sheet_quantity(ws)
+                if qty:
+                    total += qty
+        except Exception as e:
+            print(f"统计sheet出错 ({ws.title}): {e}")
+            continue
+    wb.close()
+
+    if not has_standard_sheet:
+        return 0
+    return total if total > 0 else 0
+
+
+def _parse_time_str(s):
+    """将 '9:30'/'09:30'/'9.30' 等字符串转为 datetime.time, 失败返回 None"""
+    if not s or s == '/':
+        return None
+    s = str(s).strip().replace('：', ':').replace('；', ';').replace('.', ':')
+    m = re.match(r'^(\d{1,2}):(\d{2})$', s)
+    if m:
+        h, minute = int(m.group(1)), int(m.group(2))
+        if 0 <= h < 24 and 0 <= minute < 60:
+            return dtime(h, minute)
+    return None
+
+
+def _get_operator_initials(name):
+    """获取姓名的拼音首字母；仅对中文有效，非中文返回小写原串。"""
+    if not name:
+        return ''
+    # 纯字母名字直接小写返回
+    if re.match(r'^[A-Za-z]+$', name):
+        return name.lower()
+    try:
+        from pypinyin import lazy_pinyin
+        return ''.join(p[0].lower() for p in lazy_pinyin(name) if p)
+    except Exception:
+        # 无 pypinyin 时，用内置简单映射兜底
+        _SIMPLE_INITIALS = {
+            '禹欣': 'yx',
+        }
+        return _SIMPLE_INITIALS.get(name, name.lower())
+
+
+def _make_operator_patterns(name):
+    """根据中文姓名生成多种容错匹配正则：中文、首字母、OMM/OM、-可有可无、大小写不敏感。"""
+    patterns = []
+    candidates = {name}
+    initials = _get_operator_initials(name)
+    if initials:
+        candidates.add(initials)
+
+    for cand in candidates:
+        # O+MM? 表示 O 后面跟 1~3 个 M 都算（容错 OM/OMM/OOMM/OMMM）
+        # [\-_]? 表示 - 或 _ 或没有连接符
+        patterns.append(rf'O{{1,3}}M{{1,3}}[\-_]?{re.escape(cand)}')
+    return re.compile('|'.join(patterns), re.IGNORECASE)
+
+
+def _is_operator_folder(folder_name, operator_name):
+    """判断文件夹名是否匹配指定操作者（支持中文/首字母/OM/OMM/连接符容错，大小写不敏感）。"""
+    if not operator_name:
+        operator_name = '禹欣'
+    pattern = _make_operator_patterns(operator_name)
+    return bool(pattern.search(folder_name))
+
+
+def parse_all_folders(base_dir, operator_name=OPERATOR_NAME):
+    """解析 base_dir 下的所有子文件夹（忽略文件），按 OMM-操作者 过滤。"""
+    items = os.listdir(base_dir)
+    folders = sorted(f for f in items if os.path.isdir(os.path.join(base_dir, f)))
+    skipped_files = [f for f in items if not os.path.isdir(os.path.join(base_dir, f))]
+    if skipped_files:
+        print(f"[跳过非文件夹项] {len(skipped_files)} 个: {skipped_files[:5]}{'...' if len(skipped_files) > 5 else ''}")
+    parent_name = os.path.basename(base_dir.rstrip('\\/'))
+    shift_suffix = parent_name[-1] if parent_name and parent_name[-1].upper() in 'AB' else ''
+    # 从父文件夹名提取日期（如 6.11B → 6.11B，6.11 → 6.11），用于子文件夹缺失日期时回退
+    date_match = re.match(r'(\d+)\.(\d+)[AB]?', parent_name)
+    parent_date = date_match.group(0) if date_match else ''
+    records = []
+    review_map = {}  # folder -> {'missing': [...], 'placeholders': [...]}
+    for folder in folders:
+        folder_path = os.path.join(base_dir, folder)
+        if not _is_operator_folder(folder, operator_name):
+            print(f"跳过（非{operator_name}）: {folder}")
+            continue
+        xlsx_files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx')]
+        parsed, missing, placeholders = parse_folder_name(folder, parent_shift_suffix=shift_suffix, parent_date=parent_date)
+        review_map[folder] = {'missing': missing, 'placeholders': placeholders}
+
+        # 数量优先级：文件夹名 PCS > xlsx 实际计数 > 缺失/弹窗
+        actual_quantity = None
+        nonstandard_xlsx = False
+        qs = parsed['quantity_str']
+        if qs != '/' and qs.isdigit():
+            quantity = int(qs)  # 文件夹名优先
+        else:
+            if xlsx_files:
+                actual_quantity = read_xlsx_quantity(os.path.join(folder_path, xlsx_files[0]))
+            if actual_quantity is not None and actual_quantity > 0:
+                quantity = actual_quantity
+                # xlsx 已统计出数量，不再因数量缺失弹窗
+                if 'quantity' in missing:
+                    missing.remove('quantity')
+                if 'quantity' in placeholders:
+                    placeholders.remove('quantity')
+            elif actual_quantity == 0:
+                # xlsx 存在但非标准模板：标记为占位符，弹窗提示
+                quantity = '/'
+                nonstandard_xlsx = True
+                if 'quantity' not in placeholders and 'quantity' not in missing:
+                    placeholders.append('quantity')
+            else:
+                quantity = '/'
+        records.append({
+            'folder': folder, 'station': parsed['station'], 'product': parsed['product'],
+            'sender': parsed['sender'], 'work_order': parsed['work_order'],
+            'mold': parsed['mold'], 'machine': parsed['machine'],
+            'test_type': parsed['test_type'], 'send_date': parsed['send_date'],
+            'send_time': parsed['send_time'], 'quantity': quantity,
+            'actual_quantity': actual_quantity,
+            'nonstandard_xlsx': nonstandard_xlsx,
+            'operator': parsed['operator'],
+            'manual_duration': None,
+            'manual_quantity': None,
+            'missing_fields': missing,
+            'placeholder_fields': placeholders,
+            'reviewed': False,
+        })
+    return records, review_map
+
+
+def schedule_tasks(records, shift_label='A', early_leave=False,
+                   leave_strategy=None,
+                   tpp_min=TPP_MIN_DEFAULT, tpp_max=TPP_MAX_DEFAULT,
+                   pkg_rest=PKG_REST_DEFAULT,
+                   enable_hand=True, enable_other=False,
+                   special_items=None,
+                   hand_max=120, other_max=90,
+                   real_manual_tasks=None):
+    """排程任务。
+
+    参数：
+        leave_strategy: 'auto' | 'early' | 'normal' | None
+            兼容旧参数 early_leave：
+            - leave_strategy='early' 等价于 early_leave=True
+            - leave_strategy='normal' 等价于 early_leave=False
+            - leave_strategy='auto' 为智能判断
+            - None 时退回到 early_leave 的 boolean 语义
+        real_manual_tasks: 真实手量任务列表，作为独立任务参与排程并写入 Excel。
+    """
+    # 兼容旧参数
+    if leave_strategy is None:
+        leave_strategy = 'early' if early_leave else 'normal'
+    if leave_strategy not in ('auto', 'early', 'normal'):
+        leave_strategy = 'normal'
+
+    cfg = SHIFTS[shift_label]
+    offset = cfg['start_offset']
+    schedule_warnings = []
+
+    # tpp 下限 2.5 分钟
+    if tpp_min < MIN_TPP:
+        schedule_warnings.append(
+            f'每件最低耗时不能低于{MIN_TPP}分钟，已自动按{MIN_TPP}分钟计算')
+        tpp_min = MIN_TPP
+    if tpp_max < tpp_min:
+        tpp_max = tpp_min
+    avg_tpp = (tpp_max + tpp_min) / 2
+
+    # 规范化特殊大件物品列表
+    _special_items = []
+    if special_items:
+        for it in special_items:
+            if isinstance(it, dict):
+                name = (it.get('name') or '').strip()
+                try:
+                    minutes = float(it.get('minutes', 8))
+                except (TypeError, ValueError):
+                    minutes = 8.0
+                if name and minutes > 0:
+                    _special_items.append({'name': name, 'minutes': minutes})
+
+    def _match_special(rec):
+        haystacks = []
+        for k in ('folder', 'folder_name', 'station', 'product', 'test_type'):
+            v = rec.get(k)
+            if isinstance(v, str) and v and v != '/':
+                haystacks.append(v)
+        for it in _special_items:
+            for h in haystacks:
+                if it['name'] in h:
+                    return it['minutes']
+        return None
+
+    # 预处理记录
+    valid_records = []
+    for r in records:
+        rec = dict(r)
+        if rec.get('manual_quantity') is not None:
+            rec['quantity'] = rec['manual_quantity']
+        has_duration = rec.get('manual_duration') is not None and rec['manual_duration'] > 0
+        has_qty = isinstance(rec.get('quantity'), int) and rec['quantity'] > 0
+        if not has_duration and not has_qty:
+            schedule_warnings.append(f"{rec['folder']}: 缺少件数和测量时间，已跳过排程")
+            continue
+        rec['_is_zhengxing_cnc'] = _is_zhengxing_cnc(rec.get('folder', ''))
+        valid_records.append(rec)
+    records = valid_records
+
+    # 计算 natural_tpp（排除 CNC、特殊大件、真实手量、整形CNC）
+    qtys = [r['quantity'] for r in records
+            if isinstance(r.get('quantity'), int) and r['quantity'] > 0
+            and r.get('station') != 'CNC'
+            and not r.get('_is_zhengxing_cnc')
+            and _match_special(r) is None]
+    min_qty = min(qtys) if qtys else 1
+    max_qty = max(qtys) if qtys else 1
+    same_qty = (min_qty == max_qty) or len(qtys) <= 1
+
+    natural_tpps = []
+    for r in records:
+        if r.get('station') == 'CNC' and not r.get('_is_zhengxing_cnc'):
+            natural_tpps.append(None)
+        elif r.get('_is_zhengxing_cnc'):
+            natural_tpps.append(None)
+        elif _match_special(r) is not None:
+            natural_tpps.append(None)
+        elif isinstance(r.get('quantity'), int) and r['quantity'] > 0:
+            if same_qty:
+                natural_tpps.append(avg_tpp)
+            else:
+                ratio = ((r['quantity'] - min_qty) / (max_qty - min_qty)) ** 0.5
+                natural_tpps.append(tpp_max - ratio * (tpp_max - tpp_min))
+        else:
+            natural_tpps.append(None)
+
+    # 规范化真实手量任务
+    _real_manual_tasks = []
+    if real_manual_tasks:
+        for mt in real_manual_tasks:
+            if not isinstance(mt, dict):
+                continue
+            duration = mt.get('duration_minutes')
+            try:
+                duration = float(duration)
+            except (TypeError, ValueError):
+                continue
+            if duration <= 0:
+                continue
+            task = dict(mt)
+            task['_dur'] = duration
+            task['station'] = '手量'
+            task['note'] = '真实手量'
+            task['manual_kind'] = 'real'
+            # 使用 id 或生成稳定标识，用于判断同一任务的多段
+            task['manual_task_id'] = str(task.get('id') or task.get('manual_task_id') or f"manual_{len(_real_manual_tasks)}")
+            _real_manual_tasks.append(task)
+
+    # 将真实手量拼接到 records 末尾参与排程
+    if _real_manual_tasks:
+        records = list(records) + _real_manual_tasks
+        for _ in _real_manual_tasks:
+            natural_tpps.append(None)
+
+    # 如果既没有普通记录也没有真实手量，直接返回空
+    if not records:
+        return [], ['没有可排程的任务（普通记录和真实手量均为空）']
+
+    def build_segments(cur, total_dur, rec_info, seg_type='work', breaks_list=None):
+        segments = []
+        remaining = total_dur
+        _breaks = breaks_list if breaks_list is not None else breaks
+        while remaining > 0.001:
+            placed = False
+            for bs, be in _breaks:
+                if cur >= be:
+                    continue
+                if cur < bs:
+                    before = min(remaining, bs - cur)
+                    if before > 0.001:
+                        seg = dict(rec_info)
+                        seg.update({'start': cur, 'end': cur + before, 'type': seg_type})
+                        segments.append(seg)
+                        remaining -= before
+                        cur += before
+                    if remaining <= 0.001:
+                        placed = True
+                        break
+                if remaining > 0.001 and cur < be:
+                    segments.append({'type': 'rest', 'start': cur, 'end': be})
+                    cur = be
+                    placed = True
+                    break
+            if not placed:
+                if remaining > 0.001:
+                    seg = dict(rec_info)
+                    seg.update({'start': cur, 'end': cur + remaining, 'type': seg_type})
+                    segments.append(seg)
+                    cur += remaining
+                remaining = 0
+        return segments, cur
+
+    def try_schedule(durations, duration_sources=None, extra_slots=None, breaks_list=None):
+        cur = 0
+        all_seg = []
+        items = list(records)
+        item_durs = list(durations)
+        item_sources = list(duration_sources) if duration_sources else ['tpp'] * len(records)
+        if extra_slots:
+            merged = sorted(extra_slots, key=lambda x: x[0])
+            result, dur_result, source_result, idx, si = [], [], [], 0, 0
+            while idx < len(items) or si < len(merged):
+                if si < len(merged) and (idx >= len(items) or merged[si][0] <= idx):
+                    result.append(merged[si][1])
+                    dur_result.append(merged[si][1].get('_dur', 30.0))
+                    source_result.append(merged[si][1].get('duration_source', 'hidden_buffer'))
+                    si += 1
+                else:
+                    result.append(items[idx])
+                    dur_result.append(item_durs[idx])
+                    source_result.append(item_sources[idx] if idx < len(item_sources) else 'tpp')
+                    idx += 1
+            items = result
+            item_durs = dur_result
+            item_sources = source_result
+
+        real_idx = 0
+        real_count = sum(1 for it in items
+                         if (it.get('note') not in ('手量', '其他事务') or it.get('manual_kind') == 'real')
+                         and not it.get('hidden')
+                         and it.get('type') != 'hidden_buffer')
+        for j, rec in enumerate(items):
+            is_filler = rec.get('note') in ('手量', '其他事务') and rec.get('manual_kind') != 'real'
+            is_real_manual = rec.get('manual_kind') == 'real'
+            is_hidden = rec.get('hidden') == True or rec.get('type') == 'hidden_buffer'
+            dur = rec['_dur'] if is_filler or is_hidden or is_real_manual else item_durs[j]
+            rec_info = {k: v for k, v in rec.items() if k != '_dur'}
+            seg_type = 'hidden_buffer' if is_hidden else 'work'
+            # 把 duration_source 写入 segment，方便 preview 识别耗时来源
+            if not is_hidden and not is_filler and not is_real_manual and j < len(item_sources):
+                rec_info['duration_source'] = item_sources[j]
+            segs, cur = build_segments(cur, dur, rec_info, seg_type=seg_type, breaks_list=breaks_list)
+            all_seg.extend(segs)
+            if pkg_rest > 0 and not is_filler and not is_hidden and not is_real_manual:
+                real_idx += 1
+                if real_idx < real_count:
+                    rest_segs, cur = build_segments(cur, float(pkg_rest),
+                                                     {'type': 'pkg_rest'}, seg_type='pkg_rest',
+                                                     breaks_list=breaks_list)
+                    all_seg.extend(rest_segs)
+        return all_seg, cur
+
+    def make_durations(scale, min_tpp_override=None):
+        durations = []
+        duration_sources = []
+        min_tpp_for_scale = min_tpp_override if min_tpp_override is not None else tpp_min
+        for i, r in enumerate(records):
+            if r.get('manual_kind') == 'real':
+                durations.append(float(r['_dur']))
+                duration_sources.append('real_manual')
+            elif _match_special(r) is not None:
+                sp_min = _match_special(r)
+                qty = r.get('quantity') if isinstance(r.get('quantity'), int) and r['quantity'] > 0 else 1
+                durations.append(float(sp_min) * qty)
+                duration_sources.append('special')
+            elif r.get('_is_zhengxing_cnc'):
+                qty = r.get('quantity') if isinstance(r.get('quantity'), int) and r['quantity'] > 0 else 0
+                dur = max(30.0, qty * 5.0) if qty > 0 else 30.0
+                durations.append(dur)
+                duration_sources.append('zhengxing_cnc')
+            elif r.get('station') == 'CNC':
+                durations.append(30.0)
+                duration_sources.append('cnc')
+            elif r.get('manual_duration') is not None and r['manual_duration'] > 0:
+                durations.append(float(r['manual_duration']))
+                duration_sources.append('manual_duration')
+            else:
+                nat = natural_tpps[i]
+                tpp = max(min_tpp_for_scale, min(tpp_max, (nat or avg_tpp) * scale))
+                if isinstance(r.get('quantity'), int) and r['quantity'] > 0:
+                    durations.append(r['quantity'] * tpp)
+                else:
+                    durations.append(1 * tpp)
+                duration_sources.append('tpp')
+        return durations, duration_sources
+
+    def compute_detailed_stats(segs):
+        """计算各类任务对有效时长的贡献，用于预览缺口诊断。"""
+        stats = {
+            'regular_effective': 0.0,
+            'real_manual_effective': 0.0,
+            'special_effective': 0.0,
+            'zhengxing_cnc_effective': 0.0,
+            'cnc_effective': 0.0,
+            'hand_filler_minutes': 0.0,
+            'other_filler_minutes': 0.0,
+            'hidden_buffer_total': 0.0,
+            'total_effective': 0.0,
+            'total_rest': 0.0,
+            'total_shift': 0.0,
+            'last_end': 0.0,
+        }
+        for seg in segs:
+            dur = seg.get('end', 0) - seg.get('start', 0)
+            st = seg.get('type')
+            source = seg.get('duration_source')
+            note = seg.get('note')
+            manual_kind = seg.get('manual_kind')
+            if st == 'rest' or st == 'pkg_rest':
+                stats['total_rest'] += dur
+            elif st == 'hidden_buffer':
+                stats['hidden_buffer_total'] += dur
+                stats['total_effective'] += dur
+            elif st in ('work',):
+                if manual_kind == 'real':
+                    stats['real_manual_effective'] += dur
+                    stats['total_effective'] += dur
+                elif note == '手量':
+                    stats['hand_filler_minutes'] += dur
+                    stats['total_effective'] += dur
+                elif note == '其他事务':
+                    stats['other_filler_minutes'] += dur
+                    stats['total_effective'] += dur
+                elif source == 'special':
+                    stats['special_effective'] += dur
+                    stats['total_effective'] += dur
+                elif source == 'zhengxing_cnc':
+                    stats['zhengxing_cnc_effective'] += dur
+                    stats['total_effective'] += dur
+                elif source == 'cnc':
+                    stats['cnc_effective'] += dur
+                    stats['total_effective'] += dur
+                else:
+                    stats['regular_effective'] += dur
+                    stats['total_effective'] += dur
+            if seg.get('end', 0) > stats['last_end']:
+                stats['last_end'] = seg.get('end', 0)
+        stats['total_shift'] = stats['last_end']
+        return stats
+
+    def compute_stats(segs):
+        """计算有效时长、休息时长、总跨度、hidden_buffer 总时长。"""
+        stats = compute_detailed_stats(segs)
+        return (stats['total_effective'], stats['total_rest'], stats['hidden_buffer_total'],
+                stats['total_shift'], stats['last_end'])
+
+    def schedule_with_strategy(use_early):
+        """使用指定下班策略排程，返回 (segments, end_time, breaks_used, max_shift_used)。"""
+        _breaks = cfg['early_breaks'] if use_early else cfg['breaks']
+        _max_shift = cfg['early_max'] if use_early else MAX_SHIFT
+        _target_work = TARGET_WORK_EARLY if use_early else TARGET_WORK_NORMAL
+        # 目标有效时长不含固定休息；目标下班时刻按真实钟表跨度：
+        # 下早班 8 小时有效 + 休息 = 班次开始后 560 分钟；
+        # 正常班 10 小时有效 + 休息 = 班次开始后 720 分钟。
+        _target_end = _max_shift
+        _ideal_min_end = _target_end - 10
+
+        base_durations, base_sources = make_durations(1.0)
+        segs, cur = try_schedule(base_durations, duration_sources=base_sources, breaks_list=_breaks)
+        if cur > _target_end:
+            # 任务过多时先尝试压缩每件耗时，但 make_durations 会保证 tpp >= MIN_TPP。
+            lo, hi = 0.01, 1.0
+            best_fit = None
+            best_fit_cur = None
+            min_segs, min_cur = segs, cur
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                trial_durations, trial_sources = make_durations(mid, min_tpp_override=MIN_TPP)
+                trial_segs, trial_cur = try_schedule(trial_durations, duration_sources=trial_sources, breaks_list=_breaks)
+                min_segs, min_cur = trial_segs, trial_cur
+                if trial_cur <= _target_end:
+                    best_fit, best_fit_cur = trial_segs, trial_cur
+                    lo = mid
+                else:
+                    hi = mid
+            if best_fit is not None:
+                segs, cur = best_fit, best_fit_cur
+            else:
+                segs, cur = min_segs, min_cur
+
+        def make_hidden_slots(total_hidden):
+            if total_hidden <= 0.001:
+                return []
+            n_real = max(1, len(records))
+            n_buffers = max(1, int(math.ceil(total_hidden / 10.0)))
+            step = n_real / n_buffers
+            slots = []
+            remaining = float(total_hidden)
+            for k in range(n_buffers):
+                dur = min(10.0, remaining)
+                remaining -= dur
+                if dur <= 0.001:
+                    break
+                pos = min(int(round((k + 1) * step)), n_real)
+                slots.append((pos, {
+                    'station': '/', 'product': '/', 'sender': '/', 'work_order': '/',
+                    'mold': '/', 'machine': '/', 'test_type': '/',
+                    'send_date': '/', 'send_time': '/', 'quantity': '/',
+                    'type': 'hidden_buffer', 'hidden': True, '_dur': float(dur),
+                    'note': '隐形缓冲',
+                }))
+            return slots
+
+        # hidden_buffer：每段最多 10 分钟。用二分搜索控制插入总量，
+        # 避免缓冲跨过固定休息后把最终结束时间推过目标下班窗口。
+        if cur < _ideal_min_end:
+            lo, hi = 0.0, max(0.0, _ideal_min_end - cur)
+            best_slots = []
+            best_segs = segs
+            best_cur = cur
+            for _ in range(24):
+                mid = (lo + hi) / 2
+                slots = make_hidden_slots(mid)
+                trial_segs, trial_cur = try_schedule(base_durations, duration_sources=base_sources, extra_slots=slots, breaks_list=_breaks)
+                if trial_cur <= _ideal_min_end + 0.001:
+                    best_slots, best_segs, best_cur = slots, trial_segs, trial_cur
+                    lo = mid
+                else:
+                    hi = mid
+            segs, cur = best_segs, best_cur
+
+        return segs, cur, _breaks, _max_shift, _target_work, _target_end
+
+    def add_fillers(segs, cur, max_shift, target_work, breaks_list):
+        """如果仍不足 target_work，插入手量/其他事务。返回新 segs, cur。"""
+        effective, _, _, _, _ = compute_stats(segs)
+        if effective >= target_work:
+            return segs, cur
+        need = target_work - effective
+        slots = []
+        slack = max(0.0, max_shift - cur)
+        if enable_hand and hand_max > slack:
+            schedule_warnings.append(
+                f'手量最大时长({int(hand_max)}分钟)超过班次剩余时间({int(slack)}分钟)，已自动限制')
+        if enable_other and other_max > slack:
+            schedule_warnings.append(
+                f'其他事务最大时长({int(other_max)}分钟)超过班次剩余时间({int(slack)}分钟)，已自动限制')
+        if enable_hand:
+            hand_count = 0
+            while need > 5 and hand_count < 2:
+                fill = min(need, hand_max, slack)
+                if fill < 5:
+                    break
+                slots.append(('手量', fill))
+                need -= fill
+                slack -= fill
+                hand_count += 1
+        if enable_other and need > 5:
+            fill = min(need, other_max, slack)
+            if fill >= 5:
+                slots.append(('其他事务', fill))
+                need -= fill
+                slack -= fill
+
+        if slots:
+            n_work = sum(1 for s in segs if s['type'] == 'work' and not s.get('note'))
+            gap = max(1, n_work // (len(slots) + 1))
+            extra_slots = []
+            for i, (note, dur) in enumerate(slots):
+                pos = min((i + 1) * gap, n_work)
+                extra_slots.append((pos, {
+                    'station': '/', 'product': '/', 'sender': '/', 'work_order': '/',
+                    'mold': '/', 'machine': '/', 'test_type': '/',
+                    'send_date': '/', 'send_time': '/', 'quantity': '/',
+                    'note': note, '_dur': float(dur), 'duration_source': 'hand_filler' if note == '手量' else 'other_filler',
+                }))
+            segs, cur = try_schedule(make_durations(1.0)[0], duration_sources=make_durations(1.0)[1], extra_slots=extra_slots, breaks_list=breaks_list)
+        return segs, cur
+
+    # 执行排程
+    best_segs = None
+    best_end = 0
+    best_breaks = None
+    best_max_shift = 0
+    best_target_work = TARGET_WORK_NORMAL
+    best_target_end = TARGET_WORK_NORMAL
+    chosen_strategy = leave_strategy
+    strategy_reason = ''
+
+    if leave_strategy == 'early':
+        best_segs, best_end, best_breaks, best_max_shift, best_target_work, best_target_end = schedule_with_strategy(True)
+        if best_end > best_target_end:
+            schedule_warnings.append(
+                f'任务量过多，即使按每件{MIN_TPP}分钟压缩仍会超过目标结束时间，建议将部分包移到下一天')
+    elif leave_strategy == 'normal':
+        best_segs, best_end, best_breaks, best_max_shift, best_target_work, best_target_end = schedule_with_strategy(False)
+        if best_end > best_target_end:
+            schedule_warnings.append(
+                f'任务量过多，即使按每件{MIN_TPP}分钟压缩仍会超过目标结束时间，建议将部分包移到下一天')
+    else:  # auto
+        # 先尝试下早班
+        segs_early, end_early, breaks_early, max_early, target_work_early, target_end_early = schedule_with_strategy(True)
+        if end_early <= target_end_early:
+            best_segs, best_end, best_breaks, best_max_shift, best_target_work, best_target_end = \
+                segs_early, end_early, breaks_early, max_early, target_work_early, target_end_early
+            chosen_strategy = 'early'
+            strategy_reason = '任务量适合下早班'
+        else:
+            # 下早班会超时，尝试正常班
+            segs_normal, end_normal, breaks_normal, max_normal, target_work_normal, target_end_normal = schedule_with_strategy(False)
+            best_segs, best_end, best_breaks, best_max_shift, best_target_work, best_target_end = \
+                segs_normal, end_normal, breaks_normal, max_normal, target_work_normal, target_end_normal
+            chosen_strategy = 'normal'
+            if end_normal <= target_end_normal:
+                strategy_reason = '下早班会超过目标下班时间，已按正常班排程'
+                schedule_warnings.append(f'系统判断：正常班。原因：{strategy_reason}')
+            else:
+                strategy_reason = '下早班和正常班均超过目标下班时间'
+                schedule_warnings.append(
+                    f'任务量过多，即使按每件{MIN_TPP}分钟压缩仍会超过目标结束时间，建议将部分包移到下一天')
+
+    breaks = best_breaks
+    max_shift = best_max_shift
+    target_work = best_target_work
+    target_end = best_target_end
+
+    # 插入手量/其他事务补时
+    best_segs, best_end = add_fillers(best_segs, best_end, max_shift, target_work, breaks)
+
+    # 最终检查
+    detailed_stats = compute_detailed_stats(best_segs)
+    total_effective = detailed_stats['total_effective']
+    total_rest = detailed_stats['total_rest']
+    hidden_buffer_total = detailed_stats['hidden_buffer_total']
+    total_shift = detailed_stats['total_shift']
+    last_end = detailed_stats['last_end']
+    if total_effective < target_work and leave_strategy != 'auto':
+        duration_str = f'{int(total_effective // 60)}h{int(total_effective % 60)}m'
+        target_str = f'{int(target_work // 60)}h{int(target_work % 60)}m'
+        if enable_hand or enable_other:
+            schedule_warnings.append(
+                f'有效时长不足: 当前{duration_str}, 需要{target_str}, 即使插入手量/其他事务仍不够')
+        else:
+            schedule_warnings.append(
+                f'有效时长不足: 当前{duration_str}, 需要{target_str}, 请勾选手量或其他事务补时')
+
+    # 在第一个 segment 中记录排程元信息，供 preview 使用
+    if best_segs:
+        best_segs[0]['_schedule_meta'] = {
+            'strategy': chosen_strategy,
+            'reason': strategy_reason,
+            'target_work': target_work,
+            'target_end': target_end,
+            'total_effective': total_effective,
+            'total_rest': total_rest,
+            'hidden_buffer_total': hidden_buffer_total,
+            'total_shift': total_shift,
+            'last_end': last_end,
+            'regular_effective': detailed_stats['regular_effective'],
+            'real_manual_effective': detailed_stats['real_manual_effective'],
+            'special_effective': detailed_stats['special_effective'],
+            'zhengxing_cnc_effective': detailed_stats['zhengxing_cnc_effective'],
+            'cnc_effective': detailed_stats['cnc_effective'],
+            'hand_filler_minutes': detailed_stats['hand_filler_minutes'],
+            'other_filler_minutes': detailed_stats['other_filler_minutes'],
+        }
+
+    for seg in best_segs:
+        for key in ('start', 'end'):
+            if key in seg and isinstance(seg[key], (int, float)):
+                total = int(seg[key] + offset)
+                seg[key] = dtime((total // 60) % 24, total % 60)
+    return best_segs, schedule_warnings
+
+
+def generate_report(records, tasks, test_date, output_name_suffix="", operator_name=OPERATOR_NAME, output_dir=None):
+    base_name = f"滁州量测室总体日报汇总表-OMM-{operator_name}{output_name_suffix}"
+    out_dir = output_dir if output_dir else OUTPUT_DIR
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+    output_path = os.path.join(out_dir, f"{base_name}.xlsx")
+
+    if os.path.exists(output_path):
+        try:
+            os.remove(output_path)
+        except PermissionError:
+            output_path = os.path.join(out_dir, f"{base_name}{datetime.now().strftime('_%H%M%S')}.xlsx")
+
+    if not TEMPLATE_PATH or not os.path.isfile(TEMPLATE_PATH):
+        print("错误：未找到模板文件。请在工作目录中放置模板：数据源备份/滁州量测室总体日报汇总表-OMM-禹欣1.xlsx")
+        return None
+
+    shutil.copy(TEMPLATE_PATH, output_path)
+
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb.active
+    ws.title = output_name_suffix.lstrip('-')
+    for name in wb.sheetnames:
+        if name != ws.title:
+            del wb[name]
+
+    # 隐形缓冲/休息不写入 Excel
+    visible_tasks = [t for t in tasks if not (t.get('hidden') == True or t.get('type') in ('invisible_rest', 'hidden_buffer'))]
+
+    for mr in list(ws.merged_cells.ranges):
+        if mr.min_row >= 8 and mr.max_row <= 9:
+            ws.unmerge_cells(str(mr))
+
+    black_font = InlineFont(rFont='微软雅黑', sz=11, b=True, color='FF000000')
+    red_font = InlineFont(rFont='微软雅黑', sz=11, b=True, color='FFFF0000')
+    data_font = Font(name='微软雅黑', size=11)
+    thin_side = Side(style='thin', color='FF000000')
+    thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+
+    ws['H2'].value = CellRichText([TextBlock(text="送测项目\n", font=black_font),
+                                   TextBlock(text="(OMM/CMM/3D轮廓仪）", font=red_font)])
+    ws['K2'].value = CellRichText([TextBlock(text="送测数量", font=black_font),
+                                   TextBlock(text="（测试数量）", font=red_font)])
+
+    for row in range(3, 41):
+        for col in range(1, 19):
+            ws.cell(row=row, column=col).value = None
+
+    for row in range(3, 41):
+        ws.cell(row=row, column=15).value = f'=IF(N{row}>=M{row},N{row}-M{row},IF(N{row}+1-M{row}<=0.5,N{row}+1-M{row},"检查"))'
+        ws.cell(row=row, column=16).value = f'=IF(ISBLANK(M{row}),"待测","已完成")'
+    for row in range(3 + len(visible_tasks), 41):
+        ws.cell(row=row, column=15).value = f"=N{row}-M{row}"
+
+    ROW_END = 3 + len(visible_tasks)
+    for i, task in enumerate(visible_tasks):
+        row = 3 + i
+        is_rest = task.get('type') in ('rest', 'pkg_rest')
+        is_fake = task.get('note') in ('手量', '其他事务')
+
+        if is_rest:
+            for col in range(1, 12):
+                ws.cell(row=row, column=col).value = '/'
+            ws.cell(row=row, column=12).value = test_date
+            ws.cell(row=row, column=12).number_format = 'yyyy/m/d'
+            ws.cell(row=row, column=13).value = task.get('start', '/')
+            ws.cell(row=row, column=13).number_format = 'h:mm'
+            ws.cell(row=row, column=14).value = task.get('end', '/')
+            ws.cell(row=row, column=14).number_format = 'h:mm'
+            ws.cell(row=row, column=17).value = '/'
+            ws.cell(row=row, column=18).value = '休息'
+            continue
+        is_real_manual = task.get('manual_kind') == 'real'
+        # 判断是否为同一条真实手量的后续段（非第一段）
+        is_real_manual_continuation = False
+        if is_real_manual:
+            task_id = task.get('manual_task_id')
+            if task_id:
+                # 统计该任务在 visible_tasks 中已出现次数
+                seen_count = sum(1 for prev in visible_tasks[:i] if prev.get('manual_task_id') == task_id)
+                is_real_manual_continuation = seen_count > 0
+
+        if is_fake and not is_real_manual:
+            for col in (1, 2, 3, 4, 5, 6, 7, 10, 11):
+                ws.cell(row=row, column=col).value = '/'
+            ws.cell(row=row, column=8).value = "OMM"
+            ws.cell(row=row, column=9).value = test_date
+            ws.cell(row=row, column=9).number_format = 'yyyy/m/d'
+            ws.cell(row=row, column=12).value = test_date
+            ws.cell(row=row, column=12).number_format = 'yyyy/m/d'
+        else:
+            ws.cell(row=row, column=1).value = task.get('station', '/')
+            if is_real_manual and is_real_manual_continuation:
+                # 后续续行：避免重复显示完整数量，避免看起来像测了两次
+                ws.cell(row=row, column=2).value = task.get('product', '/')  # 保留品名便于识别
+                ws.cell(row=row, column=3).value = '/'
+                ws.cell(row=row, column=4).value = '/'
+                ws.cell(row=row, column=5).value = '/'
+                ws.cell(row=row, column=6).value = '/'
+                ws.cell(row=row, column=7).value = '/'
+                ws.cell(row=row, column=8).value = "OMM"
+                ws.cell(row=row, column=9).value = '/'
+                ws.cell(row=row, column=10).value = '/'
+                ws.cell(row=row, column=11).value = '/'  # 数量不写完整值
+            else:
+                ws.cell(row=row, column=2).value = task.get('product', '/')
+                ws.cell(row=row, column=3).value = task.get('sender', '/')
+                ws.cell(row=row, column=4).value = task.get('work_order', '/')
+                ws.cell(row=row, column=5).value = task.get('mold', '/')
+                ws.cell(row=row, column=6).value = task.get('machine', '/')
+                ws.cell(row=row, column=7).value = task.get('test_type', '/')
+                ws.cell(row=row, column=8).value = "OMM"
+                ws.cell(row=row, column=9).value = task.get('send_date', '/')
+                ws.cell(row=row, column=9).number_format = 'yyyy/m/d'
+                send_time = _parse_time_str(task.get('send_time', '/'))
+                ws.cell(row=row, column=10).value = send_time if send_time else task.get('send_time', '/')
+                ws.cell(row=row, column=10).number_format = 'h:mm'
+                ws.cell(row=row, column=11).value = task.get('quantity', '/')
+            ws.cell(row=row, column=12).value = test_date
+            ws.cell(row=row, column=12).number_format = 'yyyy/m/d'
+
+        ws.cell(row=row, column=13).value = task.get('start', '/')
+        ws.cell(row=row, column=13).number_format = 'h:mm'
+        ws.cell(row=row, column=14).value = task.get('end', '/')
+        ws.cell(row=row, column=14).number_format = 'h:mm'
+        ws.cell(row=row, column=17).value = task.get('operator', operator_name)
+        if is_real_manual and is_real_manual_continuation:
+            ws.cell(row=row, column=18).value = '真实手量续行'
+        else:
+            ws.cell(row=row, column=18).value = task.get('note', '')
+
+    # 应用数据行字体、边框，并清除原条件格式（原模板条件格式在删改行列后容易异常）
+    for row in range(3, 41):
+        for col in range(1, 19):
+            cell = ws.cell(row=row, column=col)
+            if cell.font is None or cell.font.name != '微软雅黑':
+                cell.font = data_font
+            cell.border = thin_border
+    ws.conditional_formatting._cf_rules.clear()
+
+    # 重新添加状态列条件格式：已完成=绿底绿字，待测=红底红字
+    green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+    green_font = Font(color='FF006100', bold=True)
+    red_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+    red_font = Font(color='FF9C0006', bold=True)
+    last_data_row = 40
+    status_range = f'P3:P{last_data_row}'
+    ws.conditional_formatting.add(status_range,
+                                  CellIsRule(operator='equal', formula=['"已完成"'],
+                                             fill=green_fill, font=green_font))
+    ws.conditional_formatting.add(status_range,
+                                  CellIsRule(operator='equal', formula=['"待测"'],
+                                             fill=red_fill, font=red_font))
+
+    wb.save(output_path)
+    print(f"报表已生成: {output_path}")
+    print(f"共填入 {len(tasks)} 行数据")
+    return output_path
+
+
+def run(base_dir, early_leave=False, leave_strategy=None,
+        tpp_min=TPP_MIN_DEFAULT, tpp_max=TPP_MAX_DEFAULT,
+        pkg_rest=PKG_REST_DEFAULT,
+        enable_hand=True, enable_other=False,
+        operator_name=OPERATOR_NAME, output_dir=None, shift_override=None,
+        special_items=None, hand_max=120, other_max=90,
+        real_manual_tasks=None):
+    records, review_map = parse_all_folders(base_dir, operator_name=operator_name)
+    # 允许普通 records 为空，只要 real_manual_tasks 非空
+    if not records and not real_manual_tasks:
+        return None, [], [], [], {}
+
+    folder_name = os.path.basename(base_dir.rstrip('\\/'))
+    if shift_override in ('A', 'B'):
+        shift_label = shift_override
+    else:
+        shift_label = 'B' if folder_name.upper().endswith('B') else 'A'
+
+    segments, sched_warnings = schedule_tasks(records, shift_label, early_leave=early_leave,
+                              leave_strategy=leave_strategy,
+                              tpp_min=tpp_min, tpp_max=tpp_max, pkg_rest=pkg_rest,
+                              enable_hand=enable_hand, enable_other=enable_other,
+                              special_items=special_items,
+                              hand_max=hand_max, other_max=other_max,
+                              real_manual_tasks=real_manual_tasks)
+
+    suffix = f"-{folder_name}"
+    if leave_strategy == 'early' or (leave_strategy is None and early_leave):
+        suffix += "-下早班"
+
+    m = re.match(r'(\d+)\.(\d+)', folder_name)
+    test_date = datetime(datetime.now().year, int(m.group(1)), int(m.group(2))) if m else datetime.now()
+
+    # 默认输出到源文件夹
+    if output_dir is None:
+        output_dir = base_dir
+    output_path = generate_report(records, segments, test_date, suffix, operator_name=operator_name, output_dir=output_dir)
+    return output_path, records, review_map, [], sched_warnings
+
+
+def main():
+    print(f"=== 禹欣日报生成系统 ===")
+    print(f"数据源: {os.path.join(WORK_DIR, '数据源备份')}")
+    print()
+    base_dir = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(WORK_DIR, "数据源备份", "6.5B")
+    early = '--early' in sys.argv
+    hand = '--hand' in sys.argv or '--手动量' in sys.argv
+    other = '--other' in sys.argv or '--其他' in sys.argv
+    output_path, records, review_map, warnings, sched_warnings = run(base_dir, early_leave=early, enable_hand=hand, enable_other=other)
+    if warnings:
+        for folder, warns in warnings:
+            print(f"  ! {folder}: {', '.join(warns)}")
+    if sched_warnings:
+        for w in sched_warnings:
+            print(f"  ! {w}")
+    if output_path:
+        print(f"\n完成！报表保存至: {output_path}")
+        subprocess.Popen(f'explorer "{OUTPUT_DIR}"')
+    else:
+        print("未找到有效任务！")
+
+
+def preview(base_dir, early_leave=False, leave_strategy=None,
+            tpp_min=TPP_MIN_DEFAULT, tpp_max=TPP_MAX_DEFAULT,
+            pkg_rest=PKG_REST_DEFAULT, enable_hand=True, enable_other=False,
+            operator_name=OPERATOR_NAME, records=None, shift_override=None,
+            special_items=None, hand_max=120, other_max=90,
+            real_manual_tasks=None):
+    """返回预估信息字典，不生成文件。可传入已审核的 records，否则重新解析。"""
+    import math
+
+    if records is None:
+        records, _ = parse_all_folders(base_dir, operator_name=operator_name)
+    # 允许 records 为空，只要 real_manual_tasks 非空；两者都空才失败
+    if not records and not real_manual_tasks:
+        return None
+
+    folder_name = os.path.basename(base_dir.rstrip('\\/'))
+    if shift_override in ('A', 'B'):
+        shift_label = shift_override
+    else:
+        shift_label = 'B' if folder_name.upper().endswith('B') else 'A'
+    cfg = SHIFTS[shift_label]
+    start_offset = cfg['start_offset']
+
+    # 兼容旧参数
+    if leave_strategy is None:
+        leave_strategy = 'early' if early_leave else 'normal'
+
+    segments, sched_warnings = schedule_tasks(records, shift_label, early_leave=early_leave,
+                              leave_strategy=leave_strategy,
+                              tpp_min=tpp_min, tpp_max=tpp_max, pkg_rest=pkg_rest,
+                              enable_hand=enable_hand, enable_other=enable_other,
+                              special_items=special_items,
+                              hand_max=hand_max, other_max=other_max,
+                              real_manual_tasks=real_manual_tasks)
+
+    # 从第一个 segment 的元信息读取统计
+    meta = segments[0].get('_schedule_meta', {}) if segments else {}
+    total_effective = meta.get('total_effective', 0)
+    total_rest = meta.get('total_rest', 0)
+    hidden_buffer_total = meta.get('hidden_buffer_total', 0)
+    total_shift = meta.get('total_shift', 0)
+    last_end_min = meta.get('last_end', 0)
+    required_effective = meta.get('target_work', TARGET_WORK_NORMAL)
+    target_end_min = meta.get('target_end', TARGET_WORK_NORMAL)
+    chosen_strategy = meta.get('strategy', leave_strategy)
+
+    target_clock_total = int(target_end_min + start_offset)
+    target_clock_end = f"{(target_clock_total // 60) % 24:02d}:{target_clock_total % 60:02d}"
+    actual_clock_total = int(last_end_min + start_offset)
+    actual_last_end = f"{(actual_clock_total // 60) % 24:02d}:{actual_clock_total % 60:02d}"
+    finish_delta_minutes = int(target_end_min - last_end_min)
+
+    # 缺口诊断与决策建议
+    visible_effective = max(0, total_effective - hidden_buffer_total)
+    need_minutes = max(0, required_effective - visible_effective)
+    shortage_level = 'ok'
+    if need_minutes >= 180:
+        shortage_level = 'extreme'
+    elif need_minutes >= 60:
+        shortage_level = 'severe'
+    elif need_minutes > 0:
+        shortage_level = 'shortage'
+
+    decision = {
+        'level': shortage_level,
+        'need_minutes': need_minutes,
+        'regular_effective': meta.get('regular_effective', 0),
+        'real_manual_effective': meta.get('real_manual_effective', 0),
+        'special_effective': meta.get('special_effective', 0),
+        'zhengxing_cnc_effective': meta.get('zhengxing_cnc_effective', 0),
+        'cnc_effective': meta.get('cnc_effective', 0),
+        'hand_filler_minutes': meta.get('hand_filler_minutes', 0),
+        'other_filler_minutes': meta.get('other_filler_minutes', 0),
+        'hidden_buffer_total': hidden_buffer_total,
+        'target_clock_end': target_clock_end,
+        'actual_last_end': actual_last_end,
+        'options': [],
+    }
+
+    if shortage_level != 'ok':
+        if shortage_level == 'extreme':
+            decision['message'] = f'数据严重不足：当前可见有效时长 {format_minutes(visible_effective)}，目标 {format_minutes(required_effective)}，还缺 {need_minutes} 分钟。'
+            decision['title'] = '数据严重不足'
+        elif shortage_level == 'severe':
+            decision['message'] = f'数据不足：当前可见有效时长 {format_minutes(visible_effective)}，目标 {format_minutes(required_effective)}，还缺 {need_minutes} 分钟。'
+            decision['title'] = '数据不足'
+        else:
+            decision['message'] = f'有效时长不足：当前可见有效时长 {format_minutes(visible_effective)}，目标 {format_minutes(required_effective)}，还缺 {need_minutes} 分钟。'
+            decision['title'] = '有效时长不足'
+
+        decision['options'].append({
+            'key': 'as_is',
+            'label': '如实填写',
+            'description': '不自动补时间，按当前数据生成报表（隐形缓冲仍会显示但不写入Excel）。',
+        })
+        decision['options'].append({
+            'key': 'add_real_manual',
+            'label': '补充真实手量',
+            'description': f'打开手量补录窗口，建议补充约 {need_minutes} 分钟的真实手量。',
+        })
+        if enable_hand or enable_other:
+            decision['options'].append({
+                'key': 'add_filler',
+                'label': '补充其他事务 / 补时间手量',
+                'description': f'使用现有设置插入补时间手量/其他事务（已插入 {int(meta.get("hand_filler_minutes", 0) + meta.get("other_filler_minutes", 0))} 分钟）。',
+            })
+        else:
+            decision['options'].append({
+                'key': 'enable_filler',
+                'label': '启用补时间手量/其他事务',
+                'description': '当前未启用补时间功能，可在单日设置中开启。',
+            })
+    else:
+        decision['message'] = '当前有效时长已满足目标要求。'
+        decision['title'] = '时长充足'
+
+    # 若命中整形 CNC，在 warnings 中追加提示
+    if meta.get('zhengxing_cnc_effective', 0) > 0:
+        sched_warnings.append(f'整形CNC规则已生效：按 max(30, 数量×5分钟) 计算耗时')
+
+    rows = []
+    seen_real_manual_ids = set()
+    for i, seg in enumerate(segments):
+        start = seg['start']
+        end = seg['end']
+        seg_type = seg['type']
+
+        start_min = start.hour * 60 + start.minute
+        end_min = end.hour * 60 + end.minute
+        if end_min < start_min:
+            end_min += 1440
+        duration = end_min - start_min
+
+        if seg_type == 'work':
+            qty = seg.get('quantity', '/')
+            if isinstance(qty, int) and qty > 0:
+                tpp = round(duration / qty, 1)
+            else:
+                tpp = '—'
+            note = seg.get('note', '')
+            manual_kind = seg.get('manual_kind')
+            if manual_kind == 'real':
+                type_label = '真实手量'
+                task_id = seg.get('manual_task_id')
+                is_continuation = task_id and task_id in seen_real_manual_ids
+                if task_id:
+                    seen_real_manual_ids.add(task_id)
+                if is_continuation:
+                    qty = '/'
+            elif note == '手量':
+                type_label = '手量'
+            elif note == '其他事务':
+                type_label = '其他事务'
+            else:
+                type_label = '工作'
+            rows.append({
+                'seq': i + 1,
+                'product': seg.get('product', '/') if manual_kind != 'real' and note not in ('手量', '其他事务') else seg.get('product', '/'),
+                'qty': qty if manual_kind != 'real' and note not in ('手量', '其他事务') else (qty if manual_kind == 'real' else '—'),
+                'start': start.strftime('%H:%M'),
+                'end': end.strftime('%H:%M'),
+                'tpp': tpp if note not in ('手量', '其他事务') else '—',
+                'type': type_label,
+                'source': 'real_manual' if manual_kind == 'real' else (
+                    seg.get('duration_source', 'tpp') if note not in ('手量', '其他事务') else
+                    ('hand_filler' if note == '手量' else 'other_filler')
+                ),
+            })
+        elif seg_type == 'rest':
+            rows.append({
+                'seq': i + 1,
+                'product': '—',
+                'qty': '—',
+                'start': start.strftime('%H:%M'),
+                'end': end.strftime('%H:%M'),
+                'tpp': '—',
+                'type': '休息'
+            })
+        elif seg_type == 'pkg_rest':
+            rows.append({
+                'seq': i + 1,
+                'product': '—',
+                'qty': '—',
+                'start': start.strftime('%H:%M'),
+                'end': end.strftime('%H:%M'),
+                'tpp': '—',
+                'type': '包间休息'
+            })
+        elif seg_type == 'hidden_buffer' or seg.get('hidden'):
+            rows.append({
+                'seq': i + 1,
+                'product': '—',
+                'qty': '—',
+                'start': start.strftime('%H:%M'),
+                'end': end.strftime('%H:%M'),
+                'tpp': '—',
+                'type': '隐形缓冲'
+            })
+        elif seg.get('manual_kind') == 'real' or seg_type == 'real_manual':
+            rows.append({
+                'seq': i + 1,
+                'product': seg.get('product', '/'),
+                'qty': seg.get('quantity', '/'),
+                'start': start.strftime('%H:%M'),
+                'end': end.strftime('%H:%M'),
+                'tpp': '—',
+                'type': '真实手量'
+            })
+
+    meets_required = total_effective >= required_effective
+
+    # 估算还需多少件
+    need = max(0, required_effective - total_effective)
+    estimates = {}
+    if need > 0:
+        existing_qtys = [r['quantity'] for r in records
+                        if isinstance(r.get('quantity'), int) and r['quantity'] > 0]
+        if existing_qtys:
+            avg_tpp = total_effective / sum(existing_qtys) if existing_qtys else (tpp_max + tpp_min) / 2
+            conservative_tpp = tpp_max
+            conservative_duration_per_piece = conservative_tpp + (pkg_rest / 10)
+            conservative_pieces = math.ceil(need / conservative_duration_per_piece) if conservative_duration_per_piece > 0 else 999
+            optimistic_duration_per_piece = avg_tpp + (pkg_rest / 10)
+            optimistic_pieces = math.ceil(need / optimistic_duration_per_piece) if optimistic_duration_per_piece > 0 else 999
+            estimates = {
+                'optimistic': optimistic_pieces,
+                'conservative': conservative_pieces,
+                'need_minutes': need
+            }
+        else:
+            estimates = {
+                'optimistic': 999,
+                'conservative': 999,
+                'need_minutes': need
+            }
+
+    return {
+        'folder_name': folder_name,
+        'shift_label': shift_label,
+        'early_leave': early_leave,
+        'leave_strategy': chosen_strategy,
+        'records': records,
+        'warnings': [],
+        'schedule_warnings': sched_warnings,
+        'rows': rows,
+        'summary': {
+            'total_shift': total_shift,
+            'total_work': total_effective,
+            'total_effective': total_effective,
+            'required_effective': required_effective,
+            'total_rest': total_rest,
+            'hidden_buffer_total': hidden_buffer_total,
+            'meets_min': meets_required,
+            'meets_required': meets_required,
+            'estimates': estimates,
+            'target_clock_end': target_clock_end,
+            'actual_last_end': actual_last_end,
+            'finish_delta_minutes': finish_delta_minutes,
+            'regular_effective': decision['regular_effective'],
+            'real_manual_effective': decision['real_manual_effective'],
+            'special_effective': decision['special_effective'],
+            'zhengxing_cnc_effective': decision['zhengxing_cnc_effective'],
+            'cnc_effective': decision['cnc_effective'],
+            'hand_filler_minutes': decision['hand_filler_minutes'],
+            'other_filler_minutes': decision['other_filler_minutes'],
+            'need_minutes': decision['need_minutes'],
+            'shortage_level': decision['level'],
+            'decision': decision,
+        }
+    }
+
+
+if __name__ == '__main__':
+    main()

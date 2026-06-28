@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+}
+
+@layer components {
+  .setting-row {
+    @apply flex items-center gap-2 flex-wrap;
+  }
+
+  .field-label {
+    @apply text-sm font-medium text-slate-700 shrink-0;
+  }
+
+  .form-hint {
+    @apply text-xs leading-relaxed text-slate-500;
+  }
+
+  .info-strip {
+    @apply rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-800;
+  }
+
+  .warning-strip {
+    @apply rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900;
+  }
+
+  .soft-panel {
+    @apply rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

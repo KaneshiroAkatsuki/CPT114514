@@ -1,0 +1,138 @@
+use tauri::{command, AppHandle};
+
+#[command]
+pub async fn select_folder(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    
+    let path = app.dialog()
+        .file()
+        .blocking_pick_folder();
+    
+    match path {
+        Some(path) => Ok(Some(path.to_string())),
+        None => Ok(None),
+    }
+}
+
+/// 弹出文件选择对话框，限定为 .xlsx 文件，用于「替换模板」功能
+#[command]
+pub async fn select_xlsx_file(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let path = app.dialog()
+        .file()
+        .add_filter("Excel 模板", &["xlsx"])
+        .blocking_pick_file();
+
+    match path {
+        Some(path) => Ok(Some(path.to_string())),
+        None => Ok(None),
+    }
+}
+
+fn is_date_folder(name: &str) -> bool {
+    let chars: Vec<char> = name.chars().collect();
+    let mut i = 0;
+    while i < chars.len() && chars[i].is_ascii_digit() { i += 1; }
+    if i == 0 { return false; }
+    if i >= chars.len() || chars[i] != '.' { return false; }
+    i += 1;
+    while i < chars.len() && chars[i].is_ascii_digit() { i += 1; }
+    if i < chars.len() && (chars[i] == 'A' || chars[i] == 'B') { i += 1; }
+    i == chars.len()
+}
+
+#[command]
+pub fn list_date_folders(work_dir: String) -> Result<Vec<String>, String> {
+    let path = std::path::Path::new(&work_dir);
+    if !path.exists() || !path.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut folders = Vec::new();
+    let entries = std::fs::read_dir(&path)
+        .map_err(|e| format!("无法读取目录: {}", e))?;
+    for entry in entries {
+        if let Ok(entry) = entry {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if is_date_folder(&name) {
+                    folders.push(name);
+                }
+            }
+        }
+    }
+    folders.sort();
+    Ok(folders)
+}
+
+/// 列出指定目录的直接子文件夹名（不递归）。
+#[command]
+pub fn list_child_folders(path: String) -> Result<Vec<String>, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() || !p.is_dir() {
+        return Ok(vec![]);
+    }
+    let mut names = Vec::new();
+    let entries = std::fs::read_dir(p)
+        .map_err(|e| format!("无法读取目录: {}", e))?;
+    for entry in entries {
+        if let Ok(entry) = entry {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                names.push(entry.file_name().to_string_lossy().to_string());
+            }
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
+#[command]
+pub async fn open_folder(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    let p = std::path::Path::new(&path);
+    // 如果传入的是文件路径，自动取其父目录
+    let target = if p.is_file() {
+        p.parent().ok_or("无法获取父目录")?
+    } else {
+        // 可能路径不存在（例如 canonicalize 前），尝试取父目录
+        if p.extension().is_some() {
+            p.parent().unwrap_or(p)
+        } else {
+            p
+        }
+    };
+
+    // Validate that target is a real local directory
+    let canonical = std::fs::canonicalize(target)
+        .map_err(|e| format!("无效路径: {}", e))?;
+    if !canonical.is_dir() {
+        return Err("路径不是有效目录".into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&canonical)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&canonical)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&canonical)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    Ok(())
+}
