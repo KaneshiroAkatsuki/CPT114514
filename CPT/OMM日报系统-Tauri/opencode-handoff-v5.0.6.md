@@ -645,7 +645,8 @@ Git 根目录：D:\KSoftware\KMAA
 13. 真实手量归属逻辑明确化：`-OMM-姓名-手量-测量员` 归入 OMM 姓名日报；量测员按手量段姓名填写；弹窗显示日报归属人和归属提示。
 14. 版本号仍保持 5.0.7。
 
-最新完整提交链（op 本轮提交后请更新为实际 hash）：
+最新完整提交链：
+- 3964ca2 fix(manual): 明确真实手量归属逻辑，弹窗显示日报归属人和提示
 - ced651f fix(recognition): handle manual sender variants
 - f9f1b45 docs: 更新给 gpt 提示词中的最新提交链
 - ed5dfbb fix(recognition): 修复焊接 41424-41429 规则输出错误
