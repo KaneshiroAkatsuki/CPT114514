@@ -80,6 +80,8 @@ export interface RealManualTask {
   duration_minutes: number;
   /** 测量员 */
   operator: string;
+  /** 工站 */
+  station: string;
   /** 备注/来源 */
   note: string;
   /** 是否来自文件夹识别 */

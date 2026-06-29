@@ -97,9 +97,22 @@
 - **releases 清理**：清空旧 alpha/v5.0.1-v5.0.4 发布残留，仅保留当前有用的 `releases\OMM日报系统_便携版_5.0.7` 和 `releases\OMM日报系统_便携版_5.0.7.zip`。
 - **影响范围**：只做版本与发布产物整理；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
----
+### 1.9 本轮补充修复：手量文件夹识别规则细化（v5.0.7）
 
-## 2. 已验证项目
+按 gpt 复核要求，对手量文件夹自动识别做最小必要修正，未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
+- **品名识别**：优先识别文件夹开头的数字/料号段；新增 `looksLikeProduct()` 排除 `CMM`、`OMM`、`PCS`、`ST`、`MO`、`T0`、`T1`、`IQC`、`OQC` 等关键词；不再把 `CMM-郑安午` 当作品名。
+- **工站识别**：`RealManualTask` 新增 `station` 字段；`recognizeManualTaskFromFolder()` 将第二段识别为工站（如 `开发`、`CNC`、`射出` 等）；弹窗增加“工站”输入框。
+- **送测人识别**：新增支持 `姓名送测` 格式（如 `安容克送测`），仍保留 `-送测-姓名`、`-ST-姓名`。
+- **测量员识别**：继续只从 `-手量-姓名` 识别；`CMM/OMM` 后面的人名不再误放入品名，也不自动当测量员。
+- **测试日期默认值**：手量弹窗的测试日期默认使用队列日期（从 `6.13A` 解析），解析失败则用当天日期；UI 文案改为“测试日期”。
+- **字段精简**：手量弹窗只保留工站、品名、送测人、测试日期、数量、耗时、测量员；送测项目固定 `OMM`，不在弹窗作为输入框。
+- **真实手量 station 写入 Excel**：`generate_report.py` 中真实手量行 station 优先使用任务自带 `station`，未提供时默认 `'手量'`。
+- **帮助文档同步**：命名规则章节增加手量文件夹命名说明。
+
+版本号升级到 **5.0.7**，同步更新了 `package.json`、`src-tauri/tauri.conf.json`、安装包和便携版命名。
+
+---
 
 | 项目 | 结果 |
 |---|---|
@@ -143,6 +156,11 @@
 | `npm.cmd run tauri build`（5.0.7） | 成功 ✓，仅 Vite chunk size 警告 |
 | `scripts/package-portable.ps1 -Version 5.0.7` | 成功 ✓ |
 | releases 清理后仅保留 5.0.7 便携版目录与 zip | 完成 ✓ |
+| 手量文件夹识别细化：565-开发-MO-T0模具测试-安容克送测-96PCS-CMM-郑安午-手量-禹欣 → 品名=565, 工站=开发, 送测人=安容克, 测量员=禹欣 | 通过 ✓ |
+| RealManualTask 新增 station 字段 | 完成 ✓ |
+| 真实手量 station 写入 Excel | 完成 ✓ |
+| 测试日期默认使用队列日期 | 完成 ✓ |
+| 帮助文档手量命名规则同步 | 完成 ✓ |
 
 ---
 
@@ -172,11 +190,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T00:54:52`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T01:30:29`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=eb702a16633df040f0a032ab6e5e4998a534a35f97336a8ddcb79a496045432d
+sha256=ee7540b213706839d2d0bf245b4ff1e8388dc5e131fe3c824b1c0cd35d6c1b01
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab

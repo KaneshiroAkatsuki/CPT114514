@@ -161,39 +161,63 @@ export function recognizeManualTaskFromFolder(folderName: string): Partial<RealM
   // 尝试识别 -OMM-姓名 或 -CMM-姓名 前的产品/送测人（简单启发式）
   const parts = folderName.split(/[-_]/).filter(Boolean);
 
-  // 找品名：手量前面的数字段
-  if (manualMatch) {
-    const idx = parts.findIndex((p) => p.includes('手量'));
-    if (idx > 0) {
-      result.product = parts[idx - 1];
+  // 找品名：优先从头开始找数字/料号段，不要把 CMM/OMM 后的姓名当品名
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (looksLikeProduct(p)) {
+      result.product = p;
+      break;
     }
   }
 
-  // 尝试识别送测人：-送测-姓名 或 -ST-姓名
+  // 工站：第二段如果是工站名称，则取为工站
+  if (parts.length >= 2 && looksLikeStation(parts[1])) {
+    result.station = parts[1];
+  }
+
+  // 送测人：支持 -送测-姓名、-ST-姓名、姓名送测
   const senderMatch = folderName.match(/[-_](?:送测|ST)-([^-_]+)/);
   if (senderMatch) {
     result.sender = senderMatch[1].trim();
+  } else {
+    const senderInline = folderName.match(/([^\-_\d]{2,4})送测/);
+    if (senderInline) {
+      result.sender = senderInline[1].trim();
+    }
   }
 
-  // 尝试识别数量：数字+PCS/pcs/件
+  // 数量：数字+PCS/pcs/件
   const qtyMatch = folderName.match(/(\d+)\s*(?:PCS|pcs|件)/);
   if (qtyMatch) {
     result.quantity = `${qtyMatch[1]}PCS`;
   }
 
-  // 尝试识别日期：M月D日 或 M.D
-  const dateMatch = folderName.match(/(\d{1,2})[月.](\d{1,2})日?/);
-  if (dateMatch) {
-    result.send_date = `${dateMatch[1]}月${dateMatch[2]}日`;
-  }
-
-  // 尝试识别明确耗时（仅在带耗时关键词或明确单位时）
+  // 明确耗时（仅在带耗时关键词或明确单位时）
   const duration = recognizeManualDuration(folderName);
   if (duration !== null) {
     result.duration_minutes = duration;
   }
 
   return result;
+}
+
+/** 判断分段是否像品名/料号：纯数字，或数字+字母混合，不以 CMM/OMM 等开头。 */
+function looksLikeProduct(part: string): boolean {
+  if (!part) return false;
+  const s = part.toUpperCase();
+  const exclude = ['CMM', 'OMM', 'PCS', 'ST', 'MO', 'T0', 'T1', 'IQC', 'OQC'];
+  if (exclude.some((k) => s === k || s.startsWith(k))) return false;
+  return /^\d+$/.test(part) || /^\d+[A-Za-z0-9\-]+$/.test(part);
+}
+
+/** 判断分段是否像工站名称。 */
+function looksLikeStation(part: string): boolean {
+  if (!part) return false;
+  const s = part.trim();
+  if (s.length > 10) return false;
+  const stations = ['开发', 'CNC', '射出', '镭雕', '整形', '烧结', 'IQC', 'OQC', '手量'];
+  if (stations.includes(s.toUpperCase())) return true;
+  return /^[\u4e00-\u9fa5]{1,6}$/.test(s);
 }
 
 /** 判断文件夹名是否包含强手量特征。 */

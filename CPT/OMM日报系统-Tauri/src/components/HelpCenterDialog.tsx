@@ -98,6 +98,17 @@ function Content({ section }: { section: string }) {
             <li>一个日期文件夹下可以包含多个任务子文件夹。</li>
           </ul>
 
+          <h3 className={h3}>手量文件夹命名</h3>
+          <p className={p}>只要子文件夹名包含“手量”就会被识别为真实手量候选，建议格式：</p>
+          <div className={code + " block w-fit mb-3"}>品名-工站-...-数量-CMM/OMM-姓名-手量-测量员</div>
+          <ul className={ul}>
+            <li>品名优先识别开头的数字或料号段，不要把 CMM/OMM 后面的人名当品名。</li>
+            <li>工站优先识别第二段（如“开发”“CNC”“射出”）。</li>
+            <li>送测人支持“张三送测”“-送测-张三”“-ST-张三”三种写法。</li>
+            <li>测量员只从“-手量-姓名”识别，例如“-手量-禹欣”。</li>
+            <li>耗时只在出现“耗时90分钟”“手量1.5H”“耗时1:30”等明确关键词时识别，没有就不猜。</li>
+          </ul>
+
           <h3 className={h3}>任务子文件夹要求</h3>
           <p className={p}>子文件夹名最好包含上述字段，字段缺失时可启用“复杂文件夹处理方案”进行补全。</p>
         </div>
@@ -116,7 +127,7 @@ function Content({ section }: { section: string }) {
             <li><strong>模号</strong> — 模具编号（M 开头）</li>
             <li><strong>机台号</strong> — 机台编号（#号 或 DC/DV）</li>
             <li><strong>检测类型</strong> — 初测/复测等</li>
-            <li><strong>送测日期 / 时间</strong> — 日期与时间信息</li>
+            <li><strong>测试日期 / 时间</strong> — 日期与时间信息</li>
             <li><strong>件数</strong> — 任务数量（文件夹名或 .xlsx 文件）</li>
             <li><strong>测量时间</strong> — 单件测量分钟数（文件夹名或手动补全）</li>
           </ul>

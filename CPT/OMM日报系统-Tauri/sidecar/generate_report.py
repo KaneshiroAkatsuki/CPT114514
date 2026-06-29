@@ -998,7 +998,7 @@ def schedule_tasks(records, shift_label='A', early_leave=False,
                 continue
             task = dict(mt)
             task['_dur'] = duration
-            task['station'] = '手量'
+            task['station'] = mt.get('station') or '手量'
             task['note'] = '真实手量'
             task['manual_kind'] = 'real'
             # 使用 id 或生成稳定标识，用于判断同一任务的多段

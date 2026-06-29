@@ -26,6 +26,7 @@ interface ManualTaskDialogProps {
 }
 
 const EMPTY_TASK: Partial<RealManualTask> = {
+  station: '',
   product: '',
   sender: '',
   work_order: '/',
@@ -43,11 +44,12 @@ const EMPTY_TASK: Partial<RealManualTask> = {
 };
 
 const FIELD_NAMES: Record<string, string> = {
+  station: '工站',
   product: '品名',
   sender: '送测人',
-  send_date: '送测日期',
-  quantity: '测试数量',
-  duration_minutes: '测试耗时',
+  send_date: '测试日期',
+  quantity: '数量',
+  duration_minutes: '耗时（分钟）',
   operator: '测量员',
 };
 
@@ -64,9 +66,10 @@ function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate;
   if (!candidate) return null;
   const recognized = candidate.recognized || {};
   const missingFields: string[] = [];
+  if (!recognized.station) missingFields.push('工站');
   if (!recognized.product) missingFields.push('品名');
   if (!recognized.sender) missingFields.push('送测人');
-  if (!recognized.send_date) missingFields.push('送测日期');
+  if (!recognized.send_date) missingFields.push('测试日期');
   if (!recognized.quantity) missingFields.push('数量');
   if (recognized.duration_minutes === undefined || recognized.duration_minutes === null) missingFields.push('耗时');
   if (!recognized.operator) missingFields.push('测量员');
@@ -80,7 +83,9 @@ function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate;
         <span className="break-all flex-1">来源：{candidate.folderName}</span>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-slate-700">
+        {recognized.station && <span>工站：{recognized.station}</span>}
         {recognized.product && <span>品名：{recognized.product}</span>}
+        {recognized.sender && <span>送测人：{recognized.sender}</span>}
         {recognized.quantity && <span>数量：{recognized.quantity}</span>}
         {hasDurationAuto && (
           <span className="flex items-center gap-1 text-blue-700">
@@ -119,6 +124,25 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     return existing.length > 0 ? existing.map((t) => ({ ...t })) : [];
   }, [item, open]);
 
+  const defaultDate = useMemo(() => {
+    if (!item) return '';
+    // 尝试从 6.13A 这种 dateFolder 解析月和日
+    const m = item.dateFolder.match(/^(\d+)\.(\d+)/);
+    if (m) {
+      return `${m[1]}月${m[2]}日`;
+    }
+    const now = new Date();
+    return `${now.getMonth() + 1}月${now.getDate()}日`;
+  }, [item]);
+
+  const patchedExistingTasks = useMemo(() => {
+    return existingTasks.map((t) => ({
+      ...t,
+      send_date: t.send_date || defaultDate,
+      station: t.station || '',
+    }));
+  }, [existingTasks, defaultDate]);
+
   const candidateMap = useMemo(() => {
     const map: Record<string, ManualFolderCandidate> = {};
     if (!item) return map;
@@ -135,8 +159,8 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     if (!item) return [];
     const candidates = item.manualCandidates || [];
     if (candidates.length === 0) return [];
-    const existingProducts = new Set(existingTasks.map((t) => t.product));
-    const existingSourceFolders = new Set(existingTasks.map((t) => t.source_folder).filter(Boolean));
+    const existingProducts = new Set(patchedExistingTasks.map((t) => t.product));
+    const existingSourceFolders = new Set(patchedExistingTasks.map((t) => t.source_folder).filter(Boolean));
     const drafts: RealManualTask[] = [];
     for (const c of candidates) {
       const recognizedProduct = c.recognized?.product;
@@ -146,6 +170,8 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
       drafts.push({
         ...EMPTY_TASK,
         ...rec,
+        send_date: rec.send_date || defaultDate,
+        station: rec.station || '',
         id: nanoid(),
         duration_minutes: rec.duration_minutes ?? (0 as unknown as number),
         from_recognition: true,
@@ -153,11 +179,11 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
       } as RealManualTask);
     }
     return drafts;
-  }, [item, open, existingTasks]);
+  }, [item, open, patchedExistingTasks, defaultDate]);
 
   const initialTasks = useMemo(() => {
-    return [...existingTasks, ...candidateDrafts];
-  }, [existingTasks, candidateDrafts]);
+    return [...patchedExistingTasks, ...candidateDrafts];
+  }, [patchedExistingTasks, candidateDrafts]);
 
   const [tasks, setTasks] = useState<RealManualTask[]>(initialTasks);
   const [rawInput, setRawInput] = useState("");
@@ -180,6 +206,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
       ...prev,
       {
         ...EMPTY_TASK,
+        send_date: defaultDate,
         id: nanoid(),
         send_project: 'OMM',
         test_type: '测试尺寸',
@@ -317,43 +344,51 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                       className={`rounded-md border p-2 space-y-2 ${errs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
                     >
                       {candidate && <CandidateInfo candidate={candidate} task={t} />}
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['product', 'sender', 'send_date'] as const).map((field) => (
-                          <div key={field} className="space-y-0.5">
-                            <label className="text-[10px] text-slate-500">{FIELD_NAMES[field]}</label>
-                            <Input
-                              className="h-7 text-xs"
-                              value={t[field] as string}
-                              onChange={(e) => handleUpdate(t.id, { [field]: e.target.value })}
-                            />
-                          </div>
-                        ))}
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] text-slate-500">数量</label>
-                          <Input
-                            className="h-7 text-xs"
-                            value={t.quantity}
-                            onChange={(e) => handleUpdate(t.id, { quantity: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] text-slate-500">耗时（分钟）</label>
-                          <Input
-                            className="h-7 text-xs"
-                            placeholder="1.5H/90分钟/1:30"
-                            value={durationInput}
-                            onChange={(e) => handleUpdate(t.id, { durationInput: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] text-slate-500">测量员</label>
-                          <Input
-                            className="h-7 text-xs"
-                            value={t.operator}
-                            onChange={(e) => handleUpdate(t.id, { operator: e.target.value })}
-                          />
-                        </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['station', 'product', 'sender'] as const).map((field) => (
+                      <div key={field} className="space-y-0.5">
+                        <label className="text-[10px] text-slate-500">{FIELD_NAMES[field]}</label>
+                        <Input
+                          className="h-7 text-xs"
+                          value={t[field] as string}
+                          onChange={(e) => handleUpdate(t.id, { [field]: e.target.value })}
+                        />
                       </div>
+                    ))}
+                    <div className="space-y-0.5">
+                      <label className="text-[10px] text-slate-500">{FIELD_NAMES.send_date}</label>
+                      <Input
+                        className="h-7 text-xs"
+                        value={t.send_date}
+                        onChange={(e) => handleUpdate(t.id, { send_date: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      <label className="text-[10px] text-slate-500">{FIELD_NAMES.quantity}</label>
+                      <Input
+                        className="h-7 text-xs"
+                        value={t.quantity}
+                        onChange={(e) => handleUpdate(t.id, { quantity: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      <label className="text-[10px] text-slate-500">{FIELD_NAMES.duration_minutes}</label>
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="1.5H/90分钟/1:30"
+                        value={durationInput}
+                        onChange={(e) => handleUpdate(t.id, { durationInput: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      <label className="text-[10px] text-slate-500">{FIELD_NAMES.operator}</label>
+                      <Input
+                        className="h-7 text-xs"
+                        value={t.operator}
+                        onChange={(e) => handleUpdate(t.id, { operator: e.target.value })}
+                      />
+                    </div>
+                  </div>
                       {errs.length > 0 && (
                         <div className="text-xs text-amber-700 flex items-start gap-1">
                           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
