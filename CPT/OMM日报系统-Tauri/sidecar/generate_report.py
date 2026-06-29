@@ -8,7 +8,7 @@ import openpyxl
 from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
-from openpyxl.formatting.rule import CellIsRule
+from openpyxl.formatting.rule import CellIsRule, FormulaRule
 from datetime import datetime, time as dtime
 
 
@@ -1453,8 +1453,7 @@ def generate_report(records, tasks, test_date, output_name_suffix="", operator_n
 
     ws['H2'].value = CellRichText([TextBlock(text="送测项目\n", font=black_font),
                                    TextBlock(text="(OMM/CMM/3D轮廓仪）", font=red_font)])
-    ws['K2'].value = CellRichText([TextBlock(text="送测数量", font=black_font),
-                                   TextBlock(text="（测试数量）", font=red_font)])
+    ws['K2'].value = "测试数量"
 
     for row in range(3, 41):
         for col in range(1, 19):
@@ -1543,28 +1542,42 @@ def generate_report(records, tasks, test_date, output_name_suffix="", operator_n
         else:
             ws.cell(row=row, column=18).value = task.get('note', '')
 
-    # 应用数据行字体、边框，并清除原条件格式（原模板条件格式在删改行列后容易异常）
+    # 应用数据行基础格式，并清除原条件格式（原模板条件格式在删改行列后容易异常）
     for row in range(3, 41):
         for col in range(1, 19):
             cell = ws.cell(row=row, column=col)
             if cell.font is None or cell.font.name != '微软雅黑':
                 cell.font = data_font
             cell.border = thin_border
+            if col <= 16:
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            else:
+                cell.alignment = Alignment(vertical='center')
+        ws.cell(row=row, column=9).number_format = 'yyyy/m/d'
+        ws.cell(row=row, column=10).number_format = 'h:mm'
+        ws.cell(row=row, column=12).number_format = 'yyyy/m/d'
+        ws.cell(row=row, column=13).number_format = 'h:mm'
+        ws.cell(row=row, column=14).number_format = 'h:mm'
+        ws.cell(row=row, column=15).number_format = 'h:mm:ss;@'
     ws.conditional_formatting._cf_rules.clear()
 
-    # 重新添加状态列条件格式：已完成=绿底绿字，待测=红底红字
+    # 重新添加同事模板口径的条件格式：耗时列绿字，状态列已完成/待测红绿提示
+    duration_font = Font(color='FF006102')
     green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
     green_font = Font(color='FF006100', bold=True)
     red_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
     red_font = Font(color='FF9C0006', bold=True)
     last_data_row = 40
+    ws.conditional_formatting.add(f'O3:O{last_data_row}',
+                                  CellIsRule(operator='greaterThanOrEqual', formula=['0'],
+                                             font=duration_font))
     status_range = f'P3:P{last_data_row}'
     ws.conditional_formatting.add(status_range,
-                                  CellIsRule(operator='equal', formula=['"已完成"'],
-                                             fill=green_fill, font=green_font))
+                                  FormulaRule(formula=['NOT(ISERROR(SEARCH("已完成",P3)))'],
+                                              fill=green_fill, font=green_font))
     ws.conditional_formatting.add(status_range,
-                                  CellIsRule(operator='equal', formula=['"待测"'],
-                                             fill=red_fill, font=red_font))
+                                  FormulaRule(formula=['NOT(ISERROR(SEARCH("待测",P3)))'],
+                                              fill=red_fill, font=red_font))
 
     wb.save(output_path)
     print(f"报表已生成: {output_path}")

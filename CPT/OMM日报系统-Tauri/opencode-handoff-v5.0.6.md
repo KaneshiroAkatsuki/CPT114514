@@ -206,6 +206,33 @@ recognition-rules.json
 
 - **影响范围**：只修改前端 `ManualTaskDialog`、`MainWindow`、`HelpCenterDialog`；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
+### 1.16 gpt 本轮：内置模板数据区样式与生成器条件格式修复
+
+按用户提供的同事模板 `C:\Users\Administrator\Desktop\勿动\滁州量测室总体日报汇总表-尺寸-OMM-卫阳.xlsx` 做样式参照，修复“系统自带模板/生成结果只有表头，数据区颜色和格式不完整”的问题：
+
+- **内置模板重建为干净样式模板**
+  - 更新 `src-tauri/resources/template.xlsx`。
+  - 从同事模板同步 A:R 列宽、标题/表头样式、数据区基础样式。
+  - 清空同事历史数据，只保留空白数据区、O/P 公式和条件格式骨架。
+  - K 列表头统一为 `测试数量`。
+  - R 列继续保留 `备注`，因为程序会写入休息、真实手量续行等说明。
+
+- **生成器不再丢失关键颜色**
+  - 修改 `sidecar/generate_report.py`。
+  - 生成报表时仍会清理原模板散落条件格式，但会重新添加稳定条件格式：
+    - O 列 `耗时`：按同事模板口径设置绿色字体条件格式。
+    - P 列 `状态`：`已完成` 为绿底绿字，`待测` 为红底红字。
+  - 数据行 A:P 统一居中，Q/R 保持垂直居中；日期/时间/耗时列重新指定 number format，避免用户模板只有表头时生成裸格式。
+  - K2 生成时不再写 `送测数量（测试数量）`，改为 `测试数量`。
+
+- **视觉验证**
+  - 用 `test-output/template-style-after` 生成样式测试报表。
+  - 渲染 `A1:R12` 后确认：表头与同事模板口径一致，O 列为深绿色区域，P 列 `已完成/待测` 显示绿/红提示，数据区有完整边框。
+
+- **影响范围**
+  - 只改 Excel 模板和 Excel 写出样式层。
+  - 未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 | 项目 | 结果 |
@@ -296,6 +323,14 @@ recognition-rules.json
 | `npx.cmd tsc --noEmit`（归属逻辑优化后） | 通过 ✓ |
 | `npm.cmd run tauri build`（归属逻辑优化后） | 成功 ✓，仅 Vite chunk size 警告 |
 | `scripts/package-portable.ps1 -Version 5.0.7`（归属逻辑优化后） | 成功 ✓ |
+| 内置模板样式重建：K2=测试数量，R2=备注，O/P 公式中文正常 | 通过 ✓ |
+| 样式测试报表渲染：O列耗时深绿、P列状态红/绿、数据区完整边框 | 通过 ✓ |
+| `python -m py_compile sidecar\generate_report.py`（模板样式修复后） | 通过 ✓ |
+| `npx.cmd tsc --noEmit`（模板样式修复后） | 通过 ✓ |
+| `python sidecar\build_sidecar.py`（模板样式修复后） | 成功 ✓ |
+| `cargo check --release`（模板样式修复后） | 通过 ✓ |
+| `npm.cmd run tauri build`（模板样式修复后） | 成功 ✓，仅 Vite chunk size 警告 |
+| `scripts/package-portable.ps1 -Version 5.0.7`（模板样式修复后） | 成功 ✓ |
 
 ---
 
@@ -325,17 +360,17 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T03:46:37`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T04:54:03`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=10794e5643aca7fd0d0a0f6c350e9b3bb7b48c7fea281895ada1e56f71ac0ba1
+sha256=58ecc912e86bf9fb2c32738026f0f5e033ab8d56e8a2b3bca1929d9ff4dbf0cc
 
 [sidecar] binaries\generate_report.exe
-sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
+sha256=f000c1132601647cf5c515d603f9ea989c5f34a935b529f6292effdad0d9864f
 
 [template] resources\template.xlsx
-sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
+sha256=fff79146816879487da9e71c1d412618c97f608cf9ca8af656bd5fcf581234de
 ```
 
 ---
@@ -348,6 +383,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 4. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
 5. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 6. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
+7. 对模板样式做真实 Excel/GUI 验收：生成一份真实日报，确认 K 列表头为“测试数量”、O 列耗时为绿色样式、P 列状态按“已完成/待测”显示绿/红、R 列备注不丢失。
 
 ---
 
@@ -372,7 +408,8 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 ## 7. 相关文件
 
-- 后端核心：`sidecar/generate_report.py`（本轮未改动）
+- 后端核心：`sidecar/generate_report.py`
+- 内置 Excel 模板：`src-tauri/resources/template.xlsx`
 - 类型：`src/types/record.ts`
 - 工具函数：`src/lib/utils.ts`
 - 识别规则模块：`src/lib/recognitionRules.ts`
@@ -629,7 +666,7 @@ Git 根目录：D:\KSoftware\KMAA
 
 你叫 gpt。当前 opencode 窗口里只有一位 op，就是现在和你交接的这位 op。用户直接对 opencode 说话时，默认是在和 op 对话。如果用户说“gpt”，指的是你当前这个 ChatGPT/Codex 窗口。
 
-当前已完成（含 op 本轮真实手量归属逻辑明确化）：
+当前已完成（含 gpt 本轮模板样式修复）：
 1. ReviewDialog “跳过此包” 正确过滤 records。
 2. ReviewDialog “确认并继续” 校验数量和测量时间至少一项。
 3. ManualTaskDialog “保存并预览” 使用最新 real_manual_tasks。
@@ -643,7 +680,8 @@ Git 根目录：D:\KSoftware\KMAA
 11. 焊接 41424-41429 规则 bug 已修复：`41428` 不再误识别为 `48`，正确输出 `428`。
 12. 关键识别用例已通过代码级验证：565-开发...、X806-65036-04...射出-首件、X511-512-562-563烧结盘、613-41428-(035-625)-焊接。
 13. 真实手量归属逻辑明确化：`-OMM-姓名-手量-测量员` 归入 OMM 姓名日报；量测员按手量段姓名填写；弹窗显示日报归属人和归属提示。
-14. 版本号仍保持 5.0.7。
+14. 内置模板样式已按同事模板口径补齐：K列为“测试数量”，O列耗时绿色样式，P列状态红/绿，R列保留备注；生成器会重建稳定条件格式。
+15. 版本号仍保持 5.0.7。
 
 最新完整提交链：
 - 3964ca2 fix(manual): 明确真实手量归属逻辑，弹窗显示日报归属人和提示
@@ -658,14 +696,14 @@ Git 根目录：D:\KSoftware\KMAA
 
 当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
 
-最新便携版 manifest（packaged_at=2026-06-30T03:46:37）：
-- app: 10794e5643aca7fd0d0a0f6c350e9b3bb7b48c7fea281895ada1e56f71ac0ba1
-- sidecar: 39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
-- template: e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
+最新便携版 manifest（packaged_at=2026-06-30T04:54:03）：
+- app: 58ecc912e86bf9fb2c32738026f0f5e033ab8d56e8a2b3bca1929d9ff4dbf0cc
+- sidecar: f000c1132601647cf5c515d603f9ea989c5f34a935b529f6292effdad0d9864f
+- template: fff79146816879487da9e71c1d412618c97f608cf9ca8af656bd5fcf581234de
 
 注意：
 - op 本轮已做代码级审查和关键用例验证，并修复焊接规则 bug、明确真实手量归属逻辑。
-- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍手量弹窗和识别补充窗口。
+- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍手量弹窗、识别补充窗口，以及生成后 Excel 模板样式。
 
 约束：
 - 不要 git add .，只精确 add 修改过的文件。
