@@ -156,7 +156,7 @@ export function recognizeProductCodes(name: string, station?: string, rules?: Re
       }
     }
     for (const m of name.matchAll(/(?<!\d)414(2[4-9])(?!\d)/g)) {
-      pushUnique(products, `4${m[1].slice(1)}`);
+      pushUnique(products, `42${m[1].slice(1)}`);
       matchedRules.push("内置焊接 41424-41429 规则");
     }
     for (const m of name.matchAll(/(?<!\d)(289|290)(?!\d)/g)) {
