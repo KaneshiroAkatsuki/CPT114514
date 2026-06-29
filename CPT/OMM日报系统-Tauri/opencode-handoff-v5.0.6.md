@@ -310,6 +310,8 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 样式：`src/index.css`
 - UI 组件：`src/components/ui/card.tsx`、`src/components/ui/button.tsx`、`src/components/ui/input.tsx`
 - 需求文档：`OMM日报系统-v5.0.7-手量文件夹自动发现需求.md`
+- 识别规则设计：`OMM日报系统-v5.0.8-品名工站识别规则与补充窗口设计.md`
+- 识别补充交接：`OMM日报系统-v5.0.8-识别补充实现交接.md`
 - 修复交接文档：`OMM日报系统-v5.0.6-修复交接.md`
 - 当前交接文档：`opencode-handoff-v5.0.6.md`
 
