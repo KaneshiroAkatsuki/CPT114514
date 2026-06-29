@@ -24,6 +24,7 @@ interface ManualTaskDialogProps {
   onSave: (tasks: RealManualTask[]) => void;
   onPreview?: (tasks: RealManualTask[]) => void;
   recognitionRules?: RecognitionRules;
+  ownerName?: string;
 }
 
 const EMPTY_TASK: Partial<RealManualTask> = {
@@ -63,7 +64,7 @@ function formatDuration(minutes?: number | null): string {
   return `${m}分钟`;
 }
 
-function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate; task?: RealManualTask }) {
+function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolderCandidate; task?: RealManualTask; ownerName?: string }) {
   if (!candidate) return null;
   const recognized = candidate.recognized || {};
   const missingFields: string[] = [];
@@ -98,6 +99,14 @@ function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate;
         )}
         {recognized.operator && <span className="flex items-center gap-1"><User className="h-3 w-3" />测量员：{recognized.operator}</span>}
       </div>
+      {ownerName && recognized.operator && recognized.operator !== ownerName && (
+        <div className="flex items-start gap-1.5 text-blue-700">
+          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{recognized.operator}</strong> 填写
+          </span>
+        </div>
+      )}
       {missingFields.length > 0 && (
         <div className="flex items-start gap-1.5 text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -121,6 +130,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   onSave,
   onPreview,
   recognitionRules,
+  ownerName = '',
 }) => {
   const existingTasks = useMemo(() => {
     if (!item) return [];
@@ -255,10 +265,6 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     const newTasks: RealManualTask[] = [];
     for (const line of lines) {
       const recognized = recognizeManualTaskFromFolder(line, recognitionRules);
-      if (!recognized.operator) {
-        logs.push(`未识别到手量测量员：${line}`);
-        continue;
-      }
       newTasks.push({
         ...EMPTY_TASK,
         ...recognized,
@@ -299,6 +305,11 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         <DialogTitle>手量任务管理 / 补录 - {item?.dateFolder || ''}</DialogTitle>
         <div className="text-sm text-slate-500">
           识别班次：{effectiveShift ? `${effectiveShift}班` : '未识别'}
+          {ownerName && (
+            <span className="ml-2 text-blue-700">
+              日报归属人：<strong>{ownerName}</strong>
+            </span>
+          )}
         </div>
       </DialogHeader>
       <DialogContent className="space-y-4">
@@ -356,7 +367,15 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                       key={t.id}
                       className={`rounded-md border p-2 space-y-2 ${errs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
                     >
-                      {candidate && <CandidateInfo candidate={candidate} task={t} />}
+                      {candidate && <CandidateInfo candidate={candidate} task={t} ownerName={ownerName} />}
+                      {ownerName && t.operator && t.operator !== ownerName && !candidate && (
+                        <div className="text-xs text-blue-700 flex items-start gap-1.5">
+                          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span>
+                            该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{t.operator}</strong> 填写
+                          </span>
+                        </div>
+                      )}
                   <div className="grid grid-cols-3 gap-2">
                     {(['station', 'product', 'sender'] as const).map((field) => (
                       <div key={field} className="space-y-0.5">

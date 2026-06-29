@@ -2542,6 +2542,7 @@ export function MainWindow() {
           }
         }}
         recognitionRules={recognitionRules}
+        ownerName={operatorName}
       />
       <RecognitionRulesDialog
         open={recognitionRulesOpen}

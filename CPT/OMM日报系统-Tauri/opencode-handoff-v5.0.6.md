@@ -175,6 +175,37 @@ recognition-rules.json
 
 - **重新构建**：修复后重新执行 TypeScript 类型检查、Rust check、Tauri build、便携版打包，均通过。
 
+### 1.15 op 本轮：真实手量归属逻辑明确化
+
+按 gpt 提示词要求，修复/明确真实手量归属逻辑，确保 `-OMM-姓名-手量-测量员` 的场景正确处理：
+
+- **归属规则确认**
+  - 日报归属优先看 `-OMM-姓名`，不是看 `-手量-姓名`。
+  - 当前代码中：
+    - `detectManualCandidates` 只按文件夹名含“手量”/“手测”发现候选，不依赖测量员姓名，不会把 `-手量-王业陈` 的候选排除出禹欣日报。
+    - `isManualCandidateConfirmed` 按 `source_folder` / `product` 匹配，不依赖 `operator`，确认状态不受测量员影响。
+    - sidecar `parse_all_folders` 用 `_is_operator_folder` 匹配 `-OMM-姓名`，`-OMM-禹欣-手量-王业陈` 会被识别为禹欣的文件夹。
+    - 真实手量写入 Excel 时，`task.get('operator', operator_name)` 优先使用真实手量任务自带的 `operator`（王业陈），而不是日报归属人（禹欣）。
+
+- **修复：手量弹窗不强制要求识别到测量员**
+  - 原 `handleRecognize` 在粘贴识别时，如果文件夹名没有 `-手量-姓名` 就跳过整条记录。
+  - 这会导致只有 `-OMM-姓名` 但没有 `-手量-测量员` 的文件夹无法被粘贴识别为手量候选。
+  - 改为：即使没识别到测量员，也生成手量草稿，只是 `operator` 为空，后续由用户在弹窗里补；不再直接跳过。
+
+- **新增：手量弹窗显示日报归属人和归属提示**
+  - `ManualTaskDialog` 新增 `ownerName` prop，接收当前界面的 `operatorName`。
+  - 弹窗标题下方显示“日报归属人：{ownerName}”。
+  - 候选信息卡片和每条手量记录卡片中，当 `operator !== ownerName` 时，显示蓝色提示：
+    > 该手量将写入 {ownerName} 日报，量测员按 {operator} 填写
+  - 帮助文档“手量文件夹命名”章节增加归属规则说明。
+
+- **A/B 班时间推测**
+  - 当前班次已能从日期文件夹后缀 `6.28A` / `6.28B` 自动识别，并复用现有 `shiftOverride` / `shift` 状态传给 sidecar。
+  - 送测时间识别已支持 `刘前程2点30送测` / `张三14:00送测` 等写法，由 `recognitionRules.ts` 的 `applySenderRecognition` 处理。
+  - 本轮未新增孤立的时间推测逻辑；有歧义时仍由用户在弹窗中确认 `send_time` 字段。
+
+- **影响范围**：只修改前端 `ManualTaskDialog`、`MainWindow`、`HelpCenterDialog`；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 | 项目 | 结果 |
@@ -257,6 +288,14 @@ recognition-rules.json
 | `cargo check --release`（焊接规则修复后） | 通过 ✓ |
 | `npm.cmd run tauri build`（焊接规则修复后） | 成功 ✓，仅 Vite chunk size 警告 |
 | `scripts/package-portable.ps1 -Version 5.0.7`（焊接规则修复后） | 成功 ✓ |
+| 真实手量归属：`-OMM-禹欣-手量-王业陈` 归入禹欣日报，量测员王业陈 | 通过 ✓ |
+| 手量弹窗显示日报归属人 | 通过 ✓ |
+| 手量弹窗显示归属提示（写入某日报，量测员按某人填写） | 通过 ✓ |
+| 粘贴识别不再因未识别测量员而跳过整条记录 | 通过 ✓ |
+| 帮助文档说明归属规则（-OMM-姓名 vs -手量-测量员） | 完成 ✓ |
+| `npx.cmd tsc --noEmit`（归属逻辑优化后） | 通过 ✓ |
+| `npm.cmd run tauri build`（归属逻辑优化后） | 成功 ✓，仅 Vite chunk size 警告 |
+| `scripts/package-portable.ps1 -Version 5.0.7`（归属逻辑优化后） | 成功 ✓ |
 
 ---
 
@@ -286,11 +325,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T03:30:07`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T03:46:37`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=1dbd6d1eb7795c52009e904a1d6e78bc342ad50893d7e6e503ff1de4184e339b
+sha256=10794e5643aca7fd0d0a0f6c350e9b3bb7b48c7fea281895ada1e56f71ac0ba1
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -590,7 +629,7 @@ Git 根目录：D:\KSoftware\KMAA
 
 你叫 gpt。当前 opencode 窗口里只有一位 op，就是现在和你交接的这位 op。用户直接对 opencode 说话时，默认是在和 op 对话。如果用户说“gpt”，指的是你当前这个 ChatGPT/Codex 窗口。
 
-当前已完成（含 op 本轮识别补充验收与焊接规则修复）：
+当前已完成（含 op 本轮真实手量归属逻辑明确化）：
 1. ReviewDialog “跳过此包” 正确过滤 records。
 2. ReviewDialog “确认并继续” 校验数量和测量时间至少一项。
 3. ManualTaskDialog “保存并预览” 使用最新 real_manual_tasks。
@@ -603,9 +642,12 @@ Git 根目录：D:\KSoftware\KMAA
 10. 自动手量候选识别和手量弹窗粘贴识别已接入补充规则。
 11. 焊接 41424-41429 规则 bug 已修复：`41428` 不再误识别为 `48`，正确输出 `428`。
 12. 关键识别用例已通过代码级验证：565-开发...、X806-65036-04...射出-首件、X511-512-562-563烧结盘、613-41428-(035-625)-焊接。
-13. 版本号仍保持 5.0.7。
+13. 真实手量归属逻辑明确化：`-OMM-姓名-手量-测量员` 归入 OMM 姓名日报；量测员按手量段姓名填写；弹窗显示日报归属人和归属提示。
+14. 版本号仍保持 5.0.7。
 
-最新完整提交链：
+最新完整提交链（op 本轮提交后请更新为实际 hash）：
+- ced651f fix(recognition): handle manual sender variants
+- f9f1b45 docs: 更新给 gpt 提示词中的最新提交链
 - ed5dfbb fix(recognition): 修复焊接 41424-41429 规则输出错误
 - 530d290 docs: 清理第 10 节，只保留给 gpt 的提示词
 - 14948c5 docs: 更新第 10 节接力提示词
@@ -615,14 +657,14 @@ Git 根目录：D:\KSoftware\KMAA
 
 当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
 
-最新便携版 manifest（packaged_at=2026-06-30T03:30:07）：
-- app: 1dbd6d1eb7795c52009e904a1d6e78bc342ad50893d7e6e503ff1de4184e339b
+最新便携版 manifest（packaged_at=2026-06-30T03:46:37）：
+- app: 10794e5643aca7fd0d0a0f6c350e9b3bb7b48c7fea281895ada1e56f71ac0ba1
 - sidecar: 39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
 - template: e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 注意：
-- op 本轮已做代码级审查和关键用例验证，并修复焊接规则 bug。
-- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍识别补充窗口。
+- op 本轮已做代码级审查和关键用例验证，并修复焊接规则 bug、明确真实手量归属逻辑。
+- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍手量弹窗和识别补充窗口。
 
 约束：
 - 不要 git add .，只精确 add 修改过的文件。
