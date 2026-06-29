@@ -220,14 +220,14 @@ recognition-rules.json
 - **生成器不再丢失关键颜色**
   - 修改 `sidecar/generate_report.py`。
   - 生成报表时仍会清理原模板散落条件格式，但会重新添加稳定条件格式：
-    - O 列 `耗时`：按同事模板口径设置绿色字体条件格式。
-    - P 列 `状态`：`已完成` 为绿底绿字，`待测` 为红底红字。
+    - L/M/N/O/Q 列（测试日期/开始时间/完成时间/耗时/量测员）：直接设置绿色字体，无普通填充色，贴近 WPS 工具栏显示。
+    - P 列 `状态`：只通过条件格式显示 `已完成` 绿底绿字、`待测` 红底红字；WPS 工具栏可能仍显示“无填充”，这是正常现象。
   - 数据行 A:P 统一居中，Q/R 保持垂直居中；日期/时间/耗时列重新指定 number format，避免用户模板只有表头时生成裸格式。
   - K2 生成时不再写 `送测数量（测试数量）`，改为 `测试数量`。
 
 - **视觉验证**
-  - 用 `test-output/template-style-after` 生成样式测试报表。
-  - 渲染 `A1:R12` 后确认：表头与同事模板口径一致，O 列为深绿色区域，P 列 `已完成/待测` 显示绿/红提示，数据区有完整边框。
+  - 用 `test-output/template-style-wps` 生成样式测试报表。
+  - 渲染 `A1:R10` 后确认：表头与同事模板口径一致，O 列耗时为绿色字体且无填充，P 列 `已完成/待测` 显示绿/红条件格式，数据区有完整边框。
 
 - **影响范围**
   - 只改 Excel 模板和 Excel 写出样式层。
@@ -324,7 +324,7 @@ recognition-rules.json
 | `npm.cmd run tauri build`（归属逻辑优化后） | 成功 ✓，仅 Vite chunk size 警告 |
 | `scripts/package-portable.ps1 -Version 5.0.7`（归属逻辑优化后） | 成功 ✓ |
 | 内置模板样式重建：K2=测试数量，R2=备注，O/P 公式中文正常 | 通过 ✓ |
-| 样式测试报表渲染：O列耗时深绿、P列状态红/绿、数据区完整边框 | 通过 ✓ |
+| WPS 样式检查：L/M/N/O/Q 绿色字体且无普通填充，P列状态靠条件格式红/绿显示 | 通过 ✓ |
 | `python -m py_compile sidecar\generate_report.py`（模板样式修复后） | 通过 ✓ |
 | `npx.cmd tsc --noEmit`（模板样式修复后） | 通过 ✓ |
 | `python sidecar\build_sidecar.py`（模板样式修复后） | 成功 ✓ |
@@ -360,17 +360,17 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T04:54:03`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T05:07:19`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=58ecc912e86bf9fb2c32738026f0f5e033ab8d56e8a2b3bca1929d9ff4dbf0cc
+sha256=475ffa8a6593655a21696fef8d4ff2803ad47dbe9d837df44630cb26c6197870
 
 [sidecar] binaries\generate_report.exe
-sha256=f000c1132601647cf5c515d603f9ea989c5f34a935b529f6292effdad0d9864f
+sha256=7a2def106a9e7bc3e38a2dbefa8f055c8e9b81fea0e4462b0629eff1267ffb30
 
 [template] resources\template.xlsx
-sha256=fff79146816879487da9e71c1d412618c97f608cf9ca8af656bd5fcf581234de
+sha256=18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 ```
 
 ---
@@ -383,7 +383,7 @@ sha256=fff79146816879487da9e71c1d412618c97f608cf9ca8af656bd5fcf581234de
 4. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
 5. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 6. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
-7. 对模板样式做真实 Excel/GUI 验收：生成一份真实日报，确认 K 列表头为“测试数量”、O 列耗时为绿色样式、P 列状态按“已完成/待测”显示绿/红、R 列备注不丢失。
+7. 对模板样式做真实 WPS/GUI 验收：生成一份真实日报，确认 K 列表头为“测试数量”，L/M/N/O/Q 为绿色字体且无普通填充，P 列状态按“已完成/待测”显示绿/红条件格式，R 列备注不丢失。
 
 ---
 
@@ -680,7 +680,7 @@ Git 根目录：D:\KSoftware\KMAA
 11. 焊接 41424-41429 规则 bug 已修复：`41428` 不再误识别为 `48`，正确输出 `428`。
 12. 关键识别用例已通过代码级验证：565-开发...、X806-65036-04...射出-首件、X511-512-562-563烧结盘、613-41428-(035-625)-焊接。
 13. 真实手量归属逻辑明确化：`-OMM-姓名-手量-测量员` 归入 OMM 姓名日报；量测员按手量段姓名填写；弹窗显示日报归属人和归属提示。
-14. 内置模板样式已按同事模板口径补齐：K列为“测试数量”，O列耗时绿色样式，P列状态红/绿，R列保留备注；生成器会重建稳定条件格式。
+14. 内置模板样式已按同事模板和 WPS 口径补齐：K列为“测试数量”，L/M/N/O/Q 为绿色字体且无普通填充，P列状态红/绿来自条件格式，R列保留备注；生成器会重建稳定条件格式。
 15. 版本号仍保持 5.0.7。
 
 最新完整提交链：
@@ -696,14 +696,14 @@ Git 根目录：D:\KSoftware\KMAA
 
 当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
 
-最新便携版 manifest（packaged_at=2026-06-30T04:54:03）：
-- app: 58ecc912e86bf9fb2c32738026f0f5e033ab8d56e8a2b3bca1929d9ff4dbf0cc
-- sidecar: f000c1132601647cf5c515d603f9ea989c5f34a935b529f6292effdad0d9864f
-- template: fff79146816879487da9e71c1d412618c97f608cf9ca8af656bd5fcf581234de
+最新便携版 manifest（packaged_at=2026-06-30T05:07:19）：
+- app: 475ffa8a6593655a21696fef8d4ff2803ad47dbe9d837df44630cb26c6197870
+- sidecar: 7a2def106a9e7bc3e38a2dbefa8f055c8e9b81fea0e4462b0629eff1267ffb30
+- template: 18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 
 注意：
 - op 本轮已做代码级审查和关键用例验证，并修复焊接规则 bug、明确真实手量归属逻辑。
-- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍手量弹窗、识别补充窗口，以及生成后 Excel 模板样式。
+- 由于 CLI 环境限制，真实 GUI 点测（鼠标点击程序运行）尚未完成，仍需用户在真实运行程序中点一遍手量弹窗、识别补充窗口，以及生成后 WPS 模板样式。
 
 约束：
 - 不要 git add .，只精确 add 修改过的文件。

@@ -8,7 +8,7 @@ import openpyxl
 from openpyxl.cell.rich_text import CellRichText, TextBlock
 from openpyxl.cell.text import InlineFont
 from openpyxl.styles import Font, Border, Side, Alignment, PatternFill
-from openpyxl.formatting.rule import CellIsRule, FormulaRule
+from openpyxl.formatting.rule import FormulaRule
 from datetime import datetime, time as dtime
 
 
@@ -1561,16 +1561,18 @@ def generate_report(records, tasks, test_date, output_name_suffix="", operator_n
         ws.cell(row=row, column=15).number_format = 'h:mm:ss;@'
     ws.conditional_formatting._cf_rules.clear()
 
-    # 重新添加同事模板口径的条件格式：耗时列绿字，状态列已完成/待测红绿提示
-    duration_font = Font(color='FF006102')
+    # 重新添加同事模板口径的条件格式：时间/耗时/量测员为绿色字体，状态列已完成/待测红绿提示。
+    # 状态列底色来自条件格式，因此 Excel 工具栏可能仍显示“无填充”，这是正常的。
+    last_data_row = 40
+    data_green_font = Font(name='微软雅黑', size=11, color='FF006102')
+    for row in range(3, last_data_row + 1):
+        for col in (12, 13, 14, 15, 17):
+            ws.cell(row=row, column=col).font = data_green_font
+
     green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
     green_font = Font(color='FF006100', bold=True)
     red_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
     red_font = Font(color='FF9C0006', bold=True)
-    last_data_row = 40
-    ws.conditional_formatting.add(f'O3:O{last_data_row}',
-                                  CellIsRule(operator='greaterThanOrEqual', formula=['0'],
-                                             font=duration_font))
     status_range = f'P3:P{last_data_row}'
     ws.conditional_formatting.add(status_range,
                                   FormulaRule(formula=['NOT(ISERROR(SEARCH("已完成",P3)))'],
