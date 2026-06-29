@@ -2,7 +2,7 @@
 
 > 生成时间：2026-06-29  
 > 接手来源：`opencode-bug-report-v5.0.6.md`  
-> 当前版本号：仍为 5.0.4（未升级版本号）
+> 当前版本号：已于 2026-06-30 升级为 5.0.7
 
 ## 1. 本轮处理内容
 
@@ -100,7 +100,7 @@ npx.cmd tsc --noEmit
 python sidecar\build_sidecar.py
 cargo check --release
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.4
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.7
 ```
 
 结果：
@@ -109,16 +109,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable
 - sidecar 构建成功。
 - Rust release check 通过。
 - Tauri 安装包构建成功：
-  - `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.4_x64-setup.exe`
+  - `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe`
 - 便携版打包成功：
-  - `releases\OMM日报系统_便携版_5.0.4`
-  - `releases\OMM日报系统_便携版_5.0.4.zip`
+  - `releases\OMM日报系统_便携版_5.0.7`
+  - `releases\OMM日报系统_便携版_5.0.7.zip`
 
 最新便携版 manifest hash：
 
 ```text
 [app] OMM日报系统.exe
-sha256=d7c8c4f7b0bd4e36d9c6acba57cfcd20623c0872905d6d46d7a36458213a957b
+sha256=eb702a16633df040f0a032ab6e5e4998a534a35f97336a8ddcb79a496045432d
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -160,7 +160,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 使用便携版：
 
 ```text
-releases\OMM日报系统_便携版_5.0.4\OMM日报系统_便携版\binaries\generate_report.exe
+releases\OMM日报系统_便携版_5.0.7\OMM日报系统_便携版\binaries\generate_report.exe
 ```
 
 在不设置 `YX_BUNDLED_TEMPLATE` 的情况下生成成功，说明仍能从：
@@ -189,16 +189,16 @@ resources\template.xlsx
 
 但这些目前只是文字说明，不是可点击按钮。当前符合“预览显示选择”的需求；如果用户要交互式按钮，需要后续继续做。
 
-### 5.3 版本号未升级
+### 5.3 版本号已升级
 
-项目仍统一使用 `5.0.4`。本轮按既定策略未升级版本号。
+项目已于 2026-06-30 统一升级为 `5.0.7`，发布物也改为 5.0.7 命名。
 
 ## 6. 仍存在的风险
 
 - `settingsOverride` 仍不持久化，关闭程序后单日设置丢失。
 - 整形 CNC 识别依赖原始文件夹名同时包含“整形”和“CNC”；如果命名不含其中一个词，不会命中。
 - 数据不足时虽然能提示缺口，但“如实填写/补手量/补其他事务”还没有一键交互。
-- 当前 Git 仓库根目录在 `D:\KSoftware\KMAA`，大量项目和日期数据都是未跟踪状态，不能直接 `git add .`。
+- 当前 Git 仓库根目录在 `D:\KSoftware\KMAA`，大量项目和日期数据都是未跟踪状态，不能直接 `git add .`，提交必须精确指定文件。
 
 ## 7. 下一轮建议
 
@@ -266,6 +266,45 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 ```text
 [app] OMM日报系统.exe
 sha256=d274c985dfbbd29bb19c6ffde05f82c26d0bb6f2736255cfca219f3ae86e5e1d
+
+[sidecar] binaries\generate_report.exe
+sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
+
+[template] resources\template.xlsx
+sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
+```
+
+## 附：版本升级与 releases 清理（2026-06-30）
+
+用户确认需要收束版本号后，已将项目正式升级为 `5.0.7`：
+
+- `package.json` / `package-lock.json`
+- `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock`
+- `src-tauri/tauri.conf.json`
+- `src/components/HelpCenterDialog.tsx`
+
+重新验证结果：
+
+- `npx.cmd tsc --noEmit`：通过
+- `cargo check --release`：通过
+- `npm.cmd run tauri build`：成功（仅 Vite chunk size 警告）
+- `scripts/package-portable.ps1 -Version 5.0.7`：成功
+
+当前发布物：
+
+```text
+src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe
+releases\OMM日报系统_便携版_5.0.7
+releases\OMM日报系统_便携版_5.0.7.zip
+```
+
+`releases` 已清理旧 alpha/v5.0.1-v5.0.4 残留，仅保留 5.0.7 便携版目录与 zip。
+
+最新便携版 manifest hash（`packaged_at=2026-06-30T00:54:52`）：
+
+```text
+[app] OMM日报系统.exe
+sha256=eb702a16633df040f0a032ab6e5e4998a534a35f97336a8ddcb79a496045432d
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab

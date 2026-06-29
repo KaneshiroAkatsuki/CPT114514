@@ -1,7 +1,7 @@
 # OMM日报系统 v5.0.6 当前状态交接（给新 opencode 上下文）
 
-> 时间：2026-06-29
-> 版本号：仍为 5.0.4（未升级）
+> 时间：2026-06-30
+> 版本号：5.0.7（已正式升级）
 > Git 根目录：D:\KSoftware\KMAA（Tauri 项目目录为未跟踪状态，不要 `git add .`）
 
 ---
@@ -89,6 +89,14 @@
 - **修复方式**：新增 `hasUsableFieldValue(record, field)`，校验时读取 `editedRecords` 当前值；`quantity` / `manual_duration` 继续互为兜底，只要其中一个合法正值，就不强制另一个也填写。
 - **影响范围**：仅修改 `src/components/ReviewDialog.tsx` 的前端校验逻辑；未触碰 sidecar 排程核心、Excel 写入、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
+### 1.10 gpt 本轮：正式升级 5.0.7 并清理 releases
+
+- **版本号升级**：`package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json`、帮助页版本展示统一更新为 `5.0.7`。
+- **窗口标题更新**：Tauri 主窗口标题改为 `OMM日报系统 v5.0.7`。
+- **重新构建发布物**：重新执行 TypeScript、Rust、Tauri build、便携版打包。
+- **releases 清理**：清空旧 alpha/v5.0.1-v5.0.4 发布残留，仅保留当前有用的 `releases\OMM日报系统_便携版_5.0.7` 和 `releases\OMM日报系统_便携版_5.0.7.zip`。
+- **影响范围**：只做版本与发布产物整理；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 ## 2. 已验证项目
@@ -129,6 +137,12 @@
 | 预览/生成前数字设置校验 | 通过 ✓ |
 | gpt 复核：ReviewDialog 缺失字段校验读取编辑后实际值 | 通过 ✓ |
 | `cargo check --release` 无 warning | 通过 ✓ |
+| 版本号统一升级到 5.0.7 | 完成 ✓ |
+| `npx.cmd tsc --noEmit`（5.0.7） | 通过 ✓ |
+| `cargo check --release`（5.0.7） | 通过 ✓ |
+| `npm.cmd run tauri build`（5.0.7） | 成功 ✓，仅 Vite chunk size 警告 |
+| `scripts/package-portable.ps1 -Version 5.0.7` | 成功 ✓ |
+| releases 清理后仅保留 5.0.7 便携版目录与 zip | 完成 ✓ |
 
 ---
 
@@ -136,7 +150,7 @@
 
 - 手量自动发现遵循“自动发现、自动预填、人工确认”原则，不自动相信耗时，不瞎编。
 - 仅新增前端发现逻辑和一个 Rust 只读目录命令，未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断规则。
-- **Git 提醒**：项目在 `D:\KSoftware\KMAA` 下仍显示为整个目录未跟踪，后续千万不要 `git add .`，需要提交时只精确 add 本次修改的文件。
+- **Git 提醒**：Git 根目录是 `D:\KSoftware\KMAA`，后续千万不要 `git add .`，需要提交时只精确 add 本次修改的文件。
 - 本项目很怕大范围重构，最小刀法是对的。
 
 ---
@@ -146,23 +160,23 @@
 ### 4.1 安装包
 
 ```text
-src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.4_x64-setup.exe
+src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe
 ```
 
 ### 4.2 便携版
 
 ```text
-releases\OMM日报系统_便携版_5.0.4
-releases\OMM日报系统_便携版_5.0.4.zip
+releases\OMM日报系统_便携版_5.0.7
+releases\OMM日报系统_便携版_5.0.7.zip
 ```
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-30T00:44:10`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T00:54:52`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=8cc53fbc16a68c951eccd76f305aa5c2f2914d288311b17c6cd7a600741b0c19
+sha256=eb702a16633df040f0a032ab6e5e4998a534a35f97336a8ddcb79a496045432d
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -177,9 +191,9 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 1. 对手量文件夹自动发现做一轮真实 GUI 验收：把含“手量”的子文件夹放入日期文件夹后，确认队列 badge、弹窗预填、生成前阻止、普通任务过滤都符合预期。
 2. 考虑 `settingsOverride.real_manual_tasks` 持久化问题：当前单日设置关闭程序后仍可能丢失。
-3. 版本号仍保持 5.0.4，如需对外发布建议统一升级到 5.0.6 或 5.0.7。
-4. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
-5. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
+3. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
+4. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
+5. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
 
 ---
 
@@ -216,6 +230,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - Rust 文件命令：`src-tauri/src/commands/file.rs`
 - Rust 配置命令：`src-tauri/src/commands/config.rs`
 - Rust 入口：`src-tauri/src/lib.rs`
+- 版本配置：`package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json`
 - 样式：`src/index.css`
 - UI 组件：`src/components/ui/card.tsx`、`src/components/ui/button.tsx`、`src/components/ui/input.tsx`
 - 需求文档：`OMM日报系统-v5.0.7-手量文件夹自动发现需求.md`
@@ -228,7 +243,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 1. 对 DaySettingsDialog 和 PreviewDialog 诊断按钮做真实 GUI 验收。
 2. 考虑 `settingsOverride.real_manual_tasks` 持久化方案：先写设计，再落代码。
-3. 版本号仍保持 5.0.4，如需对外发布建议统一升级。
+3. 版本号已统一升级到 5.0.7；后续如再发布，需要继续保持源码版本、Tauri 版本、帮助页、安装包、便携版目录/zip、manifest 一致。
 4. 对便携版配置识别做实机验收：在便携版目录任意子目录放置 `config.json`，确认启动后界面显示识别到的配置目录，保存配置时不会误写 AppData。
 5. 对手量文件夹自动发现做实机验收：日期文件夹内直接子文件夹含“手量”时，应进入待确认流程；确认前不应作为普通任务写入最终报表。
 
@@ -278,11 +293,10 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
    - 建议给隐藏缓冲、休息、补时间手量、其他事务也补完整 `source`，让表格和缺口诊断口径一致。
    - 这属于显示层增强，不应影响最终 Excel 写入规则。
 
-7. **版本号和发布物关系需要收束**
-   - 当前版本仍是 5.0.4，但交接内容已进入 v5.0.6/v5.0.7 范围。
-   - 如果继续发布给实际用户，建议下一轮明确：
-     - 要么保持 5.0.4，只当内部修正版。
-     - 要么统一升级到 5.0.6 或 5.0.7，并同步 Tauri、package、manifest、压缩包命名。
+7. **版本号和发布物关系已收束**
+   - 项目已于 2026-06-30 正式升级到 `5.0.7`。
+   - 当前源码版本、Tauri 版本、帮助页 About、安装包、便携版目录/zip、manifest 均已按 `5.0.7` 对齐。
+   - 后续发布时继续保持这些位置同步，不要再打出“5.0.4 名称但包含 v5.0.7 修复”的混合包。
 
 8. **测试资产和 Git 边界仍然是高风险点**
    - Git 根目录是 `D:\KSoftware\KMAA`，项目目录目前可能整体未跟踪。
@@ -302,7 +316,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 1. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 2. 做手量文件夹自动发现的真实 GUI 验收，发现问题只修前端闭环。
 3. 考虑真实手量持久化方案，先写设计，不急着落代码。
-4. 如需发布，统一升级版本号到 5.0.6 或 5.0.7。
+4. 如需再次发布，沿用 5.0.7 或按用户明确要求升级下一版本，并同步所有版本位置与发布物命名。
 
 ### 9.4 下一轮缺陷解决方案设计（优先做，本轮已完成 A-E）
 
@@ -431,17 +445,20 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 4. 添加日期到队列时，如果存在保存过的真实手量，自动加载并显示 `[真实手量×N]`。
 5. UI 必须显示“已保存到本机配置”，避免用户误以为写回了生产目录。
 
-#### G. 版本号/发布建议
+#### G. 版本号/发布建议（已完成）
 
-当前功能已经超过 5.0.4 的语义范围。若下一轮完成 A-E 并打包，建议正式升级为 `5.0.7`，同步：
+当前功能已经超过 5.0.4 的语义范围。项目已于 2026-06-30 正式升级为 `5.0.7`，已同步：
 
 - `package.json`
-- `src-tauri/tauri.conf.json` 或项目实际版本配置
+- `package-lock.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/Cargo.lock`
+- `src-tauri/tauri.conf.json`
 - 便携版目录/zip 名称
 - manifest version
 - 帮助页 About 版本
 
-如果用户坚持暂不升级，则必须在交接里写清：“发布物名仍 5.0.4，但包含 v5.0.6/v5.0.7 修复”。
+后续不要再使用 5.0.4 发布物命名；如果继续发版，按用户要求升级下一个版本并重新打包。
 
 ---
 
@@ -466,7 +483,7 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 2. OMM日报系统-v5.0.7-手量文件夹自动发现需求.md
 3. OMM日报系统-v5.0.6-最终审查接续问题.md
 
-当前版本号仍保持 5.0.4，除非用户明确要求，不要升级版本号。
+当前版本号已升级为 5.0.7。后续除非用户明确要求，不要再改版本号。
 
 协作简称：
 - 当前 ChatGPT/Codex 窗口简称 gpt。
@@ -508,7 +525,7 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 - npx.cmd tsc --noEmit
 - cargo check --release
 - npm.cmd run tauri build
-- powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.4
+- powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.7
 
 建议人工/半自动验收：
 1. 准备一个触发方案 A 的缺字段任务，点击“跳过此包”，最终 Excel 不应包含该任务。
@@ -521,6 +538,6 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 - 保留原结构。
 - 在“刚刚完成了什么”追加内容。
 - 在“已验证项目”追加验证结果。
-- 从 releases\OMM日报系统_便携版_5.0.4\manifest.json 更新 app / sidecar / template sha256。
+- 从 releases\OMM日报系统_便携版_5.0.7\manifest.json 更新 app / sidecar / template sha256。
 - 写清仍需完成和风险。
 ```

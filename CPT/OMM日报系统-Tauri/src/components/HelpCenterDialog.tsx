@@ -250,7 +250,7 @@ function Content({ section }: { section: string }) {
           <h2 className={h2}>关于</h2>
           <ul className={ul}>
             <li><strong>软件名称</strong>：OMM 日报系统</li>
-            <li><strong>版本</strong>：v5.0.4</li>
+            <li><strong>版本</strong>：v5.0.7</li>
             <li><strong>功能</strong>：自动从文件夹名提取信息并生成 OMM 日报 Excel。</li>
             <li><strong>配置路径</strong>：默认在 <code className={code}>%APPDATA%\OMM日报系统</code>，可在“生成设置”中自定义。</li>
           </ul>
