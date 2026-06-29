@@ -33,6 +33,7 @@ type GenerateFailureDetail = {
   dateFolder: string;
   reason: string;
   action?: "manual" | "review" | "check";
+  type?: "failure" | "paused";
   queueIndex?: number;
 };
 
@@ -277,7 +278,37 @@ export function MainWindow() {
     }
   };
 
+  const validateGlobalSettings = (): string | null => {
+    if (!Number.isFinite(tppMin) || tppMin <= 0) {
+      return '每件时间最小值必须是大于 0 的数字';
+    }
+    if (!Number.isFinite(tppMax) || tppMax <= 0) {
+      return '每件时间最大值必须是大于 0 的数字';
+    }
+    if (tppMin > tppMax) {
+      return `每件时间最小值（${tppMin}）不能大于最大值（${tppMax}）`;
+    }
+    if (!Number.isFinite(pkgRest) || pkgRest < 0) {
+      return '包间休息时间必须是非负数字';
+    }
+    if (!Number.isFinite(handMax) || handMax <= 0) {
+      return '手量上限必须是大于 0 的数字';
+    }
+    if (!Number.isFinite(otherMax) || otherMax <= 0) {
+      return '其他事务上限必须是大于 0 的数字';
+    }
+    if (!useSrcOutput && (!outputDir || outputDir.trim().length === 0)) {
+      return '未勾选“输出到源日期文件夹”时，必须指定输出目录';
+    }
+    return null;
+  };
+
   const handlePreview = async () => {
+    const err = validateGlobalSettings();
+    if (err) {
+      addLog(`预览已阻止: ${err}`);
+      return;
+    }
     const targetIndex = Array.from(selectedQueueItems).sort((a, b) => a - b)[0] ?? 0;
     const targetItem = queue[targetIndex];
     if (!targetItem) {
@@ -288,6 +319,11 @@ export function MainWindow() {
   };
 
   const handlePreviewForItem = async (targetItem: QueueItem, targetIndex?: number) => {
+    const err = validateGlobalSettings();
+    if (err) {
+      addLog(`预览已阻止: ${err}`);
+      return;
+    }
     try {
       const parseResponse = await parseFolders(targetItem.fullPath, operatorName);
       if (!parseResponse.success) {
@@ -740,7 +776,8 @@ export function MainWindow() {
   addPathToQueueRef.current = addPathToQueue;
 
   const handleReviewConfirm = async (updatedRecords: FolderRecord[], skippedFolders: string[]) => {
-    setPendingRecords(updatedRecords);
+    const effectiveRecords = updatedRecords.filter((r) => !skippedFolders.includes(r.folder));
+    setPendingRecords(effectiveRecords);
     setReviewOpen(false);
     addLog("审核完成，记录已更新");
     if (skippedFolders.length > 0) {
@@ -748,29 +785,70 @@ export function MainWindow() {
     }
 
     const state = generateStateRef.current;
-    if (state) {
-      const { currentIndex, successCount, failCount } = state;
-      if (state.single) {
-        await generateSingleItemFinal(queue[currentIndex], updatedRecords);
-      } else {
-        generateWithRecords(queue[currentIndex], updatedRecords, currentIndex, successCount, failCount);
-      }
+    if (!state) return;
+    const { currentIndex, successCount, failCount } = state;
+    const item = queue[currentIndex];
+
+    if (effectiveRecords.length === 0) {
+      addLog(`  本日期所有任务都被跳过，未生成报表: ${item.dateFolder}`);
+      recordGenerateFailure(item, "本日期所有任务都被跳过，未生成报表", "review", currentIndex);
+      setGenerateResult({
+        ok: successCount,
+        fail: failCount + 1,
+        outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
+        outputPaths: outputPathsRef.current.slice(),
+        commonParent: computeCommonParent(outputPathsRef.current.slice()),
+        schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
+        status: successCount > 0 ? 'complete' : 'failed',
+        pendingItems: [],
+      });
+      setIsGenerating(false);
+      setProgress(0);
+      return;
+    }
+
+    if (state.single) {
+      await generateSingleItemFinal(item, effectiveRecords);
+    } else {
+      generateWithRecords(item, effectiveRecords, currentIndex, successCount, failCount);
     }
   };
 
   const handleReviewSkip = (skippedFolders: string[], updatedRecords: FolderRecord[]) => {
-    setPendingRecords(updatedRecords);
+    const effectiveRecords = updatedRecords.filter((r) => !skippedFolders.includes(r.folder));
+    setPendingRecords(effectiveRecords);
     setReviewOpen(false);
     addLog(`已跳过审核，跳过的文件夹: ${skippedFolders.join(", ")}`);
 
     const state = generateStateRef.current;
-    if (state) {
-      const { currentIndex, successCount, failCount } = state;
-      if (state.single) {
-        generateSingleItemFinal(queue[currentIndex], updatedRecords);
-      } else {
-        generateWithRecords(queue[currentIndex], updatedRecords, currentIndex, successCount, failCount);
-      }
+    if (!state) return;
+    const { currentIndex, successCount, failCount } = state;
+    const item = queue[currentIndex];
+
+    if (effectiveRecords.length === 0) {
+      addLog(`  本日期所有任务都被跳过，未生成报表: ${item.dateFolder}`);
+      recordGenerateFailure(item, "本日期所有任务都被跳过，未生成报表", "review", currentIndex);
+      setGenerateResult({
+        ok: successCount,
+        fail: failCount + 1,
+        outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
+        outputPaths: outputPathsRef.current.slice(),
+        commonParent: computeCommonParent(outputPathsRef.current.slice()),
+        schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
+        status: successCount > 0 ? 'complete' : 'failed',
+        pendingItems: [],
+      });
+      setIsGenerating(false);
+      setProgress(0);
+      return;
+    }
+
+    if (state.single) {
+      generateSingleItemFinal(item, effectiveRecords);
+    } else {
+      generateWithRecords(item, effectiveRecords, currentIndex, successCount, failCount);
     }
   };
 
@@ -808,12 +886,14 @@ export function MainWindow() {
       setManualTaskOpen(true);
       setGenerateResult({
         ok: successCount,
-        fail: failCount + 1,
+        fail: failCount,
         outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
         outputPaths: outputPathsRef.current.slice(),
         commonParent: computeCommonParent(outputPathsRef.current.slice()),
         schedWarnings: schedWarningsRef.current.slice(),
         failures: failureDetailsRef.current.slice(),
+        status: 'paused',
+        pendingItems: queue.slice(index).map((it) => it.dateFolder),
       });
       setIsGenerating(false);
       setProgress(0);
@@ -860,6 +940,8 @@ export function MainWindow() {
     commonParent: string | null; // 所有报表的公共父目录
     schedWarnings: string[]; // 排程警告
     failures: GenerateFailureDetail[]; // 失败项及可读原因
+    status: 'complete' | 'paused' | 'failed';
+    pendingItems: string[]; // 尚未处理的日期（暂停时）
   } | null>(null);
 
   /**
@@ -924,6 +1006,8 @@ export function MainWindow() {
         commonParent,
         schedWarnings: schedWarningsRef.current.slice(),
         failures: failureDetailsRef.current.slice(),
+        status: failCount === 0 ? 'complete' : successCount > 0 ? 'complete' : 'failed',
+        pendingItems: [],
       });
       generateStateRef.current = null;
       return;
@@ -969,12 +1053,14 @@ export function MainWindow() {
         setManualTaskOpen(true);
         setGenerateResult({
           ok: successCount,
-          fail: failCount + 1,
+          fail: failCount,
           outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
           outputPaths: outputPathsRef.current.slice(),
           commonParent: computeCommonParent(outputPathsRef.current.slice()),
           schedWarnings: schedWarningsRef.current.slice(),
           failures: failureDetailsRef.current.slice(),
+          status: 'paused',
+          pendingItems: queue.slice(index).map((it) => it.dateFolder),
         });
         setIsGenerating(false);
         setProgress(0);
@@ -1015,6 +1101,11 @@ export function MainWindow() {
   };
 
   const handleGenerate = async () => {
+    const err = validateGlobalSettings();
+    if (err) {
+      addLog(`生成已阻止: ${err}`);
+      return;
+    }
     if (queue.length === 0) {
       addLog("队列为空，请先添加日期文件夹");
       return;
@@ -1056,12 +1147,14 @@ export function MainWindow() {
       setManualTaskOpen(true);
       setGenerateResult({
         ok: 0,
-        fail: 1,
+        fail: 0,
         outputPath: null,
         outputPaths: [],
         commonParent: null,
         schedWarnings: schedWarningsRef.current.slice(),
         failures: failureDetailsRef.current.slice(),
+        status: 'paused',
+        pendingItems: [item.dateFolder],
       });
       setIsGenerating(false);
       setProgress(0);
@@ -1094,6 +1187,8 @@ export function MainWindow() {
           commonParent: computeCommonParent([genResponse.data.output_path]),
           schedWarnings: schedWarningsRef.current.slice(),
           failures: failureDetailsRef.current.slice(),
+          status: 'complete',
+          pendingItems: [],
         });
         try { await openFolder(genResponse.data.output_path); } catch (_) { /* ignore */ }
       } else {
@@ -1107,6 +1202,8 @@ export function MainWindow() {
           commonParent: null,
           schedWarnings: schedWarningsRef.current.slice(),
           failures: failureDetailsRef.current.slice(),
+          status: 'failed',
+          pendingItems: [],
         });
       }
     } catch (e) {
@@ -1120,6 +1217,8 @@ export function MainWindow() {
         commonParent: null,
         schedWarnings: schedWarningsRef.current.slice(),
         failures: failureDetailsRef.current.slice(),
+        status: 'failed',
+        pendingItems: [],
       });
     } finally {
       setIsGenerating(false);
@@ -1128,6 +1227,11 @@ export function MainWindow() {
   };
 
   const handleGenerateSingleFromPreview = async (index: number) => {
+    const err = validateGlobalSettings();
+    if (err) {
+      addLog(`生成已阻止: ${err}`);
+      return;
+    }
     if (index < 0 || index >= queue.length) return;
     const item = queue[index];
     setIsGenerating(true);
@@ -1150,6 +1254,8 @@ export function MainWindow() {
           commonParent: null,
           schedWarnings: schedWarningsRef.current.slice(),
           failures: failureDetailsRef.current.slice(),
+          status: 'failed',
+          pendingItems: [],
         });
         setIsGenerating(false);
         return;
@@ -1173,12 +1279,14 @@ export function MainWindow() {
         setManualTaskOpen(true);
         setGenerateResult({
           ok: 0,
-          fail: 1,
+          fail: 0,
           outputPath: null,
           outputPaths: [],
           commonParent: null,
           schedWarnings: schedWarningsRef.current.slice(),
           failures: failureDetailsRef.current.slice(),
+          status: 'paused',
+          pendingItems: queue.slice(index).map((it) => it.dateFolder),
         });
         setIsGenerating(false);
         return;
@@ -1218,6 +1326,8 @@ export function MainWindow() {
         commonParent: null,
         schedWarnings: schedWarningsRef.current.slice(),
         failures: failureDetailsRef.current.slice(),
+        status: 'failed',
+        pendingItems: [],
       });
       setIsGenerating(false);
     }
@@ -2213,11 +2323,18 @@ export function MainWindow() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] flex flex-col">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">
-              {generateResult.fail === 0 ? "生成完成" : generateResult.ok > 0 ? "生成完成（部分失败）" : "生成未完成"}
+              {generateResult.status === 'paused'
+                ? '生成已暂停，需要先处理手量'
+                : generateResult.fail === 0
+                ? '生成完成'
+                : generateResult.ok > 0
+                ? '生成完成（部分失败）'
+                : '生成未完成'}
             </h2>
             <p className="text-sm text-slate-700 mb-2">
               成功生成 {generateResult.ok} 份报表
               {generateResult.fail > 0 && `，${generateResult.fail} 份失败`}
+              {generateResult.status === 'paused' && generateResult.pendingItems.length > 0 && `，${generateResult.pendingItems.length} 个日期尚未处理`}
             </p>
 
             {/* 生成结果列表 */}
@@ -2259,11 +2376,27 @@ export function MainWindow() {
               </div>
             )}
 
+            {/* 未处理项列表 */}
+            {generateResult.pendingItems.length > 0 && (
+              <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-amber-200 rounded-md">
+                <div className="px-3 py-2 bg-amber-50 text-xs font-medium text-amber-700 border-b border-amber-200 sticky top-0">
+                  以下日期尚未生成
+                </div>
+                <ul className="divide-y divide-amber-100">
+                  {generateResult.pendingItems.map((folder, i) => (
+                    <li key={i} className="px-3 py-2 text-sm text-amber-900">
+                      {i + 1}. {folder}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* 失败明细 */}
             {generateResult.failures.length > 0 && (
               <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-red-200 rounded-md">
                 <div className="px-3 py-2 bg-red-50 text-xs font-medium text-red-700 border-b border-red-200 sticky top-0">
-                  失败原因（共 {generateResult.failures.length} 项）
+                  {generateResult.status === 'paused' ? '暂停原因' : '失败原因'}（共 {generateResult.failures.length} 项）
                 </div>
                 <ul className="divide-y divide-red-100">
                   {generateResult.failures.map((failure, i) => (
@@ -2363,10 +2496,19 @@ export function MainWindow() {
             addLog(`手量记录已更新: ${manualTaskItem.dateFolder} (${tasks.length} 条)`);
           }
         }}
-        onPreview={() => {
+        onPreview={(tasks) => {
           if (manualTaskItem) {
             const idx = queue.findIndex((it) => it.fullPath === manualTaskItem.fullPath);
-            handlePreviewForItem(manualTaskItem, idx);
+            const nextItem = {
+              ...manualTaskItem,
+              settingsOverride: {
+                ...(manualTaskItem.settingsOverride || {}),
+                real_manual_tasks: tasks.length > 0 ? tasks : undefined,
+              },
+            };
+            updateQueueItemOverride(idx, { real_manual_tasks: tasks.length > 0 ? tasks : undefined });
+            addLog(`手量记录已更新: ${manualTaskItem.dateFolder} (${tasks.length} 条)`);
+            handlePreviewForItem(nextItem, idx);
           }
         }}
       />

@@ -243,3 +243,33 @@ sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
 [template] resources\template.xlsx
 sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 ```
+
+## 附：前端流程缺陷修复（2026-06-29 再次接续）
+
+继续按 opencode-handoff-v5.0.6.md 9.4 节完成 A-E 修复：
+
+- **A. ReviewDialog “跳过此包” 真的跳过**：`handleReviewConfirm` / `handleReviewSkip` 统一过滤 `skippedFolders` 后再生成；过滤后为空则给出可读失败。
+- **B. ReviewDialog “确认并继续” 字段校验**：数量与测量时间至少填一个合法正值，缺失字段继续提示，不合法时弹窗底部显示红字错误。
+- **C. ManualTaskDialog “保存并预览” 使用最新手量**：`onPreview` 改为接收 `tasks`，`MainWindow` 用最新 tasks 构造临时 item 立即预览。
+- **D. 批量生成暂停状态与未处理日期**：扩展 `GenerateResult`，手量未确认/字段不完整时状态为 `paused`，列出当前及后续未处理日期，失败计数不再 +1。
+- **E. 预览/生成前统一校验数字设置**：`validateGlobalSettings()` 校验 `tpp_min/tpp_max/pkg_rest/hand_max/other_max/outputDir`，不合法不调用 sidecar。
+
+重新验证结果：
+
+- `npx.cmd tsc --noEmit`：通过
+- `cargo check --release`：通过（无 warning）
+- `npm.cmd run tauri build`：成功
+- `scripts/package-portable.ps1 -Version 5.0.4`：成功
+
+最新便携版 manifest hash（`packaged_at=2026-06-29T23:26:21`）：
+
+```text
+[app] OMM日报系统.exe
+sha256=d274c985dfbbd29bb19c6ffde05f82c26d0bb6f2736255cfca219f3ae86e5e1d
+
+[sidecar] binaries\generate_report.exe
+sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
+
+[template] resources\template.xlsx
+sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
+```

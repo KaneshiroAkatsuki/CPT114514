@@ -72,6 +72,7 @@ export function ReviewDialog({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pendingFolders, setPendingFolders] = useState<string[]>([]);
   const [skippedFolders, setSkippedFolders] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -82,6 +83,7 @@ export function ReviewDialog({
       setPendingFolders(folders);
       setCurrentIndex(0);
       setSkippedFolders([]);
+      setError(null);
     }
   }, [open, records, reviewMap]);
 
@@ -92,11 +94,35 @@ export function ReviewDialog({
           r.folder === folder ? setFieldValue(r, field, value) : r
         )
       );
+      if (error) setError(null);
     },
-    []
+    [error]
   );
 
+  const validateCurrentRecord = (): string | null => {
+    const currentFolder = pendingFolders[currentIndex];
+    const record = editedRecords.find((r) => r.folder === currentFolder);
+    if (!record) return '当前记录不存在';
+    const info = reviewMap[currentFolder];
+    const problemFields = [...info.missing, ...info.placeholders];
+    const hasQuantity = typeof record.quantity === 'number' && record.quantity > 0 && Number.isFinite(record.quantity);
+    const hasDuration = typeof record.manual_duration === 'number' && record.manual_duration > 0 && Number.isFinite(record.manual_duration);
+    if (!hasQuantity && !hasDuration) {
+      return '数量和测量时间至少要填写一个合法值';
+    }
+    const missingEditable = problemFields.filter((f) => isEditableField(f) && info.missing.includes(f));
+    if (missingEditable.length > 0) {
+      return `以下字段仍需补充：${missingEditable.map((f) => FIELD_LABELS[f] || f).join('、')}`;
+    }
+    return null;
+  };
+
   const handleConfirm = () => {
+    const err = validateCurrentRecord();
+    if (err) {
+      setError(err);
+      return;
+    }
     const currentFolder = pendingFolders[currentIndex];
     const newPending = pendingFolders.filter((f) => f !== currentFolder);
     setPendingFolders(newPending);
@@ -114,6 +140,7 @@ export function ReviewDialog({
     setSkippedFolders(newSkipped);
     const newPending = pendingFolders.filter((f) => f !== currentFolder);
     setPendingFolders(newPending);
+    if (error) setError(null);
 
     if (newPending.length === 0) {
       onSkip(newSkipped, editedRecords);
@@ -200,6 +227,11 @@ export function ReviewDialog({
             </div>
           </div>
         </CardContent>
+        {error && (
+          <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2">
+            <p className="text-sm text-red-700 font-medium">{error}</p>
+          </div>
+        )}
         <div className="shrink-0 border-t p-4 flex justify-end gap-3">
           <Button variant="outline" onClick={onCancel}>
             取消

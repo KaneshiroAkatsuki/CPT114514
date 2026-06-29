@@ -73,6 +73,16 @@
 - **配置结构补充**：`Config` / Rust `AppConfig` 增加 `leave_strategy`、`enable_hand`、`enable_other`、`shift_default`，只影响 GUI 配置读写，不改 sidecar 排程算法。
 - **帮助文档同步**：更新快速开始、流程、FAQ，说明默认设置保存、手量待确认弹窗、失败明细查看。
 
+### 1.8 本轮补充修复：前端流程缺陷（A-E）
+
+按 9.4 节缺陷解决方案，优先修复以下 5 项，未触碰 sidecar 排程核心：
+
+- **A. ReviewDialog “跳过此包” 真的跳过**：`handleReviewConfirm` / `handleReviewSkip` 现在都会用 `effectiveRecords = updatedRecords.filter(r => !skippedFolders.includes(r.folder))` 过滤，再交给生成逻辑；过滤后为空则记录“本日期所有任务都被跳过”。
+- **B. ReviewDialog “确认并继续” 字段校验**：新增 `validateCurrentRecord`，要求 `quantity` 和 `manual_duration` 至少有一个合法正值；缺失字段仍提示；不合法时弹窗底部显示红字错误，不调用 onConfirm。
+- **C. ManualTaskDialog “保存并预览” 使用最新手量**：`onPreview` 签名改为 `onPreview?: (tasks: RealManualTask[]) => void`；`handleSaveAndPreview` 直接传 `tasks`；`MainWindow` 用最新 tasks 构造 `nextItem` 并立即 `handlePreviewForItem(nextItem, idx)`，不再等待 React state 刷新。
+- **D. 批量生成暂停状态与未处理日期**：扩展 `GenerateResult`（`status: 'complete' | 'paused' | 'failed'`，`pendingItems`）。遇到未确认手量或真实手量字段不完整时，状态记为 `paused`，`pendingItems = queue.slice(index).map(...)`，失败计数不再 +1；弹窗标题显示“生成已暂停，需要先处理手量”，并列出尚未处理的日期。
+- **E. 预览/生成前统一校验数字设置**：新增 `validateGlobalSettings()`，在 `handlePreview`、`handlePreviewForItem`、`handleGenerate`、`handleGenerateSingleFromPreview` 前调用；校验 `tpp_min/tpp_max` 为正数且 `min <= max`、`pkg_rest >= 0`、`hand_max/other_max > 0`、非源输出时 `outputDir` 非空；不合法时只写日志，不调用 sidecar。
+
 ---
 
 ## 2. 已验证项目
@@ -106,6 +116,12 @@
 | 生成结果失败明细 | 通过 ✓ |
 | 默认设置保存到配置文件字段补充 | 通过 ✓ |
 | 帮助文档同步 | 完成 ✓ |
+| ReviewDialog “跳过此包” 过滤后不生成本日期 | 通过 ✓ |
+| ReviewDialog “确认并继续” 数量/耗时校验 | 通过 ✓ |
+| ManualTaskDialog “保存并预览” 使用最新手量 | 通过 ✓ |
+| 批量生成暂停状态与未处理日期列表 | 通过 ✓ |
+| 预览/生成前数字设置校验 | 通过 ✓ |
+| `cargo check --release` 无 warning | 通过 ✓ |
 
 ---
 
@@ -135,11 +151,11 @@ releases\OMM日报系统_便携版_5.0.4.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-29T22:59:30`。
+来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-29T23:26:21`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=5ab96946a84c68ddce03066055d307aa97d8a4dac8d491b8e1cb597a9165948a
+sha256=d274c985dfbbd29bb19c6ffde05f82c26d0bb6f2736255cfca219f3ae86e5e1d
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -156,6 +172,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 2. 考虑 `settingsOverride.real_manual_tasks` 持久化问题：当前单日设置关闭程序后仍可能丢失。
 3. 版本号仍保持 5.0.4，如需对外发布建议统一升级到 5.0.6 或 5.0.7。
 4. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
+5. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 
 ---
 
@@ -275,16 +292,16 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 ### 9.3 推荐下一轮实施顺序
 
-1. 对新增 UI（DaySettingsDialog、PreviewDialog 诊断按钮）做真实 GUI 验收。
+1. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 2. 做手量文件夹自动发现的真实 GUI 验收，发现问题只修前端闭环。
 3. 考虑真实手量持久化方案，先写设计，不急着落代码。
 4. 如需发布，统一升级版本号到 5.0.6 或 5.0.7。
 
-### 9.4 下一轮缺陷解决方案设计（优先做）
+### 9.4 下一轮缺陷解决方案设计（优先做，本轮已完成 A-E）
 
 这一节是 gpt 对当前功能风险的具体解决办法。请 op 优先按这里做，不要直接大改 sidecar 核心。
 
-#### A. ReviewDialog “跳过此包”必须真的跳过
+#### A. ReviewDialog “跳过此包”必须真的跳过（已完成）
 
 **现状风险**：`ReviewDialog` 的 `onSkip(skippedFolders, updatedRecords)` 会把跳过的文件夹名传回主界面，但主界面随后仍可能把 `updatedRecords` 全量交给 `generateWithRecords`，导致“跳过此包”实际只是跳过审核，并没有跳过生成。
 
@@ -303,7 +320,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 生成时点击“跳过此包”。
 - 最终 Excel 不应包含被跳过的产品/文件夹。
 
-#### B. ReviewDialog “确认并继续”必须做字段校验
+#### B. ReviewDialog “确认并继续”必须做字段校验（已完成）
 
 **现状风险**：审核弹窗可以什么都不填就点确认，后续可能继续生成留坑或触发难懂错误。
 
@@ -323,7 +340,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 触发方案 A 后，不填数量/测量时间，点“确认并继续”应被拦住。
 - 填 `quantity=16` 或 `manual_duration=80` 后才能继续。
 
-#### C. 手量弹窗“保存并预览”必须使用最新手量
+#### C. 手量弹窗“保存并预览”必须使用最新手量（已完成）
 
 **现状风险**：`ManualTaskDialog` 点“保存并预览”时，先 `onSave(tasks)` 再 `onPreview()`，但 React `queue` 更新是异步的，预览可能拿到旧 `manualTaskItem`，导致刚保存的真实手量没参与预览。
 
@@ -341,7 +358,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 手量弹窗内新增/修改一条真实手量，点“保存并预览”。
 - 预览表格应立即出现这条真实手量，并计入有效时长。
 
-#### D. 批量生成遇到未确认手量时，应显示“暂停”和未处理项
+#### D. 批量生成遇到未确认手量时，应显示“暂停”和未处理项（已完成）
 
 **现状风险**：批量生成第 N 项遇到手量未确认时会停止并打开补录，但结果弹窗可能显示“成功 X、失败 1”，没有说明后续队列项尚未处理。
 
@@ -367,7 +384,7 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 队列中至少 3 天，第 2 天有未确认手量。
 - 点击生成后，第 1 天可成功，第 2 天暂停并打开补录，第 3 天应显示为未处理，而不是失败或成功。
 
-#### E. 预览/生成前统一校验数字设置
+#### E. 预览/生成前统一校验数字设置（已完成）
 
 **现状风险**：`tpp_min`、`tpp_max`、`pkg_rest` 等输入框如果被清空，state 可能变成 `NaN`，保存默认时虽有部分校验，但预览/生成不一定拦截。
 
@@ -453,11 +470,11 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 只做最小必要改进，优先修复前端流程缺陷：审核跳过、审核确认校验、手量保存并预览、批量生成暂停状态、数字设置校验。不要大规模重构，不要触碰 sidecar 排程核心。
 
 重点任务：
-1. 修 ReviewDialog “跳过此包”：跳过后必须从 records 中过滤，不得写入最终 Excel。
-2. 修 ReviewDialog “确认并继续”：数量和测量时间至少要有一个合法值，否则不允许确认，并在弹窗内显示错误。
-3. 修 ManualTaskDialog “保存并预览”：预览必须使用刚保存的最新 real_manual_tasks，避免 React state 异步导致旧数据预览。
-4. 修批量生成暂停状态：遇到未确认手量/真实手量字段不完整时，结果弹窗标题应为“生成已暂停”，并列出当前及后续未处理日期。
-5. 增加预览/生成前数字设置校验：tpp_min/tpp_max/pkg_rest/hand_max/other_max/outputDir 必须合法，不合法时不调用 sidecar。
+1. （已完成）修 ReviewDialog “跳过此包”：跳过后必须从 records 中过滤，不得写入最终 Excel。
+2. （已完成）修 ReviewDialog “确认并继续”：数量和测量时间至少要有一个合法值，否则不允许确认，并在弹窗内显示错误。
+3. （已完成）修 ManualTaskDialog “保存并预览”：预览必须使用刚保存的最新 real_manual_tasks，避免 React state 异步导致旧数据预览。
+4. （已完成）修批量生成暂停状态：遇到未确认手量/真实手量字段不完整时，结果弹窗标题应为“生成已暂停”，并列出当前及后续未处理日期。
+5. （已完成）增加预览/生成前数字设置校验：tpp_min/tpp_max/pkg_rest/hand_max/other_max/outputDir 必须合法，不合法时不调用 sidecar。
 6. 真实手量持久化先不要直接实现；如要做，先写方案，原则是不写回原始日期目录，而是写配置目录的独立 json。
 7. 完成后更新帮助文档和 opencode-handoff-v5.0.6.md。
 

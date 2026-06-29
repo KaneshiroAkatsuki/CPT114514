@@ -22,7 +22,7 @@ interface ManualTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (tasks: RealManualTask[]) => void;
-  onPreview?: () => void;
+  onPreview?: (tasks: RealManualTask[]) => void;
 }
 
 const EMPTY_TASK: Partial<RealManualTask> = {
@@ -246,7 +246,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   const handleSaveAndPreview = () => {
     onSave(tasks);
     onOpenChange(false);
-    onPreview?.();
+    onPreview?.(tasks);
   };
 
   const validationMap = useMemo(() => {
