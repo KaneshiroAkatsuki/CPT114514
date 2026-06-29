@@ -60,6 +60,17 @@ function setFieldValue(
   return updated;
 }
 
+function hasUsableFieldValue(record: FolderRecord, field: EditableField): boolean {
+  if (field === "quantity") {
+    return typeof record.quantity === "number" && Number.isFinite(record.quantity) && record.quantity > 0;
+  }
+  if (field === "manual_duration") {
+    return typeof record.manual_duration === "number" && Number.isFinite(record.manual_duration) && record.manual_duration > 0;
+  }
+  const value = record[field];
+  return value !== null && value !== undefined && String(value).trim().length > 0;
+}
+
 export function ReviewDialog({
   open,
   records,
@@ -110,7 +121,12 @@ export function ReviewDialog({
     if (!hasQuantity && !hasDuration) {
       return '数量和测量时间至少要填写一个合法值';
     }
-    const missingEditable = problemFields.filter((f) => isEditableField(f) && info.missing.includes(f));
+    const missingEditable = problemFields.filter((f) => {
+      if (!isEditableField(f) || !info.missing.includes(f)) return false;
+      // 件数和测量时间互为兜底：只要其中一个合法，就不强制另一个也填写。
+      if ((f === 'quantity' || f === 'manual_duration') && (hasQuantity || hasDuration)) return false;
+      return !hasUsableFieldValue(record, f);
+    });
     if (missingEditable.length > 0) {
       return `以下字段仍需补充：${missingEditable.map((f) => FIELD_LABELS[f] || f).join('、')}`;
     }

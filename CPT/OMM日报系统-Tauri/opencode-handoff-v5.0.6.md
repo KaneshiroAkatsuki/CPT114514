@@ -83,6 +83,12 @@
 - **D. 批量生成暂停状态与未处理日期**：扩展 `GenerateResult`（`status: 'complete' | 'paused' | 'failed'`，`pendingItems`）。遇到未确认手量或真实手量字段不完整时，状态记为 `paused`，`pendingItems = queue.slice(index).map(...)`，失败计数不再 +1；弹窗标题显示“生成已暂停，需要先处理手量”，并列出尚未处理的日期。
 - **E. 预览/生成前统一校验数字设置**：新增 `validateGlobalSettings()`，在 `handlePreview`、`handlePreviewForItem`、`handleGenerate`、`handleGenerateSingleFromPreview` 前调用；校验 `tpp_min/tpp_max` 为正数且 `min <= max`、`pkg_rest >= 0`、`hand_max/other_max > 0`、非源输出时 `outputDir` 非空；不合法时只写日志，不调用 sidecar。
 
+### 1.9 gpt 复核热修：ReviewDialog 缺失字段校验读取编辑后的实际值
+
+- **发现的问题**：op 的 `validateCurrentRecord` 会把 `reviewMap[currentFolder].missing` 中的字段一直视作缺失，即使用户已经在审核弹窗输入框里补了值，也可能继续拦截“确认并继续”。
+- **修复方式**：新增 `hasUsableFieldValue(record, field)`，校验时读取 `editedRecords` 当前值；`quantity` / `manual_duration` 继续互为兜底，只要其中一个合法正值，就不强制另一个也填写。
+- **影响范围**：仅修改 `src/components/ReviewDialog.tsx` 的前端校验逻辑；未触碰 sidecar 排程核心、Excel 写入、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 ## 2. 已验证项目
@@ -121,6 +127,7 @@
 | ManualTaskDialog “保存并预览” 使用最新手量 | 通过 ✓ |
 | 批量生成暂停状态与未处理日期列表 | 通过 ✓ |
 | 预览/生成前数字设置校验 | 通过 ✓ |
+| gpt 复核：ReviewDialog 缺失字段校验读取编辑后实际值 | 通过 ✓ |
 | `cargo check --release` 无 warning | 通过 ✓ |
 
 ---
@@ -151,11 +158,11 @@ releases\OMM日报系统_便携版_5.0.4.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-29T23:26:21`。
+来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-30T00:44:10`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=d274c985dfbbd29bb19c6ffde05f82c26d0bb6f2736255cfca219f3ae86e5e1d
+sha256=8cc53fbc16a68c951eccd76f305aa5c2f2914d288311b17c6cd7a600741b0c19
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
