@@ -146,6 +146,8 @@ pub fn run() {
             commands::config::save_config,
             commands::config::migrate_config,
             commands::config::sync_config_state,
+            commands::config::load_recognition_rules,
+            commands::config::save_recognition_rules,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Config, ConfigLoadInfo, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths } from "@/types/record";
+import type { Config, ConfigLoadInfo, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo } from "@/types/record";
 
 export function useSidecar() {
   const parseFolders = async (baseDir: string, operatorName: string): Promise<ParseFoldersResponse> => {
@@ -97,5 +97,13 @@ export function useConfigManager() {
     return await invoke<string>("sync_config_state", { config });
   };
 
-  return { loadConfigWithInfo, loadConfig, saveConfig, migrateConfig, syncConfigState };
+  const loadRecognitionRules = async (): Promise<RecognitionRulesLoadInfo> => {
+    return await invoke<RecognitionRulesLoadInfo>("load_recognition_rules");
+  };
+
+  const saveRecognitionRules = async (rules: RecognitionRules): Promise<RecognitionRulesLoadInfo> => {
+    return await invoke<RecognitionRulesLoadInfo>("save_recognition_rules", { rules });
+  };
+
+  return { loadConfigWithInfo, loadConfig, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules };
 }

@@ -9,10 +9,12 @@ import { DaySettingsDialog } from "@/components/DaySettingsDialog";
 import { HelpCenterDialog } from "@/components/HelpCenterDialog";
 import { ConfigLocationDialog } from "@/components/ConfigLocationDialog";
 import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
+import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { useFile, useSidecar, useConfigManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
-import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate } from "@/types/record";
+import { emptyRecognitionRules } from "@/lib/recognitionRules";
+import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules } from "@/types/record";
 import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info, Package } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
@@ -68,6 +70,10 @@ export function MainWindow() {
   const [configSource, setConfigSource] = useState<string>("");
   const [configPath, setConfigPath] = useState<string>("");
   const [configDuplicates, setConfigDuplicates] = useState<string[]>([]);
+  const [recognitionRulesOpen, setRecognitionRulesOpen] = useState(false);
+  const [recognitionRules, setRecognitionRules] = useState<RecognitionRules>(emptyRecognitionRules());
+  const [recognitionRulesPath, setRecognitionRulesPath] = useState("");
+  const [recognitionRulesExists, setRecognitionRulesExists] = useState(false);
 
   // Preview dialog state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -115,7 +121,15 @@ export function MainWindow() {
 
   const { selectFolder, selectXlsxFile, openFolder } = useFile();
   const { parseFolders, generate, preview, listDateFolders, listChildFolders, getTemplateInfo, replaceTemplate, resetTemplate, getTemplatePaths } = useSidecar();
-  const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState } = useConfigManager();
+  const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules } = useConfigManager();
+
+  const refreshRecognitionRules = async () => {
+    const info = await loadRecognitionRules();
+    setRecognitionRules(info.rules || emptyRecognitionRules());
+    setRecognitionRulesPath(info.path);
+    setRecognitionRulesExists(info.exists);
+    return info;
+  };
 
   // Load saved config on startup
   useEffect(() => {
@@ -150,6 +164,7 @@ export function MainWindow() {
         syncConfigState(c)
           .then((effectiveDir) => {
             if (!c.config_dir && effectiveDir) setConfigDir(effectiveDir);
+            refreshRecognitionRules().catch((e) => addLog(`识别补充规则读取失败: ${e}`));
           })
           .catch(() => {});
         if (!cfg.config_dir_ever_set) {
@@ -383,6 +398,7 @@ export function MainWindow() {
         setConfigPath(`${finalDir}\\config.json`);
         setConfigDuplicates([]);
         await syncConfigState(migrated);
+        await refreshRecognitionRules();
         persistConfig({ config_dir: finalDir, config_dir_ever_set: true });
         addLog(`配置文件已迁移到: ${finalDir}`);
       } catch (e) {
@@ -420,7 +436,7 @@ export function MainWindow() {
   const failureDetailsRef = useRef<GenerateFailureDetail[]>([]);
 
   const detectAndAttachCandidates = async (item: QueueItem): Promise<QueueItem> => {
-    const candidates = await detectManualCandidates(item.fullPath, listChildFolders);
+    const candidates = await detectManualCandidates(item.fullPath, listChildFolders, recognitionRules);
     return { ...item, manualCandidates: candidates };
   };
 
@@ -1707,6 +1723,7 @@ export function MainWindow() {
                             setConfigPath(`${newDir}\\config.json`);
                             setConfigDuplicates([]);
                             await syncConfigState(migrated);
+                            await refreshRecognitionRules();
                             persistConfig({ config_dir: newDir });
                             addLog(`配置文件目录: ${newDir}`);
                           } catch (e) {
@@ -1751,6 +1768,19 @@ export function MainWindow() {
                         </Button>
                       </div>
                       <div className="text-xs text-slate-600 break-all">实际配置路径：{configPath || configDir}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <span className="break-all">
+                          识别补充：{recognitionRulesPath || "recognition-rules.json"}（独立保存，重置普通配置不会清空）
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => setRecognitionRulesOpen(true)}
+                        >
+                          识别补充
+                        </Button>
+                      </div>
                       {configDuplicates.length > 0 && (
                         <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
                           <strong>注意：</strong>在便携版目录内还发现了 {configDuplicates.length} 个 config.json，程序当前使用上方路径。建议只保留一个配置文件，避免 confusion：
@@ -2510,6 +2540,29 @@ export function MainWindow() {
             addLog(`手量记录已更新: ${manualTaskItem.dateFolder} (${tasks.length} 条)`);
             handlePreviewForItem(nextItem, idx);
           }
+        }}
+        recognitionRules={recognitionRules}
+      />
+      <RecognitionRulesDialog
+        open={recognitionRulesOpen}
+        rules={recognitionRules}
+        path={recognitionRulesPath}
+        exists={recognitionRulesExists}
+        onOpenChange={setRecognitionRulesOpen}
+        onReload={() => {
+          refreshRecognitionRules()
+            .then((info) => addLog(`识别补充规则已重新读取: ${info.path}`))
+            .catch((e) => addLog(`识别补充规则读取失败: ${e}`));
+        }}
+        onSave={(rules) => {
+          saveRecognitionRules(rules)
+            .then((info) => {
+              setRecognitionRules(info.rules || emptyRecognitionRules());
+              setRecognitionRulesPath(info.path);
+              setRecognitionRulesExists(info.exists);
+              addLog(`识别补充规则已保存: ${info.path}`);
+            })
+            .catch((e) => addLog(`识别补充规则保存失败: ${e}`));
         }}
       />
       {/* 单日设置弹窗 */}

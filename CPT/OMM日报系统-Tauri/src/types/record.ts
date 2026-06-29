@@ -90,6 +90,10 @@ export interface RealManualTask {
   source_folder?: string;
   /** 仅用于编辑时的临时输入值，不持久化 */
   durationInput?: string;
+  /** 识别命中的规则说明 */
+  matched_rules?: string[];
+  /** 识别提醒 */
+  recognition_warnings?: string[];
 }
 
 /** 队列项单独覆盖设置（用于多天不同策略） */
@@ -141,6 +145,7 @@ export interface Config {
   tpp_min?: number;
   tpp_max?: number;
   pkg_rest?: number;
+  recognition_rules_path?: string;
 }
 
 export interface ConfigLoadInfo {
@@ -148,6 +153,47 @@ export interface ConfigLoadInfo {
   source: string;
   path: string;
   duplicate_paths: string[];
+}
+
+export interface StationAliasRule {
+  alias: string;
+  station: string;
+  default_test_type?: string;
+}
+
+export interface ProductAliasRule {
+  pattern: string;
+  product: string;
+  station?: string;
+  note?: string;
+}
+
+export interface WeldingRule {
+  pattern: string;
+  product: string;
+  note?: string;
+}
+
+export interface SinterPlateRule {
+  pattern: string;
+  products: string[];
+  note?: string;
+}
+
+export interface RecognitionRules {
+  version: number;
+  updated_at?: string;
+  station_aliases?: StationAliasRule[];
+  product_aliases?: ProductAliasRule[];
+  ignored_tokens?: string[];
+  welding_rules?: WeldingRule[];
+  sinter_plate_rules?: SinterPlateRule[];
+}
+
+export interface RecognitionRulesLoadInfo {
+  rules: RecognitionRules;
+  path: string;
+  exists: boolean;
 }
 
 export const FIELD_LABELS: Record<string, string> = {

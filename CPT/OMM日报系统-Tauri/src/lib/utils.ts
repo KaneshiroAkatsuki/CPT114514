@@ -1,4 +1,5 @@
-import { type ManualFolderCandidate, type RealManualTask } from "@/types/record";
+import { type ManualFolderCandidate, type RealManualTask, type RecognitionRules } from "@/types/record";
+import { recognizeManualTaskWithRules } from "@/lib/recognitionRules";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -76,79 +77,8 @@ export function validateRealManualTask(task: Partial<RealManualTask>): string[] 
  *  强特征：-手量-姓名
  *  返回部分字段，需要用户补录确认。
  */
-export function recognizeManualTaskFromFolder(folderName: string): Partial<RealManualTask> {
-  const result: Partial<RealManualTask> = {
-    work_order: '/',
-    mold: '/',
-    machine: '/',
-    test_type: '测试尺寸',
-    send_project: 'OMM',
-    send_time: '/',
-    note: `识别来源: ${folderName}`,
-    from_recognition: true,
-  };
-
-  // 按 - _ 分割
-  const parts = folderName.split(/[-_]/).filter(Boolean);
-
-  // 测量员：强特征 -手量-姓名
-  const manualMatch = folderName.match(/-手量-([^-_]+)/);
-  if (manualMatch) {
-    result.operator = manualMatch[1].trim();
-  }
-
-  // 品名：优先从头开始找数字/料号段
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i];
-    if (looksLikeProduct(p)) {
-      result.product = p;
-      break;
-    }
-  }
-
-  // 工站：第二段如果是工站名称，则取为工站
-  if (parts.length >= 2 && looksLikeStation(parts[1])) {
-    result.station = parts[1];
-  }
-
-  // 送测人：支持 -送测-姓名、-ST-姓名、姓名送测
-  const senderMatch = folderName.match(/[-_](?:送测|ST)-([^-_]+)/);
-  if (senderMatch) {
-    result.sender = senderMatch[1].trim();
-  } else {
-    const senderInline = folderName.match(/([^\-_\d]{2,4})送测/);
-    if (senderInline) {
-      result.sender = senderInline[1].trim();
-    }
-  }
-
-  // 数量：数字+PCS/pcs/件
-  const qtyMatch = folderName.match(/(\d+)\s*(?:PCS|pcs|件)/);
-  if (qtyMatch) {
-    result.quantity = `${qtyMatch[1]}PCS`;
-  }
-
-  // 手量耗时通常不写进文件夹名，需要人工填写，这里不自动识别
-  return result;
-}
-
-/** 判断分段是否像品名/料号：纯数字，或数字+字母混合，不以 CMM/OMM 等开头。 */
-function looksLikeProduct(part: string): boolean {
-  if (!part) return false;
-  const s = part.toUpperCase();
-  const exclude = ['CMM', 'OMM', 'PCS', 'ST', 'MO', 'T0', 'T1', 'IQC', 'OQC'];
-  if (exclude.some((k) => s === k || s.startsWith(k))) return false;
-  return /^\d+$/.test(part) || /^\d+[A-Za-z0-9\-]+$/.test(part);
-}
-
-/** 判断分段是否像工站名称。 */
-function looksLikeStation(part: string): boolean {
-  if (!part) return false;
-  const s = part.trim();
-  if (s.length > 10) return false;
-  const stations = ['开发', 'CNC', '射出', '镭雕', '整形', '烧结', 'IQC', 'OQC', '手量'];
-  if (stations.includes(s.toUpperCase())) return true;
-  return /^[\u4e00-\u9fa5]{1,6}$/.test(s);
+export function recognizeManualTaskFromFolder(folderName: string, recognitionRules?: RecognitionRules): Partial<RealManualTask> {
+  return recognizeManualTaskWithRules(folderName, recognitionRules);
 }
 
 /** 判断文件夹名是否包含强手量特征。 */
@@ -159,7 +89,8 @@ export function isManualFolder(folderName: string): boolean {
 /** 从日期文件夹路径扫描直接子文件夹，自动发现手量候选。 */
 export async function detectManualCandidates(
   dateFolderPath: string,
-  listChildren: (path: string) => Promise<string[]>
+  listChildren: (path: string) => Promise<string[]>,
+  recognitionRules?: RecognitionRules
 ): Promise<ManualFolderCandidate[]> {
   try {
     const names = await listChildren(dateFolderPath);
@@ -169,7 +100,7 @@ export async function detectManualCandidates(
         candidates.push({
           folderName: name,
           fullPath: `${dateFolderPath}\\${name}`,
-          recognized: recognizeManualTaskFromFolder(name),
+          recognized: recognizeManualTaskFromFolder(name, recognitionRules),
         });
       }
     }

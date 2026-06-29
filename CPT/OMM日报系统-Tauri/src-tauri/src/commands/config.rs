@@ -36,6 +36,9 @@ pub struct AppConfig {
     /// 包间休息时长（分钟）
     #[serde(default)]
     pub pkg_rest: Option<i64>,
+    /// 识别补充规则文件名或路径，默认与 config.json 同目录的 recognition-rules.json
+    #[serde(default)]
+    pub recognition_rules_path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -140,6 +143,22 @@ impl AppConfig {
         let dir = self.effective_config_dir()?;
         Ok(dir.join("config.json"))
     }
+
+    /// Get the effective recognition rules file path.
+    pub fn effective_recognition_rules_path(&self) -> Result<PathBuf, String> {
+        let dir = self.effective_config_dir()?;
+        let configured = self
+            .recognition_rules_path
+            .as_deref()
+            .filter(|p| !p.trim().is_empty())
+            .unwrap_or("recognition-rules.json");
+        let path = PathBuf::from(configured);
+        if path.is_absolute() {
+            Ok(path)
+        } else {
+            Ok(dir.join(path))
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -148,6 +167,72 @@ pub struct ConfigLoadInfo {
     pub source: String,
     pub path: String,
     pub duplicate_paths: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct StationAliasRule {
+    pub alias: String,
+    pub station: String,
+    pub default_test_type: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct ProductAliasRule {
+    pub pattern: String,
+    pub product: String,
+    pub station: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct WeldingRule {
+    pub pattern: String,
+    pub product: String,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SinterPlateRule {
+    pub pattern: String,
+    pub products: Vec<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RecognitionRules {
+    pub version: i64,
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub station_aliases: Vec<StationAliasRule>,
+    #[serde(default)]
+    pub product_aliases: Vec<ProductAliasRule>,
+    #[serde(default)]
+    pub ignored_tokens: Vec<String>,
+    #[serde(default)]
+    pub welding_rules: Vec<WeldingRule>,
+    #[serde(default)]
+    pub sinter_plate_rules: Vec<SinterPlateRule>,
+}
+
+impl Default for RecognitionRules {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            updated_at: None,
+            station_aliases: vec![],
+            product_aliases: vec![],
+            ignored_tokens: vec![],
+            welding_rules: vec![],
+            sinter_plate_rules: vec![],
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RecognitionRulesLoadInfo {
+    pub rules: RecognitionRules,
+    pub path: String,
+    pub exists: bool,
 }
 
 fn find_all_portable_configs(root: &Path) -> Vec<PathBuf> {
@@ -378,4 +463,54 @@ pub async fn sync_config_state(
         .map_err(|e| format!("Failed to resolve config dir: {}", e))?;
     *state.user_template_dir.lock().unwrap() = dir.clone();
     Ok(dir.to_string_lossy().to_string())
+}
+
+#[command]
+pub async fn load_recognition_rules(
+    state: State<'_, AppState>,
+) -> Result<RecognitionRulesLoadInfo, String> {
+    let config = state.config.lock().unwrap().clone();
+    let path = config.effective_recognition_rules_path()?;
+    if !path.exists() {
+        return Ok(RecognitionRulesLoadInfo {
+            rules: RecognitionRules::default(),
+            path: path.to_string_lossy().to_string(),
+            exists: false,
+        });
+    }
+
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read recognition rules: {}", e))?;
+    let rules: RecognitionRules = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse recognition rules: {}", e))?;
+
+    Ok(RecognitionRulesLoadInfo {
+        rules,
+        path: path.to_string_lossy().to_string(),
+        exists: true,
+    })
+}
+
+#[command]
+pub async fn save_recognition_rules(
+    state: State<'_, AppState>,
+    mut rules: RecognitionRules,
+) -> Result<RecognitionRulesLoadInfo, String> {
+    let config = state.config.lock().unwrap().clone();
+    let path = config.effective_recognition_rules_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create recognition rules directory: {}", e))?;
+    }
+    rules.version = if rules.version <= 0 { 1 } else { rules.version };
+    let content = serde_json::to_string_pretty(&rules)
+        .map_err(|e| format!("Failed to serialize recognition rules: {}", e))?;
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write recognition rules: {}", e))?;
+
+    Ok(RecognitionRulesLoadInfo {
+        rules,
+        path: path.to_string_lossy().to_string(),
+        exists: true,
+    })
 }

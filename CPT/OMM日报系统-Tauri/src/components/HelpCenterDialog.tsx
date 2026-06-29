@@ -106,7 +106,14 @@ function Content({ section }: { section: string }) {
             <li>工站优先识别第二段（如“开发”“CNC”“射出”）。</li>
             <li>送测人支持“张三送测”“-送测-张三”“-ST-张三”三种写法。</li>
             <li>测量员只从“-手量-姓名”识别，例如“-手量-禹欣”。</li>
-            <li>耗时只在出现“耗时90分钟”“手量1.5H”“耗时1:30”等明确关键词时识别，没有就不猜。</li>
+            <li>手量耗时以人工填写为主，输入 <code className={code}>2</code> 默认表示 2 小时；如需按分钟，请写 <code className={code}>90分钟</code> 或 <code className={code}>90m</code>。</li>
+          </ul>
+
+          <h3 className={h3}>识别补充规则</h3>
+          <ul className={ul}>
+            <li>常见内置规则包括：806 料号取中间五位后三位、CNC 固定 035、FAI 代表开发、烧结盘多品名、焊接 289/290/424-429。</li>
+            <li>如果后续出现新工站、新品名或特殊模板，可在“生成设置”里的“识别补充”窗口添加规则。</li>
+            <li>补充规则会独立保存到 <code className={code}>recognition-rules.json</code>，不会随普通配置重置而清空。</li>
           </ul>
 
           <h3 className={h3}>任务子文件夹要求</h3>
@@ -219,7 +226,8 @@ function Content({ section }: { section: string }) {
               默认保存在系统用户配置目录：<br />
               <code className={code}>%APPDATA%\OMM日报系统\config.json</code><br />
               界面“配置文件”一栏会显示实际目录。如需让便携版带着配置一起走，可在“生成设置”中点击“浏览…”选择程序文件夹或 U 盘目录。<br />
-              便携版启动时会优先识别自身目录内任意位置的 config.json，并把后续保存写回该配置所在目录。
+              便携版启动时会优先识别自身目录内任意位置的 config.json，并把后续保存写回该配置所在目录。<br />
+              品名/工站的用户补充规则另存为 <code className={code}>recognition-rules.json</code>，与 config.json 位于同一配置目录。普通配置重置不会清空它；如需删除，请在“识别补充”窗口删除单条或清空全部。
             </div>
           </div>
 

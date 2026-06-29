@@ -131,6 +131,25 @@
 - **校验调整**：未填写耗时提示 `请填写手量耗时`；小于 5 分钟提示不合理；超过 8 小时提示请确认（不强制拦截）。
 - 未触碰 sidecar 排程核心。
 
+### 1.13 gpt 本轮：识别补充规则独立文件与窗口
+
+按用户要求，识别补充内容不再设计为直接写入 `config.json`，而是与配置文件同目录独立保存：
+
+```text
+config.json
+recognition-rules.json
+```
+
+- **Rust 命令**：新增 `load_recognition_rules` / `save_recognition_rules`，使用当前有效配置目录，默认文件名 `recognition-rules.json`。
+- **配置结构**：`Config` / `AppConfig` 增加 `recognition_rules_path`，仅用于指定规则文件名/路径；规则正文不塞入普通配置。
+- **前端类型**：新增 `RecognitionRules`、工站别名、品名别名、烧结盘规则、焊接规则、加载信息等类型。
+- **识别模块**：新增 `src/lib/recognitionRules.ts`，内置 806 料号后三位、CNC=035、FAI=开发、烧结盘、焊接、首件/制程/尺寸规则；`recognizeManualTaskFromFolder()` 保持旧入口，内部转调新模块。
+- **识别补充窗口**：新增 `RecognitionRulesDialog`，支持添加/删除工站别名、品名规则、忽略词、烧结盘规则、焊接规则，并可输入文件夹名测试识别结果和命中规则。
+- **主界面入口**：配置区域显示 `recognition-rules.json` 路径，提供“识别补充”按钮；切换配置目录后会刷新规则文件路径。
+- **手量识别接入**：自动发现手量候选和手量弹窗粘贴识别都会使用当前补充规则。
+- **帮助文档同步**：说明补充规则文件与 `config.json` 同目录、普通配置重置不会清空补充规则，只能在识别补充窗口删除单条或清空全部。
+- **影响范围**：只改配置/前端识别与 UI；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 | 项目 | 结果 |
@@ -188,6 +207,14 @@
 | `npx.cmd tsc --noEmit`（v5.0.7 耗时修正后） | 通过 ✓ |
 | `cargo check --release`（v5.0.7 耗时修正后） | 通过 ✓ |
 | `npm.cmd run tauri build`（v5.0.7 耗时修正后） | 成功 ✓ |
+| 识别补充规则独立保存到 `recognition-rules.json` | 完成 ✓ |
+| `RecognitionRulesDialog` 增删/测试识别入口 | 完成 ✓ |
+| 自动手量候选识别接入补充规则 | 完成 ✓ |
+| 帮助文档同步 `config.json` / `recognition-rules.json` 区别 | 完成 ✓ |
+| `npx.cmd tsc --noEmit`（识别补充窗口后） | 通过 ✓ |
+| `cargo check --release`（识别补充窗口后） | 通过 ✓ |
+| `npm.cmd run tauri build`（识别补充窗口后） | 成功 ✓，仅 Vite chunk size 警告 |
+| `scripts/package-portable.ps1 -Version 5.0.7`（识别补充窗口后） | 成功 ✓ |
 | `scripts/package-portable.ps1 -Version 5.0.7`（耗时修正后） | 成功 ✓ |
 
 ---
@@ -218,11 +245,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T01:42:37`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T02:22:02`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=5d3bfe045b99bf779592636d41310a320135d9de3b1ae32e38d6346f2fe2b1ff
+sha256=c01153cbe02c441a05cb62945cbfbeec7d850e3315f8d990adc2295fc1257bda
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -239,7 +266,8 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 2. 考虑 `settingsOverride.real_manual_tasks` 持久化问题：当前单日设置关闭程序后仍可能丢失。
 3. 对 DaySettingsDialog 和 PreviewDialog 新增按钮做真实交互验收。
 4. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
-5. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
+5. 对识别补充窗口做真实 GUI 验收：新增规则、保存、重新打开、测试识别、清空补充、切换配置目录后路径刷新。
+6. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
 
 ---
 
@@ -267,8 +295,10 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 后端核心：`sidecar/generate_report.py`（本轮未改动）
 - 类型：`src/types/record.ts`
 - 工具函数：`src/lib/utils.ts`
+- 识别规则模块：`src/lib/recognitionRules.ts`
 - 前端主界面：`src/components/MainWindow.tsx`
 - 前端手量弹窗：`src/components/ManualTaskDialog.tsx`
+- 前端识别补充窗口：`src/components/RecognitionRulesDialog.tsx`
 - 前端预览：`src/components/PreviewDialog.tsx`
 - 前端帮助：`src/components/HelpCenterDialog.tsx`
 - 前端配置位置：`src/components/ConfigLocationDialog.tsx`

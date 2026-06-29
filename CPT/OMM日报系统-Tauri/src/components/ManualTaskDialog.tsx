@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { ManualFolderCandidate, QueueItem, RealManualTask } from "@/types/record";
+import type { ManualFolderCandidate, QueueItem, RealManualTask, RecognitionRules } from "@/types/record";
 import {
   parseManualDuration,
   recognizeManualTaskFromFolder,
@@ -23,6 +23,7 @@ interface ManualTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   onSave: (tasks: RealManualTask[]) => void;
   onPreview?: (tasks: RealManualTask[]) => void;
+  recognitionRules?: RecognitionRules;
 }
 
 const EMPTY_TASK: Partial<RealManualTask> = {
@@ -119,6 +120,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   onOpenChange,
   onSave,
   onPreview,
+  recognitionRules,
 }) => {
   const existingTasks = useMemo(() => {
     if (!item) return [];
@@ -252,7 +254,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     const logs: string[] = [];
     const newTasks: RealManualTask[] = [];
     for (const line of lines) {
-      const recognized = recognizeManualTaskFromFolder(line);
+      const recognized = recognizeManualTaskFromFolder(line, recognitionRules);
       if (!recognized.operator) {
         logs.push(`未识别到手量测量员：${line}`);
         continue;
