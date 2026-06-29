@@ -182,14 +182,45 @@ RecognitionRulesDialog.tsx
    - 让用户选择一个模板根目录，扫描非 OLD 文件，生成候选规则。
    - 第一版可以不实现自动导入，只保留未来入口。
 
-### 4.3 配置持久化
+### 4.3 持久化：补充规则必须独立成文件
 
-规则应写入当前 `config.json`，不要写回原始日期数据目录。
+用户补充的识别规则不要直接塞进 `config.json`。原因：
 
-建议新增配置字段：
+1. `config.json` 未来可能被“恢复默认设置”、迁移、误清空或重新生成。
+2. 识别补充规则是用户长期积累的知识库，价值比普通界面配置更高。
+3. 如果规则跟配置放在同一个 JSON 内，用户更新/重置配置时容易误删补充内容。
+
+建议采用双文件策略：
+
+```text
+config.json                  # 普通界面配置，可随设置修改/重置
+recognition-rules.json       # 用户识别补充规则，独立保存
+```
+
+两个文件放在同一个配置目录里：
+
+```text
+AppData 模式：
+%APPDATA%\OMM日报系统\config.json
+%APPDATA%\OMM日报系统\recognition-rules.json
+
+便携版模式：
+<当前识别到的便携版配置目录>\config.json
+<当前识别到的便携版配置目录>\recognition-rules.json
+```
+
+`config.json` 里最多只保存规则文件名/路径，不保存完整规则内容：
 
 ```ts
-recognition_rules?: {
+recognition_rules_path?: string; // 默认 recognition-rules.json
+```
+
+真正的 `recognition-rules.json` 建议结构：
+
+```ts
+{
+  version: 1;
+  updated_at?: string;
   station_aliases?: Array<{
     alias: string;
     station: string;
@@ -215,6 +246,14 @@ recognition_rules?: {
 }
 ```
 
+删除/清空规则的原则：
+
+```text
+普通“恢复默认配置”不删除 recognition-rules.json；
+只有用户在“识别补充”窗口里点“清空全部补充规则”或删除某条规则，才修改 recognition-rules.json；
+用户手动删除 recognition-rules.json 时，程序应自动回到只有内置规则的状态，并提示“未找到识别补充文件，可重新创建”。
+```
+
 内置规则与自定义规则的关系：
 
 ```text
@@ -222,6 +261,14 @@ recognition_rules?: {
 自定义规则用于补充/覆盖；
 不要用自定义规则替换整个内置规则表。
 ```
+
+帮助页必须同步说明：
+
+1. 识别规则有“内置规则”和“补充规则”两层。
+2. 补充规则文件名是 `recognition-rules.json`。
+3. 它和 `config.json` 在同一个配置目录。
+4. 重置普通配置不会清空补充规则。
+5. 如需删除补充规则，请在“识别补充”窗口中删除单条或清空全部。
 
 ---
 
@@ -363,8 +410,8 @@ op 当前还在改代码，所以后续接力时建议：
 3. 在 `utils.ts` 中兼容接入新识别函数。
 4. 给 `RealManualTask` 补 `station`，手量弹窗加“工站”字段。
 5. 修 `姓名送测`、`CMM/OMM 后人名不当品名`。
-6. 增加“识别补充”窗口，只先做手工编辑 config，不做自动导入模板。
-7. 更新帮助文档。
+6. 增加“识别补充”窗口，只先做手工编辑 `recognition-rules.json`，不做自动导入模板。
+7. 更新帮助文档，说明 `config.json` 与 `recognition-rules.json` 的区别。
 8. 跑验证并精确提交推送。
 
 ---
@@ -519,9 +566,12 @@ OMM日报系统-v5.0.8-品名工站识别规则与补充窗口设计.md
    - 展示只读内置规则
    - 可添加工站别名、品名规则、忽略词
    - 提供“测试识别”输入框，显示命中的规则和结果
-   - 自定义规则保存到 config.json 的 recognition_rules 字段
+   - 自定义规则保存到独立 recognition-rules.json，不要直接塞进 config.json
+   - recognition-rules.json 与 config.json 放在同一配置目录
+   - 普通“恢复默认配置”不能删除 recognition-rules.json
+   - 只有用户在识别补充窗口中删除单条/清空全部，才修改 recognition-rules.json
 8. 第一版可以不做“自动导入模板文件夹”，但界面/设计可以预留。
-9. 更新帮助文档和交接文档。
+9. 更新帮助文档和交接文档，明确补充规则文件不会随普通配置重置而消失。
 
 验证命令：
 - npx.cmd tsc --noEmit
@@ -538,4 +588,3 @@ Git 约束：
 - 不要移动、删除、重命名 C:\Users\Administrator\Desktop\勿动\日期文件。
 - 不要写回原始测试数据目录。
 ```
-
