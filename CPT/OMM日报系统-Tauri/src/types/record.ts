@@ -125,6 +125,10 @@ export interface Config {
   work_dir: string;
   output_dir: string;
   src_output: boolean;
+  leave_strategy?: 'auto' | 'early' | 'normal';
+  enable_hand?: boolean;
+  enable_other?: boolean;
+  shift_default?: 'A' | 'B';
   complex_default: 'A' | 'B';
   operator_name: string;
   config_dir?: string;

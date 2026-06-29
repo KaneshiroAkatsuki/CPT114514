@@ -29,6 +29,13 @@ function schemePillClass(label: string): string {
   return "bg-slate-100 text-slate-600 border-slate-200";
 }
 
+type GenerateFailureDetail = {
+  dateFolder: string;
+  reason: string;
+  action?: "manual" | "review" | "check";
+  queueIndex?: number;
+};
+
 export function MainWindow() {
   const [workDir, setWorkDir] = useState("");
   const [operatorName, setOperatorName] = useState("禹欣");
@@ -119,6 +126,10 @@ export function MainWindow() {
         if (c.operator_name) setOperatorName(c.operator_name);
         if (c.src_output !== undefined) setUseSrcOutput(c.src_output);
         if (c.output_dir) setOutputDir(c.output_dir);
+        if (c.leave_strategy === 'auto' || c.leave_strategy === 'early' || c.leave_strategy === 'normal') setLeaveStrategy(c.leave_strategy);
+        if (typeof c.enable_hand === 'boolean') setEnableHand(c.enable_hand);
+        if (typeof c.enable_other === 'boolean') setEnableOther(c.enable_other);
+        if (c.shift_default === 'A' || c.shift_default === 'B') setShiftDefault(c.shift_default);
         if (c.config_dir) setConfigDir(c.config_dir);
         if (Array.isArray(c.special_items) && c.special_items.length > 0) {
           setSpecialItems(c.special_items);
@@ -160,6 +171,10 @@ export function MainWindow() {
       operator_name: operatorName,
       src_output: useSrcOutput,
       output_dir: outputDir,
+      leave_strategy: leaveStrategy,
+      enable_hand: enableHand,
+      enable_other: enableOther,
+      shift_default: shiftDefault,
       complex_default: complexDefault,
       tpp_min: tppMin,
       tpp_max: tppMax,
@@ -175,6 +190,24 @@ export function MainWindow() {
 
   const persistConfig = (overrides?: Partial<Config>) => {
     saveConfig(buildConfigPatch(overrides)).catch(() => {});
+  };
+
+  const handleSaveDefaultSettings = async () => {
+    if (!Number.isFinite(tppMin) || !Number.isFinite(tppMax) || tppMin <= 0 || tppMax <= 0 || tppMin > tppMax) {
+      addLog("默认设置保存失败: 每件时间范围不合法，请确认最小值不大于最大值");
+      return;
+    }
+    try {
+      const config = buildConfigPatch();
+      await saveConfig(config);
+      const info = await loadConfigWithInfo();
+      setConfigSource(info.source);
+      setConfigPath(info.path);
+      setConfigDuplicates(info.duplicate_paths || []);
+      addLog(`默认设置已保存到配置文件: ${info.path}`);
+    } catch (e) {
+      addLog(`默认设置保存失败: ${e}`);
+    }
   };
 
   // 更新模板：弹窗选择 xlsx，调用 sidecar 替换（复制到用户配置目录）
@@ -347,6 +380,8 @@ export function MainWindow() {
   const outputPathsRef = useRef<string[]>([]);
   // 累积所有生成项的排程警告
   const schedWarningsRef = useRef<string[]>([]);
+  // 累积失败项和可读原因，最终在结果弹窗中展示
+  const failureDetailsRef = useRef<GenerateFailureDetail[]>([]);
 
   const detectAndAttachCandidates = async (item: QueueItem): Promise<QueueItem> => {
     const candidates = await detectManualCandidates(item.fullPath, listChildFolders);
@@ -370,6 +405,24 @@ export function MainWindow() {
       manualTaskCount,
       pendingCount: Math.max(0, candidates.length - confirmedCount),
     };
+  };
+
+  const recordGenerateFailure = (
+    item: QueueItem,
+    reason: string,
+    action: GenerateFailureDetail["action"] = "check",
+    queueIndex?: number
+  ) => {
+    const resolvedIndex = queueIndex ?? queueRef.current.findIndex((it) => it.fullPath === item.fullPath);
+    failureDetailsRef.current = [
+      ...failureDetailsRef.current,
+      {
+        dateFolder: item.dateFolder,
+        reason,
+        action,
+        queueIndex: resolvedIndex >= 0 ? resolvedIndex : undefined,
+      },
+    ];
   };
 
   const addPathToQueue = async (path: string) => {
@@ -750,7 +803,20 @@ export function MainWindow() {
       );
       addLog(`生成已阻止: ${item.dateFolder} 的真实手量字段不完整`);
       addLog(`  ${lines.join('; ')}`);
-      await processQueueItem(index + 1, successCount, failCount + 1);
+      recordGenerateFailure(item, `真实手量字段不完整：${lines.join('；')}`, "manual", index);
+      setManualTaskItem(item);
+      setManualTaskOpen(true);
+      setGenerateResult({
+        ok: successCount,
+        fail: failCount + 1,
+        outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
+        outputPaths: outputPathsRef.current.slice(),
+        commonParent: computeCommonParent(outputPathsRef.current.slice()),
+        schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
+      });
+      setIsGenerating(false);
+      setProgress(0);
       return;
     }
 
@@ -776,10 +842,12 @@ export function MainWindow() {
         await processQueueItem(index + 1, successCount + 1, failCount);
       } else {
         addLog(`  生成失败: ${genResponse.error}`);
+        recordGenerateFailure(item, genResponse.error || "sidecar 未返回具体错误，请查看运行日志", "check", index);
         await processQueueItem(index + 1, successCount, failCount + 1);
       }
     } catch (e) {
       addLog(`  错误: ${e}`);
+      recordGenerateFailure(item, `程序调用失败：${e}`, "check", index);
       await processQueueItem(index + 1, successCount, failCount + 1);
     }
   };
@@ -791,6 +859,7 @@ export function MainWindow() {
     outputPaths: string[]; // 所有成功生成的报表路径
     commonParent: string | null; // 所有报表的公共父目录
     schedWarnings: string[]; // 排程警告
+    failures: GenerateFailureDetail[]; // 失败项及可读原因
   } | null>(null);
 
   /**
@@ -854,6 +923,7 @@ export function MainWindow() {
         outputPaths: allPaths,
         commonParent,
         schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
       });
       generateStateRef.current = null;
       return;
@@ -869,6 +939,7 @@ export function MainWindow() {
       const parseResponse = await parseFolders(item.fullPath, operatorName);
       if (!parseResponse.success) {
         addLog(`  扫描失败: ${parseResponse.error}`);
+        recordGenerateFailure(item, `扫描日期文件夹失败：${parseResponse.error || "请确认路径可访问且不是空目录"}`, "check", index);
         await processQueueItem(index + 1, successCount, failCount + 1);
         return;
       }
@@ -891,8 +962,22 @@ export function MainWindow() {
       );
       if (unconfirmedCandidates.length > 0) {
         const names = unconfirmedCandidates.map((c) => c.folderName).join(", ");
-        addLog(`  生成已阻止: ${item.dateFolder} 有 ${unconfirmedCandidates.length} 个手量候选未确认: ${names}`);
-        await processQueueItem(index + 1, successCount, failCount + 1);
+        const reason = `有 ${unconfirmedCandidates.length} 个手量文件夹未确认：${names}。请先在弹窗中确认耗时、数量和测量员。`;
+        addLog(`  生成已暂停: ${item.dateFolder} ${reason}`);
+        recordGenerateFailure(item, reason, "manual", index);
+        setManualTaskItem(item);
+        setManualTaskOpen(true);
+        setGenerateResult({
+          ok: successCount,
+          fail: failCount + 1,
+          outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
+          outputPaths: outputPathsRef.current.slice(),
+          commonParent: computeCommonParent(outputPathsRef.current.slice()),
+          schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
+        });
+        setIsGenerating(false);
+        setProgress(0);
         return;
       }
 
@@ -924,6 +1009,7 @@ export function MainWindow() {
       await generateWithRecords(item, filteredRecords, index, successCount, failCount);
     } catch (e) {
       addLog(`  错误: ${e}`);
+      recordGenerateFailure(item, `处理时发生异常：${e}`, "check", index);
       await processQueueItem(index + 1, successCount, failCount + 1);
     }
   };
@@ -939,6 +1025,7 @@ export function MainWindow() {
     addLog("开始生成...");
     outputPathsRef.current = []; // 清空上一轮的输出路径列表
     schedWarningsRef.current = []; // 清空上一轮的排程警告
+    failureDetailsRef.current = []; // 清空上一轮的失败明细
 
     generateStateRef.current = {
       currentIndex: 0,
@@ -964,6 +1051,18 @@ export function MainWindow() {
       );
       addLog(`生成已阻止: ${item.dateFolder} 的真实手量字段不完整`);
       addLog(`  ${lines.join('; ')}`);
+      recordGenerateFailure(item, `真实手量字段不完整：${lines.join('；')}`, "manual");
+      setManualTaskItem(item);
+      setManualTaskOpen(true);
+      setGenerateResult({
+        ok: 0,
+        fail: 1,
+        outputPath: null,
+        outputPaths: [],
+        commonParent: null,
+        schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
+      });
       setIsGenerating(false);
       setProgress(0);
       return;
@@ -994,10 +1093,12 @@ export function MainWindow() {
           outputPaths: [genResponse.data.output_path],
           commonParent: computeCommonParent([genResponse.data.output_path]),
           schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
         });
         try { await openFolder(genResponse.data.output_path); } catch (_) { /* ignore */ }
       } else {
         addLog(`  生成失败: ${genResponse.error}`);
+        recordGenerateFailure(item, genResponse.error || "sidecar 未返回具体错误，请查看运行日志", "check");
         setGenerateResult({
           ok: 0,
           fail: 1,
@@ -1005,10 +1106,12 @@ export function MainWindow() {
           outputPaths: [],
           commonParent: null,
           schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
         });
       }
     } catch (e) {
       addLog(`  错误: ${e}`);
+      recordGenerateFailure(item, `程序调用失败：${e}`, "check");
       setGenerateResult({
         ok: 0,
         fail: 1,
@@ -1016,6 +1119,7 @@ export function MainWindow() {
         outputPaths: [],
         commonParent: null,
         schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
       });
     } finally {
       setIsGenerating(false);
@@ -1030,12 +1134,23 @@ export function MainWindow() {
     setProgress(0);
     outputPathsRef.current = [];
     schedWarningsRef.current = [];
+    failureDetailsRef.current = [];
     addLog(`开始生成: ${item.dateFolder}`);
 
     try {
       const parseResponse = await parseFolders(item.fullPath, operatorName);
       if (!parseResponse.success) {
         addLog(`  扫描失败: ${parseResponse.error}`);
+        recordGenerateFailure(item, `扫描日期文件夹失败：${parseResponse.error || "请确认路径可访问且不是空目录"}`, "check", index);
+        setGenerateResult({
+          ok: 0,
+          fail: 1,
+          outputPath: null,
+          outputPaths: [],
+          commonParent: null,
+          schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
+        });
         setIsGenerating(false);
         return;
       }
@@ -1051,7 +1166,20 @@ export function MainWindow() {
       );
       if (unconfirmedCandidates.length > 0) {
         const names = unconfirmedCandidates.map((c) => c.folderName).join(", ");
-        addLog(`生成已阻止: ${item.dateFolder} 有 ${unconfirmedCandidates.length} 个手量候选未确认: ${names}`);
+        const reason = `有 ${unconfirmedCandidates.length} 个手量文件夹未确认：${names}。请先在弹窗中确认耗时、数量和测量员。`;
+        addLog(`生成已暂停: ${item.dateFolder} ${reason}`);
+        recordGenerateFailure(item, reason, "manual", index);
+        setManualTaskItem(item);
+        setManualTaskOpen(true);
+        setGenerateResult({
+          ok: 0,
+          fail: 1,
+          outputPath: null,
+          outputPaths: [],
+          commonParent: null,
+          schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
+        });
         setIsGenerating(false);
         return;
       }
@@ -1081,6 +1209,16 @@ export function MainWindow() {
       await generateSingleItemFinal(item, filteredRecords);
     } catch (e) {
       addLog(`  错误: ${e}`);
+      recordGenerateFailure(item, `处理时发生异常：${e}`, "check", index);
+      setGenerateResult({
+        ok: 0,
+        fail: 1,
+        outputPath: null,
+        outputPaths: [],
+        commonParent: null,
+        schedWarnings: schedWarningsRef.current.slice(),
+        failures: failureDetailsRef.current.slice(),
+      });
       setIsGenerating(false);
     }
   };
@@ -1233,13 +1371,20 @@ export function MainWindow() {
 
               {/* Settings */}
               <Card>
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                     <Settings className="h-4 w-4 text-blue-600" />
                     生成设置
                   </CardTitle>
+                  <Button variant="secondary" size="sm" onClick={handleSaveDefaultSettings}>
+                    保存默认设置
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="info-strip flex items-start gap-2">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>修改下班策略、每件时间范围、补时间开关、默认班次等全局默认值后，点击“保存默认设置”会同步写入配置文件，下次打开仍会沿用。</span>
+                  </div>
                   {/* Leave strategy */}
                   <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-start">
                     <label className="field-label pt-1.5">下班策略</label>
@@ -2068,7 +2213,7 @@ export function MainWindow() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] flex flex-col">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">
-              {generateResult.fail === 0 ? "生成完成" : "生成完成（有警告）"}
+              {generateResult.fail === 0 ? "生成完成" : generateResult.ok > 0 ? "生成完成（部分失败）" : "生成未完成"}
             </h2>
             <p className="text-sm text-slate-700 mb-2">
               成功生成 {generateResult.ok} 份报表
@@ -2110,6 +2255,44 @@ export function MainWindow() {
                       </li>
                     );
                   })}
+                </ul>
+              </div>
+            )}
+
+            {/* 失败明细 */}
+            {generateResult.failures.length > 0 && (
+              <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-red-200 rounded-md">
+                <div className="px-3 py-2 bg-red-50 text-xs font-medium text-red-700 border-b border-red-200 sticky top-0">
+                  失败原因（共 {generateResult.failures.length} 项）
+                </div>
+                <ul className="divide-y divide-red-100">
+                  {generateResult.failures.map((failure, i) => (
+                    <li key={`${failure.dateFolder}-${i}`} className="px-3 py-2">
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-red-900">
+                            {i + 1}. {failure.dateFolder}
+                          </div>
+                          <div className="text-sm leading-6 text-red-800">
+                            {failure.reason}
+                          </div>
+                        </div>
+                        {failure.action === "manual" && failure.queueIndex !== undefined && queue[failure.queueIndex] && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs flex-shrink-0 border-red-200 text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              setManualTaskItem(queue[failure.queueIndex!]);
+                              setManualTaskOpen(true);
+                            }}
+                          >
+                            打开手量补录
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}

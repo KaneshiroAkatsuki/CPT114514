@@ -13,8 +13,9 @@ interface PreviewDialogProps {
 }
 
 function formatMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const safeMinutes = Number.isFinite(minutes) ? Math.round(minutes) : 0;
+  const h = Math.floor(safeMinutes / 60);
+  const m = safeMinutes % 60;
   return `${h}h${m.toString().padStart(2, "0")}m`;
 }
 
@@ -187,7 +188,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
                 {summary.estimates && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
                     <p className="text-sm leading-6 text-amber-900 whitespace-pre-line">
-                      还差 {summary.estimates.need_minutes} 分钟{"\n"}
+                      还差 {Math.round(summary.estimates.need_minutes)} 分钟{"\n"}
                       乐观估计: 还需约 {summary.estimates.optimistic} 件{"\n"}
                       保守估计: 还需约 {summary.estimates.conservative} 件
                     </p>

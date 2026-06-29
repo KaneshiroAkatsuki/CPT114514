@@ -41,7 +41,7 @@ function Content({ section }: { section: string }) {
             <li><strong className="text-slate-900">生成报表</strong>：核对件数、时间等信息后，点击“生成报表”输出 Excel。想先看效果而不生成文件，可点击“预览”。</li>
           </ol>
           <div className={info}>
-            所有设置都会自动保存，下次打开软件时恢复。配置默认保存在 <code className={code}>%APPDATA%\OMM日报系统</code>。
+            全局默认设置修改后，请在“生成设置”中点击“保存默认设置”。程序会写入配置文件，下次打开继续沿用。配置默认保存在 <code className={code}>%APPDATA%\OMM日报系统</code>。
           </div>
         </div>
       );
@@ -64,6 +64,7 @@ function Content({ section }: { section: string }) {
             <li><strong>手量 / 其他事务</strong>：当总工时不足 11 小时时，会自动插入手量或其他事务行补齐。</li>
             <li><strong>真实手量</strong>：可在队列项右键菜单中补录真实手量；跨固定休息时会拆成多段，续行数量显示为 "/"。</li>
             <li><strong>每件时间范围</strong>：件数越少每件时间越长，件数越多每件时间越短，程序会按文件数量自动分配。</li>
+            <li><strong>保存默认设置</strong>：修改下班策略、每件时间范围、手量/其他事务开关、默认班次等全局默认值后，点击“保存默认设置”写入配置文件。</li>
             <li><strong>CNC 规则</strong>：普通 CNC 固定 30 分钟/包；文件夹名同时包含“整形”和“CNC”时，按 <code className={code}>max(30, 数量×5分钟)</code> 计算；特殊大件规则优先于整形 CNC。</li>
             <li><strong>包间休息</strong>：每包任务之间插入的休息分钟数，设为 0 可关闭。</li>
             <li><strong>复杂文件夹处理方案</strong>：见“复杂文件夹”章节。</li>
@@ -73,6 +74,8 @@ function Content({ section }: { section: string }) {
           <ul className={ul}>
             <li><strong>预览</strong>：仅打开临时窗口查看排程结果，不会生成文件。数据不足时会显示可见有效时长、目标有效时长、缺口及处理方式。</li>
             <li><strong>生成报表</strong>：在输出目录生成 Excel 文件，并自动打开文件夹。</li>
+            <li><strong>手量待确认</strong>：如果日期文件夹内发现“手量”子文件夹，直接生成会暂停并打开手量补录；请确认耗时、数量、测量员后再生成。</li>
+            <li><strong>失败明细</strong>：如果部分日期成功、部分失败，生成结果弹窗会分别列出成功文件和失败原因；手量相关失败可从弹窗继续打开补录。</li>
             <li><strong>输出到源文件夹</strong>：默认启用，每份报表保存到对应日期文件夹；取消后可手动指定统一输出目录。</li>
             <li>输出目录输入框为空且被禁用时，表示正在使用“输出到源文件夹”，不是输出到程序目录。</li>
           </ul>
@@ -200,7 +203,7 @@ function Content({ section }: { section: string }) {
 
           <div className="space-y-1">
             <h3 className={h3}>Q5：配置会自动保存吗？配置文件在哪里？</h3>
-            <p className={p}>会。所有设置都会保存到配置文件，下次打开自动恢复。</p>
+            <p className={p}>全局默认设置支持保存到配置文件。修改“每件时间范围”“下班策略”“手量/其他事务开关”“默认班次”等设置后，请点击“保存默认设置”，下次打开会自动恢复。</p>
             <div className={info}>
               默认保存在系统用户配置目录：<br />
               <code className={code}>%APPDATA%\OMM日报系统\config.json</code><br />
@@ -215,12 +218,22 @@ function Content({ section }: { section: string }) {
           </div>
 
           <div className="space-y-1">
-            <h3 className={h3}>Q7：弹窗提示“非标准表格无法识别”是什么意思？</h3>
+            <h3 className={h3}>Q7：为什么点击生成后弹出了手量补录？</h3>
+            <p className={p}>这通常表示当天日期文件夹内发现了名称包含“手量”的子文件夹，但还没有人工确认。程序不会自动相信文件夹名里的耗时，会先让你确认数量、耗时和测量员，避免真实手量漏排或重复排程。</p>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={h3}>Q8：生成失败时怎么看原因？</h3>
+            <p className={p}>生成结果弹窗会分开显示成功报表和失败明细。失败原因会尽量写成人能看懂的说明，例如“手量未确认”“真实手量字段不完整”“扫描日期文件夹失败”等；手量类失败可以直接从弹窗打开手量补录。</p>
+          </div>
+
+          <div className="space-y-1">
+            <h3 className={h3}>Q9：弹窗提示“非标准表格无法识别”是什么意思？</h3>
             <p className={p}>程序只能识别公司标准首件尺寸报告模板（第一行含“安徽中耀智能科技有限公司”和“首件尺寸报告”，并有“测量值”表头）。如果任务文件夹里的 .xlsx 不是这个格式，程序无法自动统计件数，需要你在弹窗中手动填写件数或测量时间。</p>
           </div>
 
           <div className="space-y-1">
-            <h3 className={h3}>Q8：标准表格有什么特征？</h3>
+            <h3 className={h3}>Q10：标准表格有什么特征？</h3>
             <ul className={ul}>
               <li>第一行有 CPT 标识和“安徽中耀智能科技有限公司首件尺寸报告”字样；</li>
               <li>有“检测工具”列，行内标记 OMM 或 CMM；</li>

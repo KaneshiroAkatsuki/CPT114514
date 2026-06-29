@@ -64,6 +64,15 @@
 - **影响范围**：只改前端类型、手量弹窗和主界面确认判断；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 - **顺手清理**：删除 Rust 配置命令里已废弃的 `find_config_recursive`，消除 `cargo check` unused warning，不改变配置加载行为。
 
+### 1.7 本轮补充修复：预览取整、失败明细、手量补录入口、默认设置持久化
+
+- **预览统计取整**：`PreviewDialog` 的分钟展示统一四舍五入，修复 `9h10.000988...` 这类浮点误差直接露出的问题。
+- **生成前手量补录入口**：直接点击生成时，如果某日期有未确认手量候选，不再只写日志失败；会暂停生成、打开手量任务管理弹窗，并在生成结果中显示“手量文件夹未确认”的中文原因。
+- **生成失败明细**：生成结果弹窗现在区分成功文件和失败原因；扫描失败、真实手量字段不完整、sidecar 返回失败、运行异常都会记录为可读原因。手量类失败提供“打开手量补录”按钮。
+- **默认设置持久化**：新增“保存默认设置”按钮；下班策略、每件时间范围、手量/其他事务开关、默认班次、审核模式、包间休息、手量/其他上限等会写入配置文件，下次打开恢复。
+- **配置结构补充**：`Config` / Rust `AppConfig` 增加 `leave_strategy`、`enable_hand`、`enable_other`、`shift_default`，只影响 GUI 配置读写，不改 sidecar 排程算法。
+- **帮助文档同步**：更新快速开始、流程、FAQ，说明默认设置保存、手量待确认弹窗、失败明细查看。
+
 ---
 
 ## 2. 已验证项目
@@ -92,6 +101,11 @@
 | 同品名/未识别品名候选误判风险 | 已修复 ✓ |
 | `cargo check --release` 无 warning | 通过 ✓ |
 | 便携版重新打包（5.0.4） | 成功 ✓ |
+| 预览统计分钟取整 | 通过 ✓ |
+| 未确认手量候选生成前打开补录入口 | 通过 ✓ |
+| 生成结果失败明细 | 通过 ✓ |
+| 默认设置保存到配置文件字段补充 | 通过 ✓ |
+| 帮助文档同步 | 完成 ✓ |
 
 ---
 
@@ -121,11 +135,11 @@ releases\OMM日报系统_便携版_5.0.4.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-29T07:32:46`。
+来源：`releases\OMM日报系统_便携版_5.0.4\manifest.json`，`packaged_at=2026-06-29T22:59:30`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=fe45a07ea375ae6db5e879fed35dde3f1aff737315a6c7401fc1d0ad5978e36d
+sha256=5ab96946a84c68ddce03066055d307aa97d8a4dac8d491b8e1cb597a9165948a
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -156,6 +170,8 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 - 不要写回原始测试数据目录。
 - 不要移动/删除/重命名 `C:\Users\Administrator\Desktop\勿动\日期文件`。
 - Git 根目录是 `D:\KSoftware\KMAA`，不要 `git add .`，如需提交请精确指定文件。
+- 用户新约定：本窗口简称 **gpt**，opencode 里的接力 AI 简称 **op**；每轮完成后要尽量精确提交并 `git push`。如果项目内日期测试样例确实被修改，也要精确 add/push；仍禁止把原始 `C:\Users\Administrator\Desktop\勿动\日期文件` 或无关日期数据整目录加入提交。
+- 当前 Git 是绿色版：`C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe`，op 也应优先使用这个可执行路径或当前 PATH 中的 `git`。
 - 本项目很怕大范围重构，只做最小必要改动。
 - 不要触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断等业务逻辑，除非本轮明确要求修改。
 - PowerShell 不要用 `< file` 这种重定向方式调用 sidecar。
@@ -279,6 +295,11 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 
 当前版本号仍保持 5.0.4，除非用户明确要求，不要升级版本号。
 
+协作简称：
+- 当前 ChatGPT/Codex 窗口简称 gpt。
+- opencode 里的接力 AI 简称 op。
+- 即使 gpt/op 换窗口，也要记住：完成一轮后尽量精确提交并 git push。
+
 本轮目标：
 只做最小必要改进，优先处理界面提示、配置文件解释、手量文件夹自动发现闭环、预览诊断操作入口。不要大规模重构，不要触碰 sidecar 排程核心。
 
@@ -293,6 +314,9 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 8. 预览表格来源列已补充 break / supplement_manual / supplement_other 显示口径，但不要让隐形缓冲写入最终 Excel。
 9. 考虑真实手量持久化前，请先写设计方案，不要直接大改数据结构。
 10. `.gitignore` 已存在，后续提交前请再次核对不要误忽略源代码。
+11. 预览统计数字应显示整数分钟，不要让浮点误差露到 UI。
+12. 生成失败必须给用户能看懂的失败明细；如果是手量未确认或真实手量字段不完整，要提供打开手量补录的入口。
+13. 全局默认设置修改后必须能保存到配置文件，包括每件时间范围、下班策略、手量/其他事务开关、默认班次等。
 
 必须遵守：
 - sidecar exe 只从 stdin 读取 JSONL，不支持 --input / --output。
@@ -307,6 +331,9 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 - Git 根目录是：
   D:\KSoftware\KMAA
   不要 git add .，提交时必须精确指定文件。
+- 当前可用 Git 是绿色版：
+  C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe
+- 用户要求每轮完成后执行精确提交并 git push；如果项目内日期测试样例确实被修改，也要精确 add/push。仍不要把原始“勿动”日期数据目录或无关日期数据整目录加入提交。
 - 本项目很怕大范围重构，只做最小必要改动。
 - 不要触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断等业务逻辑，除非用户明确要求。
 
