@@ -74,7 +74,7 @@ export function validateRealManualTask(task: Partial<RealManualTask>): string[] 
 }
 
 /** 从文件夹名识别真实手量信息。
- *  强特征：-手量-姓名
+ *  强特征：-手量-姓名 / -手测-姓名
  *  返回部分字段，需要用户补录确认。
  */
 export function recognizeManualTaskFromFolder(folderName: string, recognitionRules?: RecognitionRules): Partial<RealManualTask> {
@@ -83,7 +83,7 @@ export function recognizeManualTaskFromFolder(folderName: string, recognitionRul
 
 /** 判断文件夹名是否包含强手量特征。 */
 export function isManualFolder(folderName: string): boolean {
-  return folderName.includes('手量');
+  return folderName.includes('手量') || folderName.includes('手测');
 }
 
 /** 从日期文件夹路径扫描直接子文件夹，自动发现手量候选。 */

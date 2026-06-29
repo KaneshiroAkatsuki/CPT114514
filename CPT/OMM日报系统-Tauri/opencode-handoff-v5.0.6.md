@@ -286,11 +286,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T02:47:37`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T03:30:07`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=372b6992c0278876da2d6ccdd1a068d1f73e829119be517c2e4b3dc28d3ce112
+sha256=1dbd6d1eb7795c52009e904a1d6e78bc342ad50893d7e6e503ff1de4184e339b
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
@@ -615,8 +615,8 @@ Git 根目录：D:\KSoftware\KMAA
 
 当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
 
-最新便携版 manifest（packaged_at=2026-06-30T02:47:37）：
-- app: 372b6992c0278876da2d6ccdd1a068d1f73e829119be517c2e4b3dc28d3ce112
+最新便携版 manifest（packaged_at=2026-06-30T03:30:07）：
+- app: 1dbd6d1eb7795c52009e904a1d6e78bc342ad50893d7e6e503ff1de4184e339b
 - sidecar: 39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
 - template: e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 

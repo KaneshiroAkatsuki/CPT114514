@@ -53,7 +53,9 @@ function matchPattern(input: string, pattern: string): boolean {
 }
 
 function normalizeStation(value: string): string {
+  if (value.includes("测试片")) return "开发";
   if (value === "FAI" || value.includes("FAI")) return "开发";
+  if (value.includes("开发")) return "开发";
   if (value.includes("二维")) return "镭雕";
   if (value.includes("射出")) return "射出";
   if (value.includes("整形")) return "整形";
@@ -84,7 +86,12 @@ export function recognizeStation(name: string, rules?: RecognitionRules): { stat
     }
   }
 
-  const keywordStations = ["CNC", "射出", "整形", "烧结盘", "烧结", "焊接", "电镀", "镭雕", "二维", "FAI"];
+  if (name.includes("测试片")) {
+    matchedRules.push("内置测试片工站规则：测试片 -> 开发");
+    return { station: "开发", matchedRules, warnings };
+  }
+
+  const keywordStations = ["CNC", "开发", "射出", "整形", "烧结盘", "烧结", "焊接", "电镀", "镭雕", "二维", "FAI"];
   for (const keyword of keywordStations) {
     if (name.toUpperCase().includes(keyword.toUpperCase())) {
       const station = normalizeStation(keyword);
@@ -122,6 +129,12 @@ export function recognizeProductCodes(name: string, station?: string, rules?: Re
     }
   }
   if (products.length > 0) {
+    return { products, matchedRules, warnings };
+  }
+
+  if (name.includes("测试片")) {
+    pushUnique(products, "测试片");
+    matchedRules.push("内置测试片品名规则");
     return { products, matchedRules, warnings };
   }
 
@@ -189,6 +202,38 @@ export function recognizeProductCodes(name: string, station?: string, rules?: Re
   return { products, matchedRules, warnings };
 }
 
+function normalizeSendTime(raw?: string): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  return value.replace(/点/g, ":").replace(/：/g, ":");
+}
+
+function applySenderRecognition(folderName: string, result: Partial<RealManualTask>, warnings: string[]) {
+  const senderMatch = folderName.match(/[-_](?:送测|ST)-([^-_]+)/);
+  if (senderMatch) {
+    result.sender = senderMatch[1].trim();
+    return;
+  }
+
+  const inlineWithTime = folderName.match(/([\u4e00-\u9fa5]{2,6})(\d{1,2}(?:点\d{0,2}|[:：]\d{1,2}))送测/);
+  if (inlineWithTime) {
+    result.sender = inlineWithTime[1].trim();
+    result.send_time = normalizeSendTime(inlineWithTime[2]) || result.send_time;
+    return;
+  }
+
+  const senderInline = folderName.match(/([\u4e00-\u9fa5]{2,6})送测/);
+  if (senderInline) {
+    result.sender = senderInline[1].trim();
+    return;
+  }
+
+  const suspiciousSender = folderName.match(/([\u4e00-\u9fa5]{2,6})(?:送(?!测)|生成|上传)(?=$|[-_\s])/);
+  if (suspiciousSender) {
+    warnings.push(`疑似送测人写法不完整：${suspiciousSender[0]}，请确认是否为“${suspiciousSender[1]}送测”`);
+  }
+}
+
 export function recognizeManualTaskWithRules(folderName: string, rules?: RecognitionRules): Partial<RealManualTask> {
   const stationResult = recognizeStation(folderName, rules);
   const productResult = recognizeProductCodes(folderName, stationResult.station, rules);
@@ -210,16 +255,10 @@ export function recognizeManualTaskWithRules(folderName: string, rules?: Recogni
     recognition_warnings: warnings,
   };
 
-  const manualMatch = folderName.match(/[-_](?:手量)-([^-_]+)/);
+  const manualMatch = folderName.match(/[-_](?:手量|手测)-([^-_]+)/);
   if (manualMatch) result.operator = manualMatch[1].trim();
 
-  const senderMatch = folderName.match(/[-_](?:送测|ST)-([^-_]+)/);
-  if (senderMatch) {
-    result.sender = senderMatch[1].trim();
-  } else {
-    const senderInline = folderName.match(/([^\-_\d]{2,6})送测/);
-    if (senderInline) result.sender = senderInline[1].trim();
-  }
+  applySenderRecognition(folderName, result, warnings);
 
   const qtyMatch = folderName.match(/(\d+)\s*(?:PCS|pcs|件)/);
   if (qtyMatch) result.quantity = `${qtyMatch[1]}PCS`;
