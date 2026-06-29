@@ -233,6 +233,34 @@ recognition-rules.json
   - 只改 Excel 模板和 Excel 写出样式层。
   - 未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
+### 1.17 gpt 本轮：桌面样式检查报表与每件时间偏低风险确认
+
+按用户要求先生成了一份可直接打开检查的报表到桌面：
+
+```text
+C:\Users\Administrator\Desktop\滁州量测室总体日报汇总表-OMM-YX-desktop-style-check.xlsx
+```
+
+- **桌面报表验证**
+  - 使用当前内置模板和当前 `generate_report.py` 生成。
+  - 报表关键样式复核：L/M/N/O/Q 列为绿色字体且无普通填充；P 列状态保留条件格式；桌面文件大小约 358 KB。
+
+- **每件时间范围风险确认**
+  - 新增前端风险提示：当每件时间上限很低（如 4~5 分钟），且当天识别到较多普通任务或 PCS 数量较多时，预览/生成前会弹出确认。
+  - 触发口径：
+    - `tpp_max <= 5` 且普通任务数 `>= 6` 或总 PCS `>= 60`。
+    - `tpp_max <= 6` 且普通任务数 `>= 10` 或总 PCS `>= 120`。
+  - 该提示只做二次确认，不自动修改设置、不改排程算法；用户确认后仍可继续。
+  - 手量未确认优先级更高：生成时如果同时存在手量待确认，会先打开手量补录，不先弹每件时间提示。
+  - 取消生成时，生成结果状态为 `paused`，失败明细说明“每件时间范围可能偏低，用户取消生成以便调整设置”。
+
+- **帮助文档同步**
+  - 快速开始/完整流程/FAQ 已补充“每件时间范围明显偏低会在预览和生成前提示确认”的说明。
+
+- **影响范围**
+  - 只改 `MainWindow.tsx` 前端校验/确认流程和 `HelpCenterDialog.tsx` 文案。
+  - 未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+
 ---
 
 | 项目 | 结果 |
@@ -331,6 +359,16 @@ recognition-rules.json
 | `cargo check --release`（模板样式修复后） | 通过 ✓ |
 | `npm.cmd run tauri build`（模板样式修复后） | 成功 ✓，仅 Vite chunk size 警告 |
 | `scripts/package-portable.ps1 -Version 5.0.7`（模板样式修复后） | 成功 ✓ |
+| 桌面样式检查报表生成 | 成功 ✓，`C:\Users\Administrator\Desktop\滁州量测室总体日报汇总表-OMM-YX-desktop-style-check.xlsx` |
+| 桌面报表样式复核：L/M/N/O/Q 绿色字体，P 列条件格式 | 通过 ✓ |
+| 每件时间偏低风险确认逻辑（预览/生成入口） | 完成 ✓ |
+| 手量待确认优先于每件时间偏低提示 | 完成 ✓ |
+| 帮助文档同步每件时间偏低提示 | 完成 ✓ |
+| `npx.cmd tsc --noEmit`（每件时间风险确认后） | 通过 ✓ |
+| `python sidecar\build_sidecar.py`（每件时间风险确认后） | 成功 ✓ |
+| `cargo check --release`（每件时间风险确认后） | 通过 ✓ |
+| `npm.cmd run tauri build`（每件时间风险确认后） | 成功 ✓，仅 Vite chunk size 警告 |
+| `scripts/package-portable.ps1 -Version 5.0.7`（每件时间风险确认后） | 成功 ✓ |
 
 ---
 
@@ -360,11 +398,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T05:07:19`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T05:20:02`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=475ffa8a6593655a21696fef8d4ff2803ad47dbe9d837df44630cb26c6197870
+sha256=48e3ce7d00d2a8ab2e7c9ee66c41f813a53b3989afbcaef54154de228e169cc5
 
 [sidecar] binaries\generate_report.exe
 sha256=7a2def106a9e7bc3e38a2dbefa8f055c8e9b81fea0e4462b0629eff1267ffb30
@@ -384,6 +422,7 @@ sha256=18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 5. 对 A-E 修复做真实 GUI 验收：跳过此包、审核校验、保存并预览、暂停状态、数字校验。
 6. 如果要分发安装版，也可从 `src-tauri\target\release\bundle\nsis\OMM日报系统_5.0.7_x64-setup.exe` 取用；`releases` 当前只保留便携版目录与 zip。
 7. 对模板样式做真实 WPS/GUI 验收：生成一份真实日报，确认 K 列表头为“测试数量”，L/M/N/O/Q 为绿色字体且无普通填充，P 列状态按“已完成/待测”显示绿/红条件格式，R 列备注不丢失。
+8. 对每件时间偏低提示做真实 GUI 验收：例如设置 `4~5` 分钟并选择任务/数量较多的日期，确认预览和生成前都会弹出可理解的二次确认；取消生成时结果弹窗应显示暂停原因。
 
 ---
 
@@ -666,7 +705,7 @@ Git 根目录：D:\KSoftware\KMAA
 
 你叫 gpt。当前 opencode 窗口里只有一位 op，就是现在和你交接的这位 op。用户直接对 opencode 说话时，默认是在和 op 对话。如果用户说“gpt”，指的是你当前这个 ChatGPT/Codex 窗口。
 
-当前已完成（含 gpt 本轮模板样式修复）：
+当前已完成（含 gpt 本轮每件时间偏低风险确认）：
 1. ReviewDialog “跳过此包” 正确过滤 records。
 2. ReviewDialog “确认并继续” 校验数量和测量时间至少一项。
 3. ManualTaskDialog “保存并预览” 使用最新 real_manual_tasks。
@@ -681,7 +720,10 @@ Git 根目录：D:\KSoftware\KMAA
 12. 关键识别用例已通过代码级验证：565-开发...、X806-65036-04...射出-首件、X511-512-562-563烧结盘、613-41428-(035-625)-焊接。
 13. 真实手量归属逻辑明确化：`-OMM-姓名-手量-测量员` 归入 OMM 姓名日报；量测员按手量段姓名填写；弹窗显示日报归属人和归属提示。
 14. 内置模板样式已按同事模板和 WPS 口径补齐：K列为“测试数量”，L/M/N/O/Q 为绿色字体且无普通填充，P列状态红/绿来自条件格式，R列保留备注；生成器会重建稳定条件格式。
-15. 版本号仍保持 5.0.7。
+15. 桌面已生成样式检查报表：`C:\Users\Administrator\Desktop\滁州量测室总体日报汇总表-OMM-YX-desktop-style-check.xlsx`。
+16. 每件时间范围偏低风险确认已实现：任务/数量较多且 `tpp_max` 很低时，预览和生成前弹窗确认；手量待确认优先于该提示；取消生成会显示暂停原因。
+17. 帮助文档已同步每件时间偏低提示。
+18. 版本号仍保持 5.0.7。
 
 最新完整提交链：
 - 3964ca2 fix(manual): 明确真实手量归属逻辑，弹窗显示日报归属人和提示
@@ -696,8 +738,8 @@ Git 根目录：D:\KSoftware\KMAA
 
 当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
 
-最新便携版 manifest（packaged_at=2026-06-30T05:07:19）：
-- app: 475ffa8a6593655a21696fef8d4ff2803ad47dbe9d837df44630cb26c6197870
+最新便携版 manifest（packaged_at=2026-06-30T05:20:02）：
+- app: 48e3ce7d00d2a8ab2e7c9ee66c41f813a53b3989afbcaef54154de228e169cc5
 - sidecar: 7a2def106a9e7bc3e38a2dbefa8f055c8e9b81fea0e4462b0629eff1267ffb30
 - template: 18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 
@@ -717,7 +759,7 @@ op 留给你的几个注意点：
 3. durationInput 是临时字段，保存在 task 对象上但不属于 RealManualTask 持久化字段；后续若做真实手量持久化，需要决定是否保存原始输入字符串。
 
 建议下一轮工作：
-1. 真实 GUI 验收（A-E + 手量识别/耗时输入）。
+1. 真实 GUI 验收（A-E + 手量识别/耗时输入 + 每件时间偏低提示）。
 2. 真实手量持久化方案设计（先写文档，不写代码）。
 3. 用户明确的新需求。
 ```

@@ -318,6 +318,61 @@ export function MainWindow() {
     return null;
   };
 
+  const getNumericQuantity = (quantity: FolderRecord["quantity"]): number => {
+    if (typeof quantity === "number" && Number.isFinite(quantity)) return quantity;
+    return 0;
+  };
+
+  const buildTppRangeRiskMessage = (
+    item: QueueItem,
+    records: FolderRecord[],
+    settings: GenerateSettings,
+    actionLabel: "预览" | "生成"
+  ): string | null => {
+    if (records.length === 0) return null;
+    const min = settings.tpp_min;
+    const max = settings.tpp_max;
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+
+    const packageCount = records.length;
+    const totalQuantity = records.reduce((sum, record) => sum + getNumericQuantity(record.quantity), 0);
+    const manyPackages = packageCount >= 6;
+    const heavyQuantity = totalQuantity >= 60;
+    const veryManyPackages = packageCount >= 10;
+    const veryHeavyQuantity = totalQuantity >= 120;
+
+    const suspicious =
+      (max <= 5 && (manyPackages || heavyQuantity)) ||
+      (max <= 6 && (veryManyPackages || veryHeavyQuantity));
+
+    if (!suspicious) return null;
+
+    const quantityText = totalQuantity > 0 ? `、约 ${totalQuantity} PCS` : "";
+    return [
+      `${item.dateFolder} 当前每件时间范围是 ${min}~${max} 分钟。`,
+      `本日已识别 ${packageCount} 个普通任务${quantityText}，这个范围可能偏短，容易让大量料的总耗时被压低。`,
+      `如果这是你故意设置的，可以继续${actionLabel}；如果不是，建议先把“每件时间”调回常用范围（例如 3~7 分钟）或在单日设置里单独调整。`,
+    ].join("\n");
+  };
+
+  const confirmTppRangeIfNeeded = (
+    item: QueueItem,
+    records: FolderRecord[],
+    settings: GenerateSettings,
+    actionLabel: "预览" | "生成"
+  ): boolean => {
+    const message = buildTppRangeRiskMessage(item, records, settings, actionLabel);
+    if (!message) return true;
+
+    const ok = window.confirm(`${message}\n\n是否继续${actionLabel}？`);
+    if (ok) {
+      addLog(`注意: ${item.dateFolder} 每件时间 ${settings.tpp_min}~${settings.tpp_max} 分钟偏低，用户已确认继续${actionLabel}`);
+    } else {
+      addLog(`${actionLabel}已取消: ${item.dateFolder} 每件时间 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低`);
+    }
+    return ok;
+  };
+
   const handlePreview = async () => {
     const err = validateGlobalSettings();
     if (err) {
@@ -361,6 +416,9 @@ export function MainWindow() {
       }
 
       const settings = buildItemSettings(targetItem);
+      if (!confirmTppRangeIfNeeded(targetItem, filteredRecords, settings, "预览")) {
+        return;
+      }
       const previewResponse = await preview(targetItem.fullPath, filteredRecords, settings);
       if (previewResponse.success && previewResponse.data) {
         setPreviewData(previewResponse.data);
@@ -1083,6 +1141,25 @@ export function MainWindow() {
         return;
       }
 
+      const settings = buildItemSettings(item);
+      if (!confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成")) {
+        recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
+        setGenerateResult({
+          ok: successCount,
+          fail: failCount,
+          outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
+          outputPaths: outputPathsRef.current.slice(),
+          commonParent: computeCommonParent(outputPathsRef.current.slice()),
+          schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
+          status: 'paused',
+          pendingItems: queue.slice(index).map((it) => it.dateFolder),
+        });
+        setIsGenerating(false);
+        setProgress(0);
+        return;
+      }
+
       const needsReview = Object.keys(reviewMap).some(
         (key) =>
           reviewMap[key].missing.length > 0 ||
@@ -1293,6 +1370,24 @@ export function MainWindow() {
         recordGenerateFailure(item, reason, "manual", index);
         setManualTaskItem(item);
         setManualTaskOpen(true);
+        setGenerateResult({
+          ok: 0,
+          fail: 0,
+          outputPath: null,
+          outputPaths: [],
+          commonParent: null,
+          schedWarnings: schedWarningsRef.current.slice(),
+          failures: failureDetailsRef.current.slice(),
+          status: 'paused',
+          pendingItems: queue.slice(index).map((it) => it.dateFolder),
+        });
+        setIsGenerating(false);
+        return;
+      }
+
+      const settings = buildItemSettings(item);
+      if (!confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成")) {
+        recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
         setGenerateResult({
           ok: 0,
           fail: 0,
