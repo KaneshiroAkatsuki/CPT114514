@@ -280,6 +280,145 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 3. 考虑真实手量持久化方案，先写设计，不急着落代码。
 4. 如需发布，统一升级版本号到 5.0.6 或 5.0.7。
 
+### 9.4 下一轮缺陷解决方案设计（优先做）
+
+这一节是 gpt 对当前功能风险的具体解决办法。请 op 优先按这里做，不要直接大改 sidecar 核心。
+
+#### A. ReviewDialog “跳过此包”必须真的跳过
+
+**现状风险**：`ReviewDialog` 的 `onSkip(skippedFolders, updatedRecords)` 会把跳过的文件夹名传回主界面，但主界面随后仍可能把 `updatedRecords` 全量交给 `generateWithRecords`，导致“跳过此包”实际只是跳过审核，并没有跳过生成。
+
+**建议修法**：
+
+1. 在 `handleReviewSkip` 和 `handleReviewConfirm` 之后进入生成前，统一过滤记录：
+   - `const effectiveRecords = updatedRecords.filter(r => !skippedFolders.includes(r.folder))`
+   - 后续传给 `generateWithRecords` / `generateSingleItemFinal` 的必须是 `effectiveRecords`。
+2. 如果某次审核后所有问题记录都被跳过，仍允许生成剩余正常记录；如果过滤后没有任何记录，给出可读失败：
+   - “本日期所有任务都被跳过，未生成报表。”
+3. 结果弹窗里把跳过项列为“已跳过”，不要混在失败里；如果暂时不做新状态，也至少写入日志。
+
+**验收**：
+
+- 准备一个日期文件夹，其中一个子文件夹缺字段触发方案 A。
+- 生成时点击“跳过此包”。
+- 最终 Excel 不应包含被跳过的产品/文件夹。
+
+#### B. ReviewDialog “确认并继续”必须做字段校验
+
+**现状风险**：审核弹窗可以什么都不填就点确认，后续可能继续生成留坑或触发难懂错误。
+
+**建议修法**：
+
+1. 在 `ReviewDialog` 内新增当前记录校验函数，例如 `validateReviewRecord(record, problemFields)`。
+2. 最低校验：
+   - 如果 `quantity` 和 `manual_duration` 都是空、`/`、`null`、`NaN`，不允许确认。
+   - 对 `quantity`：必须是正数，或明确允许 `/` 但必须有 `manual_duration`。
+   - 对 `manual_duration`：必须是正数。
+3. 对其他字段：
+   - 缺失字段建议提示，但可以允许 `/`；如果字段本来在 `missing` 内，确认时至少给用户明确红字提示。
+4. UI 上在当前弹窗底部显示错误，不要只写日志。
+
+**验收**：
+
+- 触发方案 A 后，不填数量/测量时间，点“确认并继续”应被拦住。
+- 填 `quantity=16` 或 `manual_duration=80` 后才能继续。
+
+#### C. 手量弹窗“保存并预览”必须使用最新手量
+
+**现状风险**：`ManualTaskDialog` 点“保存并预览”时，先 `onSave(tasks)` 再 `onPreview()`，但 React `queue` 更新是异步的，预览可能拿到旧 `manualTaskItem`，导致刚保存的真实手量没参与预览。
+
+**建议修法**：
+
+1. 修改 `ManualTaskDialog` 的 `onPreview` 回调签名为 `onPreview?: (tasks: RealManualTask[]) => void`。
+2. `handleSaveAndPreview` 调用 `onPreview?.(tasks)`。
+3. `MainWindow` 里构造一个带最新手量的临时 item：
+   - `const nextItem = { ...manualTaskItem, settingsOverride: { ...(manualTaskItem.settingsOverride || {}), real_manual_tasks: tasks.length > 0 ? tasks : undefined } }`
+   - 先 `updateQueueItemOverride(...)`。
+   - 再 `handlePreviewForItem(nextItem, idx)`，不要等 state 刷新。
+
+**验收**：
+
+- 手量弹窗内新增/修改一条真实手量，点“保存并预览”。
+- 预览表格应立即出现这条真实手量，并计入有效时长。
+
+#### D. 批量生成遇到未确认手量时，应显示“暂停”和未处理项
+
+**现状风险**：批量生成第 N 项遇到手量未确认时会停止并打开补录，但结果弹窗可能显示“成功 X、失败 1”，没有说明后续队列项尚未处理。
+
+**建议修法**：
+
+1. 扩展 `GenerateResult`，增加：
+   - `status: "complete" | "paused" | "failed"`
+   - `pendingItems?: string[]`
+2. 当未确认手量或真实手量字段不完整导致中断时：
+   - `status = "paused"`
+   - `pendingItems = queue.slice(index).map(item => item.dateFolder)`，包含当前项和后续未处理项。
+3. 弹窗标题：
+   - complete 且无失败：`生成完成`
+   - complete 且部分失败：`生成完成（部分失败）`
+   - paused：`生成已暂停，需要先处理手量`
+4. 弹窗正文：
+   - 成功文件继续列出。
+   - 失败/暂停原因继续列出。
+   - 未处理项单独列出：“以下日期尚未生成”。
+
+**验收**：
+
+- 队列中至少 3 天，第 2 天有未确认手量。
+- 点击生成后，第 1 天可成功，第 2 天暂停并打开补录，第 3 天应显示为未处理，而不是失败或成功。
+
+#### E. 预览/生成前统一校验数字设置
+
+**现状风险**：`tpp_min`、`tpp_max`、`pkg_rest` 等输入框如果被清空，state 可能变成 `NaN`，保存默认时虽有部分校验，但预览/生成不一定拦截。
+
+**建议修法**：
+
+1. 新增 `validateGlobalSettings()`，在 `handlePreview`、`handlePreviewForItem`、`handleGenerate`、`handleGenerateSingleFromPreview` 前调用。
+2. 校验项：
+   - `tpp_min`、`tpp_max` 必须是有限正数。
+   - `tpp_min <= tpp_max`。
+   - `pkg_rest >= 0`。
+   - `hand_max > 0`、`other_max > 0`。
+   - 如果 `useSrcOutput === false`，`outputDir` 必须非空。
+3. 失败时：
+   - 不调用 sidecar。
+   - 打开或显示一个明确错误，可以先用运行日志 + 生成结果失败明细。
+
+**验收**：
+
+- 清空每件时间最小值后点预览/生成，应被拦截并提示“每件时间范围不合法”。
+- 设置最小值 7、最大值 3，应被拦截。
+
+#### F. 真实手量持久化先不要急着实现，但要有方案
+
+**现状风险**：真实手量目前绑定在队列 item 的 `settingsOverride.real_manual_tasks`，关闭程序后会丢失。
+
+**建议方案（先设计，后实现）**：
+
+1. 不写回原始日期文件夹。
+2. 在配置目录新增单独文件，例如：
+   - `%APPDATA%\OMM日报系统\manual_tasks.json`
+   - 便携版则写到当前识别到的配置目录。
+3. 数据结构按日期文件夹绝对路径或稳定 key 保存：
+   - `fullPath`
+   - `dateFolder`
+   - `manualTasks`
+   - `updatedAt`
+4. 添加日期到队列时，如果存在保存过的真实手量，自动加载并显示 `[真实手量×N]`。
+5. UI 必须显示“已保存到本机配置”，避免用户误以为写回了生产目录。
+
+#### G. 版本号/发布建议
+
+当前功能已经超过 5.0.4 的语义范围。若下一轮完成 A-E 并打包，建议正式升级为 `5.0.7`，同步：
+
+- `package.json`
+- `src-tauri/tauri.conf.json` 或项目实际版本配置
+- 便携版目录/zip 名称
+- manifest version
+- 帮助页 About 版本
+
+如果用户坚持暂不升级，则必须在交接里写清：“发布物名仍 5.0.4，但包含 v5.0.6/v5.0.7 修复”。
+
 ---
 
 ## 10. 给下一位 AI 的提示词
@@ -287,6 +426,16 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 ```text
 你是一名接力开发 AI，当前项目目录是：
 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
+
+基本协作信息：
+- 你是 op，即 opencode 里的接力开发 AI。
+- 当前 ChatGPT/Codex 窗口叫 gpt。gpt 已做过审查、文档和部分前端修复；后续如果用户说“gpt”，指的就是这个窗口。
+- Git 根目录不是 Tauri 项目目录，而是：
+  D:\KSoftware\KMAA
+- 当前可用 Git 是绿色版：
+  C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe
+- 必须精确 add/commit/push，不要 `git add .`。每轮完成后都要尽量提交并 `git push origin main`。
+- 如果项目内日期测试样例（如 `CPT/日期文件夹/...`）确实被新增/修改，也要精确 add/push；但绝对不要提交 `C:\Users\Administrator\Desktop\勿动\日期文件` 或无关日期数据整目录。
 
 请先阅读：
 1. opencode-handoff-v5.0.6.md
@@ -301,22 +450,16 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 - 即使 gpt/op 换窗口，也要记住：完成一轮后尽量精确提交并 git push。
 
 本轮目标：
-只做最小必要改进，优先处理界面提示、配置文件解释、手量文件夹自动发现闭环、预览诊断操作入口。不要大规模重构，不要触碰 sidecar 排程核心。
+只做最小必要改进，优先修复前端流程缺陷：审核跳过、审核确认校验、手量保存并预览、批量生成暂停状态、数字设置校验。不要大规模重构，不要触碰 sidecar 排程核心。
 
-重点检查和改进：
-1. 日期文件夹内如果有直接子文件夹名称包含“手量”，队列项应提示“本日内有手量待确认”或类似清晰文案。
-2. 手量候选应自动预填到手量任务弹窗，但必须人工确认；确认前生成应阻止，预览可打开并提示未确认。
-3. 手量弹窗应显示候选来源文件夹名、识别出的产品/数量/耗时，以及哪些字段需要人工补充。
-4. 配置区域应清楚显示当前配置来源：AppData / 便携版 config.json，并显示实际配置目录。
-5. 如果便携版目录树中发现多个 config.json，不要静默猜测，应该提示用户当前使用哪个，并建议只保留一个。
-6. 输出路径为空时，界面应明确提示“输出到源日期文件夹”，不是程序文件夹。
-7. PreviewDialog 缺口诊断按钮（如实生成 / 打开手量补录 / 打开单日设置）只做前端导航或状态选择，不改 sidecar 排程算法。
-8. 预览表格来源列已补充 break / supplement_manual / supplement_other 显示口径，但不要让隐形缓冲写入最终 Excel。
-9. 考虑真实手量持久化前，请先写设计方案，不要直接大改数据结构。
-10. `.gitignore` 已存在，后续提交前请再次核对不要误忽略源代码。
-11. 预览统计数字应显示整数分钟，不要让浮点误差露到 UI。
-12. 生成失败必须给用户能看懂的失败明细；如果是手量未确认或真实手量字段不完整，要提供打开手量补录的入口。
-13. 全局默认设置修改后必须能保存到配置文件，包括每件时间范围、下班策略、手量/其他事务开关、默认班次等。
+重点任务：
+1. 修 ReviewDialog “跳过此包”：跳过后必须从 records 中过滤，不得写入最终 Excel。
+2. 修 ReviewDialog “确认并继续”：数量和测量时间至少要有一个合法值，否则不允许确认，并在弹窗内显示错误。
+3. 修 ManualTaskDialog “保存并预览”：预览必须使用刚保存的最新 real_manual_tasks，避免 React state 异步导致旧数据预览。
+4. 修批量生成暂停状态：遇到未确认手量/真实手量字段不完整时，结果弹窗标题应为“生成已暂停”，并列出当前及后续未处理日期。
+5. 增加预览/生成前数字设置校验：tpp_min/tpp_max/pkg_rest/hand_max/other_max/outputDir 必须合法，不合法时不调用 sidecar。
+6. 真实手量持久化先不要直接实现；如要做，先写方案，原则是不写回原始日期目录，而是写配置目录的独立 json。
+7. 完成后更新帮助文档和 opencode-handoff-v5.0.6.md。
 
 必须遵守：
 - sidecar exe 只从 stdin 读取 JSONL，不支持 --input / --output。
@@ -342,6 +485,13 @@ D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
 - cargo check --release
 - npm.cmd run tauri build
 - powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.4
+
+建议人工/半自动验收：
+1. 准备一个触发方案 A 的缺字段任务，点击“跳过此包”，最终 Excel 不应包含该任务。
+2. 方案 A 中不填数量/测量时间，点击确认应被拦截；填一个合法值后才能继续。
+3. 手量弹窗新增/修改真实手量后点“保存并预览”，预览应立即包含最新手量。
+4. 队列三天，第二天有未确认手量：第一天成功后应暂停在第二天，第三天列为未处理。
+5. 清空每件时间或设置 min > max，预览/生成应被拦截并给出中文提示。
 
 完成后请更新 opencode-handoff-v5.0.6.md：
 - 保留原结构。
