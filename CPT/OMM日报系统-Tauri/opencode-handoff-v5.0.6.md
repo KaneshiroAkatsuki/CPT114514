@@ -508,15 +508,54 @@ sha256=e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
 
 ---
 
-## 10. 给下一位 AI 的提示词
+## 10. 给 gpt 的提示词
 
 ```text
-你是一名接力开发 AI，当前项目目录是：
-D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
+当前项目目录：D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
+Git 根目录：D:\KSoftware\KMAA
+绿色版 Git：C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe
 
-基本协作信息：
-- 你是 op，即 opencode 里的接力开发 AI。
-- 当前 ChatGPT/Codex 窗口叫 gpt。gpt 已做过审查、文档和部分前端修复；后续如果用户说“gpt”，指的就是这个窗口。
+你叫 gpt。当前 opencode 窗口里只有一位 op，就是现在和你交接的这位 op。用户直接对 opencode 说话时，默认是在和 op 对话。如果用户说“gpt”，指的是你当前这个 ChatGPT/Codex 窗口。
+
+当前已完成（commit 14948c5 已 push 到 origin main）：
+1. ReviewDialog “跳过此包” 正确过滤 records。
+2. ReviewDialog “确认并继续” 校验数量和测量时间至少一项。
+3. ManualTaskDialog “保存并预览” 使用最新 real_manual_tasks。
+4. 批量生成遇到未确认手量时显示“生成已暂停”并列出未处理日期。
+5. 预览/生成前统一校验数字设置。
+6. 手量文件夹识别细化：品名优先数字/料号；第二段识别为工站；支持“姓名送测”；测量员只从“-手量-姓名”识别；排除 CMM/OMM/PCS/ST/MO/T0/T1/IQC/OQC 等作为品名。
+7. 手量耗时输入体验：不再从文件夹名识别耗时；默认按小时输入（2=120 分钟、2.5=150 分钟、3h=180 分钟、150分钟=150 分钟）；实时显示换算结果；未识别不列为强警告。
+8. 版本号已升级为 5.0.7。
+
+最新完整提交链：
+- 14948c5 docs: 更新第 10 节接力提示词
+- deca90d fix(manual): 手量耗时输入默认按小时
+- 5a80efd fix(manual): 细化手量文件夹识别规则并升级到 v5.0.7
+- 1abae0a fix(frontend): 修复审核跳过/校验、手量预览、生成暂停状态、数字设置校验
+
+当前版本号：5.0.7。后续除非用户明确要求，不要再改版本号。
+
+最新便携版 manifest（packaged_at=2026-06-30T01:42:37）：
+- app: 5d3bfe045b99bf779592636d41310a320135d9de3b1ae32e38d6346f2fe2b1ff
+- sidecar: 39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab
+- template: e96e5eab2f6535ecef77bfd495bdd1893990bde6fcbebb317d9f44d011eac982
+
+约束：
+- 不要 git add .，只精确 add 修改过的文件。
+- 不要触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
+- 不要写回原始测试数据目录，不要动 C:\Users\Administrator\Desktop\勿动\日期文件。
+- 如果用户让 op 做修改，op 会尽量 push；你这边看到的代码状态以上述 commit 为准。
+
+op 留给你的几个注意点：
+1. parseManualDuration 语义已变：纯数字现在默认按小时理解。该函数目前只用于 ManualTaskDialog，但如果以后复用到其他地方，需要留意。
+2. 手量耗时超过 8 小时目前只提示、不强制拦截。如果用户后续希望强制，再补逻辑。
+3. durationInput 是临时字段，保存在 task 对象上但不属于 RealManualTask 持久化字段；后续若做真实手量持久化，需要决定是否保存原始输入字符串。
+
+建议下一轮工作：
+1. 真实 GUI 验收（A-E + 手量识别/耗时输入）。
+2. 真实手量持久化方案设计（先写文档，不写代码）。
+3. 用户明确的新需求。
+```
 - Git 根目录不是 Tauri 项目目录，而是：
   D:\KSoftware\KMAA
 - 当前可用 Git 是绿色版：
