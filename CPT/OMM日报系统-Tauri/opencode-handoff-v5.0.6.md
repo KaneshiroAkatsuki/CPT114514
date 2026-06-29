@@ -97,7 +97,7 @@
 - **releases 清理**：清空旧 alpha/v5.0.1-v5.0.4 发布残留，仅保留当前有用的 `releases\OMM日报系统_便携版_5.0.7` 和 `releases\OMM日报系统_便携版_5.0.7.zip`。
 - **影响范围**：只做版本与发布产物整理；未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
-### 1.9 本轮补充修复：手量文件夹识别规则细化（v5.0.7）
+### 1.11 本轮补充修复：手量文件夹识别规则细化（v5.0.7）
 
 按 gpt 复核要求，对手量文件夹自动识别做最小必要修正，未触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法。
 
@@ -111,6 +111,25 @@
 - **帮助文档同步**：命名规则章节增加手量文件夹命名说明。
 
 版本号升级到 **5.0.7**，同步更新了 `package.json`、`src-tauri/tauri.conf.json`、安装包和便携版命名。
+
+### 1.12 本轮补充修正：手量耗时输入体验（v5.0.7）
+
+按 gpt 要求，不再指望从文件夹名识别手量耗时，改为人工确认/填写，默认按小时输入：
+
+- **不再从文件夹名识别耗时**：`recognizeManualTaskFromFolder()` 移除耗时识别；`recognizeManualDuration()` 保留但仅作为通用工具，不再用于手量文件夹。
+- **`parseManualDuration()` 改为默认按小时理解**：
+  - `2` → 120 分钟
+  - `2.5` → 150 分钟
+  - `3h` / `3H` → 180 分钟
+  - `150分钟` / `150分` → 150 分钟
+  - `90m` / `90M` → 90 分钟
+- **ManualTaskDialog 耗时输入**：
+  - 标签改为“耗时”，placeholder：`例如 2、2.5、3h、150分钟`。
+  - 下方提示：`手量耗时默认按小时输入；如需按分钟，请写“90分钟”或“90m”。`
+  - 实时显示换算结果：`将按 120 分钟计入`。
+- **候选信息**：未识别耗时显示“耗时：待填写”，不再列入橙色强警告。
+- **校验调整**：未填写耗时提示 `请填写手量耗时`；小于 5 分钟提示不合理；超过 8 小时提示请确认（不强制拦截）。
+- 未触碰 sidecar 排程核心。
 
 ---
 
@@ -161,6 +180,15 @@
 | 真实手量 station 写入 Excel | 完成 ✓ |
 | 测试日期默认使用队列日期 | 完成 ✓ |
 | 帮助文档手量命名规则同步 | 完成 ✓ |
+| 手量耗时不再从文件夹名自动识别 | 完成 ✓ |
+| `parseManualDuration` 默认按小时理解 | 通过 ✓ |
+| ManualTaskDialog 耗时输入实时换算提示 | 通过 ✓ |
+| 手量耗时未识别不列入强警告 | 通过 ✓ |
+| 手量耗时校验：0.5-8 小时建议范围 | 通过 ✓ |
+| `npx.cmd tsc --noEmit`（v5.0.7 耗时修正后） | 通过 ✓ |
+| `cargo check --release`（v5.0.7 耗时修正后） | 通过 ✓ |
+| `npm.cmd run tauri build`（v5.0.7 耗时修正后） | 成功 ✓ |
+| `scripts/package-portable.ps1 -Version 5.0.7`（耗时修正后） | 成功 ✓ |
 
 ---
 
@@ -190,11 +218,11 @@ releases\OMM日报系统_便携版_5.0.7.zip
 
 ### 4.3 最新便携版 manifest hash
 
-来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T01:30:29`。
+来源：`releases\OMM日报系统_便携版_5.0.7\manifest.json`，`packaged_at=2026-06-30T01:42:37`。
 
 ```text
 [app] OMM日报系统.exe
-sha256=ee7540b213706839d2d0bf245b4ff1e8388dc5e131fe3c824b1c0cd35d6c1b01
+sha256=5d3bfe045b99bf779592636d41310a320135d9de3b1ae32e38d6346f2fe2b1ff
 
 [sidecar] binaries\generate_report.exe
 sha256=39ddecb307f87797d9861f70d570b89b45f2c72c467c82fe1ccde9e997c7acab

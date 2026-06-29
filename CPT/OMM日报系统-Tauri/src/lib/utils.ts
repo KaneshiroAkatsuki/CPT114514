@@ -6,27 +6,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** 判断文本是否包含明确耗时关键词（耗时/用时/手量）。 */
-function hasDurationKeyword(input: string): boolean {
-  return /(?:耗时|用时|手量)/.test(input);
-}
-
-/** 解析手量耗时字符串，统一返回分钟数。
- *  支持格式：1.5H、1.5h、1小时30分钟、1小时、90分钟、1:30、01:30
+/** 解析手量耗时输入字符串，默认按小时理解，统一返回分钟数。
+ *  支持格式：2（=120分钟）、2.5（=150分钟）、3h/H（=180分钟）、
+ *  150分钟/150分（=150分钟）、90m（=90分钟）。
  *  解析失败返回 null。
  */
 export function parseManualDuration(input: string): number | null {
   const s = input.trim().replace(/\s+/g, '');
   if (!s) return null;
 
-  // 1.5H / 1.5h
+  // 150分钟 / 150分 / 90m —— 明确分钟单位
+  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:分钟|分|m|M)$/);
+  if (minMatch) {
+    return Math.round(parseFloat(minMatch[1]));
+  }
+
+  // 3h / 3H
   const hMatch = s.match(/^(\d+(?:\.\d+)?)\s*[Hh]$/);
   if (hMatch) {
     return Math.round(parseFloat(hMatch[1]) * 60);
   }
 
-  // 1小时30分钟 / 1小时 / 1时30分 / 1时 / 30分钟 / 30分
-  // 先尝试 X小时Y分钟 / X时Y分
+  // 1小时30分钟 / 1小时 / 1时30分 / 1时
   const hourMinMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:小时|时)\s*(\d+(?:\.\d+)?)?\s*(?:分钟|分)?$/);
   if (hourMinMatch) {
     const hours = parseFloat(hourMinMatch[1] || '0');
@@ -34,76 +35,10 @@ export function parseManualDuration(input: string): number | null {
     return Math.round(hours * 60 + minutes);
   }
 
-  // 30分钟 / 30分
-  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:分钟|分)$/);
-  if (minMatch) {
-    return Math.round(parseFloat(minMatch[1]));
-  }
-
-  // 1:30 / 01:30 —— 谨慎识别：只有带耗时关键词时才当耗时
-  const hasKeyword = hasDurationKeyword(input);
-  const timeMatch = s.match(/^(\d{1,2}):(\d{1,2})$/);
-  if (timeMatch && hasKeyword) {
-    const hours = parseInt(timeMatch[1], 10);
-    const minutes = parseInt(timeMatch[2], 10);
-    if (minutes >= 60) return null;
-    return hours * 60 + minutes;
-  }
-
-  // 纯数字默认分钟
+  // 纯数字默认按小时理解（如 2 = 120 分钟）
   const numMatch = s.match(/^(\d+(?:\.\d+)?)$/);
   if (numMatch) {
-    return Math.round(parseFloat(numMatch[1]));
-  }
-
-  return null;
-}
-
-/** 从文件夹名中识别明确耗时（分钟）。
- *  仅识别明确表达“耗时/用时/手量时长”的格式，避免误识别日期/班次/送测时间/数量。
- */
-export function recognizeManualDuration(input: string): number | null {
-  const s = input.trim().replace(/\s+/g, '');
-  if (!s) return null;
-
-  // 有明确关键词前缀的 1:30 / 01:30
-  const keywordTimeMatch = s.match(/(?:耗时|用时|手量)(\d{1,2}):(\d{1,2})/);
-  if (keywordTimeMatch) {
-    const hours = parseInt(keywordTimeMatch[1], 10);
-    const minutes = parseInt(keywordTimeMatch[2], 10);
-    if (minutes >= 60) return null;
-    return hours * 60 + minutes;
-  }
-
-  // 有明确关键词前缀的小时数或分钟数：耗时90 / 耗时90分钟 / 用时1.5H / 手量1小时30分
-  const keywordNumberMatch = s.match(/(?:耗时|用时|手量)(\d+(?:\.\d+)?)([Hh]|小时|时|分钟|分)?/);
-  if (keywordNumberMatch) {
-    const num = parseFloat(keywordNumberMatch[1]);
-    const unit = keywordNumberMatch[2] || '';
-    if (/^[Hh]|小时|时$/.test(unit)) {
-      return Math.round(num * 60);
-    }
-    return Math.round(num);
-  }
-
-  // 没有关键词的纯 1.5H / 90分钟 / 1小时30分钟 等 —— 注意避免 6.30B 被误判
-  // 1.5H / 1.5h
-  const hMatch = s.match(/(\d+(?:\.\d+)?)\s*[Hh]$/);
-  if (hMatch) {
-    return Math.round(parseFloat(hMatch[1]) * 60);
-  }
-
-  // 90分钟 / 90分 / 1小时30分钟 / 1小时 / 1时30分
-  const hourMinMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:小时|时)\s*(\d+(?:\.\d+)?)?\s*(?:分钟|分)?$/);
-  if (hourMinMatch) {
-    const hours = parseFloat(hourMinMatch[1] || '0');
-    const minutes = parseFloat(hourMinMatch[2] || '0');
-    return Math.round(hours * 60 + minutes);
-  }
-
-  const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*(?:分钟|分)$/);
-  if (minMatch) {
-    return Math.round(parseFloat(minMatch[1]));
+    return Math.round(parseFloat(numMatch[1]) * 60);
   }
 
   return null;
@@ -119,16 +54,17 @@ export function validateRealManualTask(task: Partial<RealManualTask>): string[] 
     errors.push('送测人未填写');
   }
   if (!task.send_date || task.send_date.trim() === '' || task.send_date === '/') {
-    errors.push('送测日期未填写');
+    errors.push('测试日期未填写');
   }
   if (!task.quantity || task.quantity.trim() === '' || task.quantity === '/') {
-    errors.push('测试数量未填写');
+    errors.push('数量未填写');
   }
   if (task.duration_minutes === undefined || task.duration_minutes === null || Number.isNaN(task.duration_minutes)) {
-    errors.push('测试耗时未填写或无效');
+    errors.push('请填写手量耗时');
   } else {
-    if (task.duration_minutes < 5) errors.push('测试耗时小于5分钟，可能不合理');
-    if (task.duration_minutes > 180) errors.push('测试耗时超过3小时，请确认');
+    const hours = task.duration_minutes / 60;
+    if (task.duration_minutes < 5) errors.push('耗时小于5分钟，可能不合理');
+    if (hours > 8) errors.push('耗时超过8小时，请确认');
   }
   if (!task.operator || task.operator.trim() === '' || task.operator === '/') {
     errors.push('测量员未填写');
@@ -152,16 +88,16 @@ export function recognizeManualTaskFromFolder(folderName: string): Partial<RealM
     from_recognition: true,
   };
 
-  // 尝试识别 -手量-姓名 段落
+  // 按 - _ 分割
+  const parts = folderName.split(/[-_]/).filter(Boolean);
+
+  // 测量员：强特征 -手量-姓名
   const manualMatch = folderName.match(/-手量-([^-_]+)/);
   if (manualMatch) {
     result.operator = manualMatch[1].trim();
   }
 
-  // 尝试识别 -OMM-姓名 或 -CMM-姓名 前的产品/送测人（简单启发式）
-  const parts = folderName.split(/[-_]/).filter(Boolean);
-
-  // 找品名：优先从头开始找数字/料号段，不要把 CMM/OMM 后的姓名当品名
+  // 品名：优先从头开始找数字/料号段
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     if (looksLikeProduct(p)) {
@@ -192,12 +128,7 @@ export function recognizeManualTaskFromFolder(folderName: string): Partial<RealM
     result.quantity = `${qtyMatch[1]}PCS`;
   }
 
-  // 明确耗时（仅在带耗时关键词或明确单位时）
-  const duration = recognizeManualDuration(folderName);
-  if (duration !== null) {
-    result.duration_minutes = duration;
-  }
-
+  // 手量耗时通常不写进文件夹名，需要人工填写，这里不自动识别
   return result;
 }
 

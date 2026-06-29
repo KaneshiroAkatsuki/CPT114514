@@ -71,10 +71,10 @@ function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate;
   if (!recognized.sender) missingFields.push('送测人');
   if (!recognized.send_date) missingFields.push('测试日期');
   if (!recognized.quantity) missingFields.push('数量');
-  if (recognized.duration_minutes === undefined || recognized.duration_minutes === null) missingFields.push('耗时');
   if (!recognized.operator) missingFields.push('测量员');
+  // 手量耗时通常不写进文件夹名，不列为强警告
 
-  const hasDurationAuto = recognized.duration_minutes !== undefined && recognized.duration_minutes !== null;
+  const hasDurationAuto = recognized.duration_minutes !== undefined && recognized.duration_minutes !== null && recognized.duration_minutes > 0;
 
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs space-y-1.5">
@@ -87,11 +87,13 @@ function CandidateInfo({ candidate, task }: { candidate?: ManualFolderCandidate;
         {recognized.product && <span>品名：{recognized.product}</span>}
         {recognized.sender && <span>送测人：{recognized.sender}</span>}
         {recognized.quantity && <span>数量：{recognized.quantity}</span>}
-        {hasDurationAuto && (
+        {hasDurationAuto ? (
           <span className="flex items-center gap-1 text-blue-700">
             <Clock className="h-3 w-3" />
             自动识别耗时：{formatDuration(recognized.duration_minutes)}
           </span>
+        ) : (
+          <span className="text-slate-500">耗时：待填写</span>
         )}
         {recognized.operator && <span className="flex items-center gap-1"><User className="h-3 w-3" />测量员：{recognized.operator}</span>}
       </div>
@@ -199,7 +201,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
 
   const effectiveShift = item?.shiftOverride || item?.shift || null;
   const hasCandidates = (item?.manualCandidates?.length || 0) > 0;
-  const autoRecognizedCount = tasks.filter((t) => t.from_recognition && t.duration_minutes).length;
+  const autoRecognizedCount = tasks.filter((t) => t.from_recognition && t.duration_minutes && t.duration_minutes > 0).length;
 
   const handleAdd = () => {
     setTasks((prev) => [
@@ -232,7 +234,10 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
           const parsed = parseManualDuration(patch.durationInput);
           if (parsed !== null) {
             next.duration_minutes = parsed;
+          } else if (patch.durationInput.trim() === '') {
+            next.duration_minutes = 0 as unknown as number;
           }
+          (next as unknown as Record<string, string>).durationInput = patch.durationInput;
         }
         return next;
       })
@@ -334,11 +339,17 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
               {tasks.length === 0 ? (
                 <div className="p-4 text-sm text-slate-400">暂无手量记录</div>
               ) : (
-                tasks.map((t) => {
-                  const errs = validationMap[t.id] || [];
-                  const durationInput = t.duration_minutes?.toString() || '';
-                  const candidate = (t.source_folder && candidateMap[`folder:${t.source_folder}`]) || candidateMap[`product:${t.product}`];
-                  return (
+              tasks.map((t) => {
+                const errs = validationMap[t.id] || [];
+                const durationInput = (t as RealManualTask & { durationInput?: string }).durationInput ?? (t.duration_minutes > 0 ? t.duration_minutes.toString() : '');
+                const parsedMinutes = parseManualDuration(durationInput);
+                const parsedDurationText = durationInput.trim().length > 0
+                  ? parsedMinutes !== null
+                    ? `将按 ${parsedMinutes} 分钟计入`
+                    : '无法识别，请重新输入'
+                  : null;
+                const candidate = (t.source_folder && candidateMap[`folder:${t.source_folder}`]) || candidateMap[`product:${t.product}`];
+                return (
                     <div
                       key={t.id}
                       className={`rounded-md border p-2 space-y-2 ${errs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
@@ -371,15 +382,21 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                         onChange={(e) => handleUpdate(t.id, { quantity: e.target.value })}
                       />
                     </div>
-                    <div className="space-y-0.5">
-                      <label className="text-[10px] text-slate-500">{FIELD_NAMES.duration_minutes}</label>
-                      <Input
-                        className="h-7 text-xs"
-                        placeholder="1.5H/90分钟/1:30"
-                        value={durationInput}
-                        onChange={(e) => handleUpdate(t.id, { durationInput: e.target.value })}
-                      />
-                    </div>
+                        <div className="space-y-0.5 col-span-2">
+                          <label className="text-[10px] text-slate-500">{FIELD_NAMES.duration_minutes}</label>
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="例如 2、2.5、3h、150分钟"
+                            value={durationInput}
+                            onChange={(e) => handleUpdate(t.id, { durationInput: e.target.value })}
+                          />
+                          <p className="text-[10px] text-slate-400">
+                            手量耗时默认按小时输入；如需按分钟，请写“90分钟”或“90m”。
+                          </p>
+                          {parsedDurationText && (
+                            <p className="text-xs text-blue-700 font-medium">{parsedDurationText}</p>
+                          )}
+                        </div>
                     <div className="space-y-0.5">
                       <label className="text-[10px] text-slate-500">{FIELD_NAMES.operator}</label>
                       <Input
