@@ -517,7 +517,7 @@ export function MainWindow() {
 
   const handleConfigLocationCustom = async () => {
     setConfigLocationOpen(false);
-    const newDir = await selectFolder();
+    const newDir = await selectFolder(configDir || workDir);
     if (newDir) {
       try {
         const currentConfig = buildConfigPatch();
@@ -665,7 +665,7 @@ export function MainWindow() {
   };
 
   const handleSelectWorkDir = async () => {
-    const path = await selectFolder();
+    const path = await selectFolder(workDir || configDir);
     if (path) {
       setWorkDir(path);
       setSelectedDateFolder("");
@@ -697,7 +697,7 @@ export function MainWindow() {
   };
 
   const handleSelectOutputDir = async () => {
-    const path = await selectFolder();
+    const path = await selectFolder(outputDir || workDir || configDir);
     if (path) {
       setOutputDir(path);
       addLog(`输出目录: ${path}`);
@@ -1790,7 +1790,7 @@ export function MainWindow() {
                         onChange={(e) => setHandMax(parseInt(e.target.value) || 120)}
                         className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       />
-                      <span className="form-hint">分钟，超过班次剩余会自动限制并提示</span>
+                      <span className="form-hint">分钟，仅限制系统自动补时间手量，不影响真实手量</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
@@ -1805,7 +1805,7 @@ export function MainWindow() {
                         onChange={(e) => setOtherMax(parseInt(e.target.value) || 90)}
                         className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                       />
-                      <span className="form-hint">分钟</span>
+                      <span className="form-hint">分钟，仅限制系统自动补其他事务</span>
                       <label className="flex items-center gap-1.5 text-sm ml-2">
                         <input
                           type="checkbox"
@@ -1893,7 +1893,7 @@ export function MainWindow() {
                         className="flex-1 bg-slate-50"
                       />
                       <Button variant="secondary" size="sm" onClick={async () => {
-                        const path = await selectFolder();
+                        const path = await selectFolder(configDir || workDir);
                         if (path) {
                           try {
                             const currentConfig = buildConfigPatch();

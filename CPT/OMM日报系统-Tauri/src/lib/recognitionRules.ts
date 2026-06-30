@@ -99,11 +99,30 @@ function collectNormalProductCandidates(name: string, rules?: RecognitionRules):
   const parts = splitName(name);
   const candidates: string[] = [];
   for (const part of parts) {
+    if (isIgnoredToken(part, rules)) continue;
     const clean = part.replace(/^X/, "");
     if (isIgnoredToken(clean, rules)) continue;
     if (/^\d{3}$/.test(clean)) pushUnique(candidates, clean);
   }
   return candidates;
+}
+
+function collectKnownProductCodes(rules?: RecognitionRules): Set<string> {
+  const products = new Set<string>();
+  for (const rule of rules?.product_aliases || []) {
+    for (const part of rule.product.split(/[,，]/)) {
+      if (/^\d{3}$/.test(part.trim())) products.add(part.trim());
+    }
+  }
+  for (const rule of rules?.welding_rules || []) {
+    if (/^\d{3}$/.test(rule.product.trim())) products.add(rule.product.trim());
+  }
+  for (const rule of rules?.sinter_plate_rules || []) {
+    for (const part of rule.products || []) {
+      if (/^\d{3}$/.test(part.trim())) products.add(part.trim());
+    }
+  }
+  return products;
 }
 
 function validateClockTime(raw: string): boolean {
@@ -238,9 +257,18 @@ export function recognizeProductCodes(name: string, station?: string, rules?: Re
   const parts = splitName(name);
   const normalCandidates = collectNormalProductCandidates(name, rules);
   if (normalCandidates.length > 1) {
+    const knownProducts = collectKnownProductCodes(rules);
+    const knownCandidate = normalCandidates.find((candidate) => knownProducts.has(candidate));
+    if (knownCandidate) {
+      pushUnique(products, knownCandidate);
+      matchedRules.push("补充规则已知品名优先");
+      pushWarning(warnings, `识别到多个三位数字品名候选：${normalCandidates.join("、")}；已优先取补充规则中存在的“${knownCandidate}”，请确认品名`);
+      return { products, matchedRules, warnings };
+    }
     pushWarning(warnings, `识别到多个三位数字品名候选：${normalCandidates.join("、")}；普通任务仅自动取第一个，请确认品名`);
   }
   for (const part of parts) {
+    if (isIgnoredToken(part, rules)) continue;
     const clean = part.replace(/^X/, "");
     if (isIgnoredToken(clean, rules)) continue;
     if (/^\d{3}$/.test(clean)) {

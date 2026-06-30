@@ -1438,8 +1438,11 @@ def generate_report(records, tasks, test_date, output_name_suffix="", operator_n
         if name != ws.title:
             del wb[name]
 
-    # 隐形缓冲/休息不写入 Excel
-    visible_tasks = [t for t in tasks if not (t.get('hidden') == True or t.get('type') in ('invisible_rest', 'hidden_buffer'))]
+    # 隐形缓冲/包间休息不写入 Excel。包间休息只影响排程时间，不作为报表行展示。
+    visible_tasks = [
+        t for t in tasks
+        if not (t.get('hidden') == True or t.get('type') in ('invisible_rest', 'hidden_buffer', 'pkg_rest'))
+    ]
 
     for mr in list(ws.merged_cells.ranges):
         if mr.min_row >= 8 and mr.max_row <= 9:
@@ -1537,8 +1540,8 @@ def generate_report(records, tasks, test_date, output_name_suffix="", operator_n
         ws.cell(row=row, column=14).value = task.get('end', '/')
         ws.cell(row=row, column=14).number_format = 'h:mm'
         ws.cell(row=row, column=17).value = task.get('operator', operator_name)
-        if is_real_manual and is_real_manual_continuation:
-            ws.cell(row=row, column=18).value = '真实手量续行'
+        if is_real_manual:
+            ws.cell(row=row, column=18).value = ''
         else:
             ws.cell(row=row, column=18).value = task.get('note', '')
 

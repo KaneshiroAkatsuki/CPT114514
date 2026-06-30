@@ -92,8 +92,10 @@ export function useSidecar() {
 }
 
 export function useFile() {
-  const selectFolder = async (): Promise<string | null> => {
-    return await invoke<string | null>("select_folder");
+  const selectFolder = async (defaultPath?: string | null): Promise<string | null> => {
+    return await invoke<string | null>("select_folder", {
+      defaultPath: defaultPath || null,
+    });
   };
 
   const selectXlsxFile = async (): Promise<string | null> => {

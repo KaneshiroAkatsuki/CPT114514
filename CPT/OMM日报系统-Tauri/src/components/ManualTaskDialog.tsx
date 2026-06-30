@@ -69,7 +69,6 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
   if (!candidate) return null;
   const recognized = candidate.recognized || {};
   const warnings = recognized.recognition_warnings || [];
-  const countingMode = task?.counting_mode || 'separate';
   const missingFields: string[] = [];
   if (!recognized.station) missingFields.push('工站');
   if (!recognized.product) missingFields.push('品名');
@@ -107,15 +106,6 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>
             该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{recognized.operator}</strong> 填写
-          </span>
-        </div>
-      )}
-      {ownerName && recognized.operator && recognized.operator === ownerName && (
-        <div className="flex items-start gap-1.5 text-blue-700">
-          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>
-            OMM 与手量测量员同为 <strong>{ownerName}</strong>，
-            {countingMode === 'manual_only' ? '已选择只计手量' : '如果 OMM 已在其他日期登记，请把计时方式改成只计手量'}
           </span>
         </div>
       )}
@@ -394,15 +384,6 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                           <span>
                             该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{t.operator}</strong> 填写
-                          </span>
-                        </div>
-                      )}
-                      {ownerName && t.operator && t.operator === ownerName && !candidate && (
-                        <div className="text-xs text-blue-700 flex items-start gap-1.5">
-                          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <span>
-                            OMM 与手量测量员同为 <strong>{ownerName}</strong>，
-                            {(t.counting_mode || 'separate') === 'manual_only' ? '已选择只计手量' : '如果 OMM 已在其他日期登记，请把计时方式改成只计手量'}
                           </span>
                         </div>
                       )}

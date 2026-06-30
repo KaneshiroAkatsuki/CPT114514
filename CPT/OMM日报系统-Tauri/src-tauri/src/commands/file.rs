@@ -1,12 +1,18 @@
 use tauri::{command, AppHandle};
 
 #[command]
-pub async fn select_folder(app: AppHandle) -> Result<Option<String>, String> {
+pub async fn select_folder(app: AppHandle, default_path: Option<String>) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    
-    let path = app.dialog()
-        .file()
-        .blocking_pick_folder();
+
+    let mut dialog = app.dialog().file();
+    if let Some(default_path) = default_path {
+        let path = std::path::PathBuf::from(default_path);
+        if path.is_dir() {
+            dialog = dialog.set_directory(path);
+        }
+    }
+
+    let path = dialog.blocking_pick_folder();
     
     match path {
         Some(path) => Ok(Some(path.to_string())),
