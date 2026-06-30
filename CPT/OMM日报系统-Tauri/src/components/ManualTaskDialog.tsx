@@ -40,6 +40,7 @@ const EMPTY_TASK: Partial<RealManualTask> = {
   send_time: '/',
   quantity: '',
   duration_minutes: undefined as unknown as number,
+  counting_mode: 'separate',
   operator: '',
   note: '',
   from_recognition: false,
@@ -68,6 +69,7 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
   if (!candidate) return null;
   const recognized = candidate.recognized || {};
   const warnings = recognized.recognition_warnings || [];
+  const countingMode = task?.counting_mode || 'separate';
   const missingFields: string[] = [];
   if (!recognized.station) missingFields.push('工站');
   if (!recognized.product) missingFields.push('品名');
@@ -112,7 +114,8 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
         <div className="flex items-start gap-1.5 text-blue-700">
           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>
-            OMM 与手量测量员同为 <strong>{ownerName}</strong>，系统会按 OMM 和真实手量分别统计时间
+            OMM 与手量测量员同为 <strong>{ownerName}</strong>，
+            {countingMode === 'manual_only' ? '已选择只计手量' : '如果 OMM 已在其他日期登记，请把计时方式改成只计手量'}
           </span>
         </div>
       )}
@@ -174,6 +177,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
       ...t,
       send_date: t.send_date || defaultDate,
       station: t.station || '',
+      counting_mode: t.counting_mode || 'separate',
     }));
   }, [existingTasks, defaultDate]);
 
@@ -242,6 +246,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         mold: '/',
         machine: '/',
         send_time: '/',
+        counting_mode: 'separate',
         from_recognition: false,
       } as RealManualTask,
     ]);
@@ -284,6 +289,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         ...recognized,
         id: nanoid(),
         duration_minutes: recognized.duration_minutes ?? 0,
+        counting_mode: recognized.counting_mode ?? 'separate',
         from_recognition: true,
       } as RealManualTask);
       const warnings = recognized.recognition_warnings || [];
@@ -395,7 +401,8 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                         <div className="text-xs text-blue-700 flex items-start gap-1.5">
                           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                           <span>
-                            OMM 与手量测量员同为 <strong>{ownerName}</strong>，系统会按 OMM 和真实手量分别统计时间
+                            OMM 与手量测量员同为 <strong>{ownerName}</strong>，
+                            {(t.counting_mode || 'separate') === 'manual_only' ? '已选择只计手量' : '如果 OMM 已在其他日期登记，请把计时方式改成只计手量'}
                           </span>
                         </div>
                       )}
@@ -459,6 +466,20 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                         value={t.operator}
                         onChange={(e) => handleUpdate(t.id, { operator: e.target.value })}
                       />
+                    </div>
+                    <div className="space-y-0.5 col-span-3">
+                      <label className="text-[10px] text-slate-500">计时方式</label>
+                      <select
+                        className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                        value={t.counting_mode || 'separate'}
+                        onChange={(e) => handleUpdate(t.id, { counting_mode: e.target.value as RealManualTask['counting_mode'] })}
+                      >
+                        <option value="separate">OMM + 手量都计时（同一天都测）</option>
+                        <option value="manual_only">只计手量（OMM 已在其他日期登记）</option>
+                      </select>
+                      <p className="text-[10px] text-slate-400">
+                        选“只计手量”时，生成/预览会跳过同品名同测量员的普通 OMM 记录，避免重复计时。
+                      </p>
                     </div>
                   </div>
                       {errs.length > 0 && (

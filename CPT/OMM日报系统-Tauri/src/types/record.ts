@@ -78,6 +78,8 @@ export interface RealManualTask {
   quantity: string;
   /** 测试耗时（分钟） */
   duration_minutes: number;
+  /** 计时方式：separate=OMM 与手量都计时；manual_only=只计手量，跳过匹配的普通 OMM 记录 */
+  counting_mode?: 'separate' | 'manual_only';
   /** 测量员 */
   operator: string;
   /** 工站 */

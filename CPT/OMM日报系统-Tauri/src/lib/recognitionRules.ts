@@ -313,7 +313,7 @@ function applyManualOperatorRecognition(folderName: string, result: Partial<Real
       result.operator = operator;
       const ommOperator = extractOmmOperator(folderName);
       if (ommOperator && ommOperator === operator) {
-        pushWarning(warnings, `检测到 OMM 与手量测量员同为“${operator}”；已按普通 OMM 任务和真实手量任务分别统计时间`);
+        pushWarning(warnings, `检测到 OMM 与手量测量员同为“${operator}”；请在手量弹窗确认是“OMM+手量都计时”还是“只计手量（OMM已登记）”`);
       }
     } else {
       pushWarning(warnings, `手量测量员“${operator}”不像有效姓名，请人工确认`);

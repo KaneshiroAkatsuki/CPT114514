@@ -14,7 +14,7 @@ import { useFile, useSidecar, useConfigManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
-import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules } from "@/types/record";
+import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask } from "@/types/record";
 import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info, Package } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
@@ -323,6 +323,75 @@ export function MainWindow() {
     return 0;
   };
 
+  const normalizeRecordText = (value?: string | number | null): string => {
+    if (value === undefined || value === null) return "";
+    const text = String(value).trim();
+    return text === "/" ? "" : text;
+  };
+
+  const normalizeQuantityText = (value?: string | number | null): string => {
+    const text = normalizeRecordText(value);
+    if (!text) return "";
+    const match = text.match(/\d+/);
+    return match ? match[0] : "";
+  };
+
+  const manualOnlyTaskMatchesRecord = (task: RealManualTask, record: FolderRecord): boolean => {
+    if (task.counting_mode !== 'manual_only') return false;
+
+    const taskProduct = normalizeRecordText(task.product);
+    const recordProduct = normalizeRecordText(record.product);
+    const taskOperator = normalizeRecordText(task.operator);
+    const recordOperator = normalizeRecordText(record.operator);
+    if (!taskProduct || !recordProduct || taskProduct !== recordProduct) return false;
+    if (!taskOperator || !recordOperator || taskOperator !== recordOperator) return false;
+
+    const taskSender = normalizeRecordText(task.sender);
+    const recordSender = normalizeRecordText(record.sender);
+    if (taskSender && recordSender && taskSender !== recordSender) return false;
+
+    const taskQuantity = normalizeQuantityText(task.quantity);
+    const recordQuantity = normalizeQuantityText(record.quantity);
+    if (taskQuantity && recordQuantity && taskQuantity !== recordQuantity) return false;
+
+    return true;
+  };
+
+  const filterRecordsByManualCountingMode = (
+    item: QueueItem,
+    records: FolderRecord[],
+    actionLabel: "预览" | "生成"
+  ): FolderRecord[] => {
+    const manualOnlyTasks = (item.settingsOverride?.real_manual_tasks || []).filter(
+      (task) => task.counting_mode === 'manual_only'
+    );
+    if (manualOnlyTasks.length === 0) return records;
+
+    const skipped: string[] = [];
+    const filtered = records.filter((record) => {
+      const matchedTask = manualOnlyTasks.find((task) => manualOnlyTaskMatchesRecord(task, record));
+      if (!matchedTask) return true;
+      skipped.push(`${record.folder}（匹配手量：${matchedTask.product}/${matchedTask.operator}）`);
+      return false;
+    });
+
+    if (skipped.length > 0) {
+      addLog(`${actionLabel}：${item.dateFolder} 已按“只计手量”跳过 ${skipped.length} 个普通 OMM 记录`);
+      skipped.forEach((name) => addLog(`  - ${name}`));
+    }
+    return filtered;
+  };
+
+  const filterReviewMapByRecords = (
+    sourceReviewMap: Record<string, ReviewInfo>,
+    records: FolderRecord[]
+  ): Record<string, ReviewInfo> => {
+    const folderNames = new Set(records.map((record) => record.folder));
+    return Object.fromEntries(
+      Object.entries(sourceReviewMap).filter(([folder]) => folderNames.has(folder))
+    );
+  };
+
   const buildTppRangeRiskMessage = (
     item: QueueItem,
     records: FolderRecord[],
@@ -402,11 +471,12 @@ export function MainWindow() {
       }
       const records = parseResponse.data.records;
       const candidateNames = new Set(targetItem.manualCandidates?.map((c) => c.folderName) || []);
-      const filteredRecords = records.filter((r) => !candidateNames.has(r.folder));
-      const skippedCount = records.length - filteredRecords.length;
+      const manualCandidateFilteredRecords = records.filter((r) => !candidateNames.has(r.folder));
+      const skippedCount = records.length - manualCandidateFilteredRecords.length;
       if (skippedCount > 0) {
         addLog(`预览：已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
       }
+      const filteredRecords = filterRecordsByManualCountingMode(targetItem, manualCandidateFilteredRecords, "预览");
 
       const unconfirmedCount = (targetItem.manualCandidates || []).filter(
         (candidate) => !isManualCandidateConfirmed(candidate, targetItem)
@@ -1104,15 +1174,17 @@ export function MainWindow() {
 
       const records = parseResponse.data.records;
       const reviewMap = parseResponse.data.review_map;
-      setReviewMap(reviewMap);
 
       // 过滤掉手量候选对应的普通 records，避免重复排程
       const candidateNames = new Set(item.manualCandidates?.map((c) => c.folderName) || []);
-      const filteredRecords = records.filter((r) => !candidateNames.has(r.folder));
-      const skippedCount = records.length - filteredRecords.length;
+      const manualCandidateFilteredRecords = records.filter((r) => !candidateNames.has(r.folder));
+      const skippedCount = records.length - manualCandidateFilteredRecords.length;
       if (skippedCount > 0) {
         addLog(`  已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
       }
+      const filteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
+      const filteredReviewMap = filterReviewMapByRecords(reviewMap, filteredRecords);
+      setReviewMap(filteredReviewMap);
 
       // 如果还有未确认的手量候选，生成前阻止
       const unconfirmedCandidates = (item.manualCandidates || []).filter(
@@ -1160,17 +1232,17 @@ export function MainWindow() {
         return;
       }
 
-      const needsReview = Object.keys(reviewMap).some(
+      const needsReview = Object.keys(filteredReviewMap).some(
         (key) =>
-          reviewMap[key].missing.length > 0 ||
-          reviewMap[key].placeholders.length > 0
+          filteredReviewMap[key].missing.length > 0 ||
+          filteredReviewMap[key].placeholders.length > 0
       );
 
       const effectiveReviewMode = item.reviewMode ?? complexDefault;
       if (needsReview && effectiveReviewMode === 'A') {
         addLog(`  需要审核，打开审核对话框`);
         setPendingRecords(filteredRecords);
-        setReviewMap(reviewMap);
+        setReviewMap(filteredReviewMap);
         setReviewOpen(true);
         generateStateRef.current = {
           currentIndex: index,
@@ -1355,10 +1427,16 @@ export function MainWindow() {
       }
       const records = parseResponse.data.records;
       const reviewMap = parseResponse.data.review_map;
-      setReviewMap(reviewMap);
 
       const candidateNames = new Set(item.manualCandidates?.map((c) => c.folderName) || []);
-      const filteredRecords = records.filter((r) => !candidateNames.has(r.folder));
+      const manualCandidateFilteredRecords = records.filter((r) => !candidateNames.has(r.folder));
+      const skippedCount = records.length - manualCandidateFilteredRecords.length;
+      if (skippedCount > 0) {
+        addLog(`  已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
+      }
+      const filteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
+      const filteredReviewMap = filterReviewMapByRecords(reviewMap, filteredRecords);
+      setReviewMap(filteredReviewMap);
 
       const unconfirmedCandidates = (item.manualCandidates || []).filter(
         (candidate) => !isManualCandidateConfirmed(candidate, item)
@@ -1403,14 +1481,14 @@ export function MainWindow() {
         return;
       }
 
-      const needsReview = Object.keys(reviewMap).some(
-        (key) => reviewMap[key].missing.length > 0 || reviewMap[key].placeholders.length > 0
+      const needsReview = Object.keys(filteredReviewMap).some(
+        (key) => filteredReviewMap[key].missing.length > 0 || filteredReviewMap[key].placeholders.length > 0
       );
       const effectiveReviewMode = item.reviewMode ?? complexDefault;
       if (needsReview && effectiveReviewMode === 'A') {
         addLog(`  需要审核，打开审核对话框`);
         setPendingRecords(filteredRecords);
-        setReviewMap(reviewMap);
+        setReviewMap(filteredReviewMap);
         setReviewOpen(true);
         generateStateRef.current = {
           currentIndex: index,
