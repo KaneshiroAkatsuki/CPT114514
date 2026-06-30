@@ -502,7 +502,7 @@ export function MainWindow() {
     const tasks = item.settingsOverride?.real_manual_tasks || [];
     return tasks.some((task) => {
       if (task.source_folder && task.source_folder === candidate.folderName) return true;
-      return !task.source_folder && !!candidate.recognized?.product && task.product === candidate.recognized.product;
+      return false;
     });
   };
 

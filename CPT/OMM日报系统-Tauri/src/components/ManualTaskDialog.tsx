@@ -108,6 +108,14 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
           </span>
         </div>
       )}
+      {ownerName && recognized.operator && recognized.operator === ownerName && (
+        <div className="flex items-start gap-1.5 text-blue-700">
+          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            OMM 与手量测量员同为 <strong>{ownerName}</strong>，系统会按 OMM 和真实手量分别统计时间
+          </span>
+        </div>
+      )}
       {missingFields.length > 0 && (
         <div className="flex items-start gap-1.5 text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -174,9 +182,6 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     if (!item) return map;
     for (const c of item.manualCandidates || []) {
       map[`folder:${c.folderName}`] = c;
-      if (c.recognized?.product) {
-        map[`product:${c.recognized.product}`] = c;
-      }
     }
     return map;
   }, [item, open]);
@@ -185,13 +190,10 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     if (!item) return [];
     const candidates = item.manualCandidates || [];
     if (candidates.length === 0) return [];
-    const existingProducts = new Set(patchedExistingTasks.map((t) => t.product));
     const existingSourceFolders = new Set(patchedExistingTasks.map((t) => t.source_folder).filter(Boolean));
     const drafts: RealManualTask[] = [];
     for (const c of candidates) {
-      const recognizedProduct = c.recognized?.product;
       if (existingSourceFolders.has(c.folderName)) continue;
-      if (recognizedProduct && existingProducts.has(recognizedProduct)) continue;
       const rec = c.recognized || {};
       drafts.push({
         ...EMPTY_TASK,
@@ -374,7 +376,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                     ? `将按 ${parsedMinutes} 分钟计入`
                     : '无法识别，请重新输入'
                   : null;
-                const candidate = (t.source_folder && candidateMap[`folder:${t.source_folder}`]) || candidateMap[`product:${t.product}`];
+                const candidate = t.source_folder ? candidateMap[`folder:${t.source_folder}`] : undefined;
                 return (
                     <div
                       key={t.id}
@@ -386,6 +388,14 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                           <span>
                             该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{t.operator}</strong> 填写
+                          </span>
+                        </div>
+                      )}
+                      {ownerName && t.operator && t.operator === ownerName && !candidate && (
+                        <div className="text-xs text-blue-700 flex items-start gap-1.5">
+                          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span>
+                            OMM 与手量测量员同为 <strong>{ownerName}</strong>，系统会按 OMM 和真实手量分别统计时间
                           </span>
                         </div>
                       )}

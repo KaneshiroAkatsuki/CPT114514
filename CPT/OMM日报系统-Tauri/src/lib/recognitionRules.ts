@@ -311,6 +311,10 @@ function applyManualOperatorRecognition(folderName: string, result: Partial<Real
     const operator = manualMatch[1].trim();
     if (isLikelyChineseName(operator)) {
       result.operator = operator;
+      const ommOperator = extractOmmOperator(folderName);
+      if (ommOperator && ommOperator === operator) {
+        pushWarning(warnings, `检测到 OMM 与手量测量员同为“${operator}”；已按普通 OMM 任务和真实手量任务分别统计时间`);
+      }
     } else {
       pushWarning(warnings, `手量测量员“${operator}”不像有效姓名，请人工确认`);
     }
@@ -320,6 +324,12 @@ function applyManualOperatorRecognition(folderName: string, result: Partial<Real
   if (folderName.includes("手量") || folderName.includes("手测")) {
     pushWarning(warnings, "检测到手量/手测，但未识别到“-手量-姓名”格式的测量员，请人工补充");
   }
+}
+
+function extractOmmOperator(folderName: string): string | undefined {
+  const ommMatch = folderName.match(/[-_](?:OMM|OM)-?([^-_\s]+)/i);
+  const operator = ommMatch?.[1]?.trim();
+  return isLikelyChineseName(operator) ? operator : undefined;
 }
 
 function applyQuantityRecognition(folderName: string, result: Partial<RealManualTask>, warnings: string[]) {
