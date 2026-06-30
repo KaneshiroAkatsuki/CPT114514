@@ -1,6 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Config, ConfigLoadInfo, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo } from "@/types/record";
 
+export interface PersonalCleanerOptions {
+  dryRun: boolean;
+  cleanEdge: boolean;
+  keepPasswordsAutofill: boolean;
+  clearSitePreferences: boolean;
+  resetEdge: boolean;
+  clearBookmarks: boolean;
+  clearExtensions: boolean;
+  clearMicrosoftAccount: boolean;
+  clearWindowsNotifications: boolean;
+  clearScreenshotsDays?: number | null;
+  clearClipboardHistory: boolean;
+  clearOpencodeShortcuts: boolean;
+  keepWifiPrefixes: string[];
+  skipBackup: boolean;
+}
+
+export interface PersonalCleanerRunInfo {
+  runId: string;
+  scriptPath: string;
+  logPath: string;
+  summaryPath: string;
+  launched: boolean;
+}
+
+export interface PersonalCleanerLogInfo {
+  log: string;
+  done: boolean;
+  summary?: unknown;
+}
+
 export function useSidecar() {
   const parseFolders = async (baseDir: string, operatorName: string): Promise<ParseFoldersResponse> => {
     return await invoke<ParseFoldersResponse>("sidecar_parse_folders", {
@@ -106,4 +137,16 @@ export function useConfigManager() {
   };
 
   return { loadConfigWithInfo, loadConfig, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules };
+}
+
+export function usePersonalCleaner() {
+  const runPersonalCleaner = async (options: PersonalCleanerOptions): Promise<PersonalCleanerRunInfo> => {
+    return await invoke<PersonalCleanerRunInfo>("run_personal_cleaner", { options });
+  };
+
+  const readPersonalCleanerLog = async (logPath: string, summaryPath: string): Promise<PersonalCleanerLogInfo> => {
+    return await invoke<PersonalCleanerLogInfo>("read_personal_cleaner_log", { logPath, summaryPath });
+  };
+
+  return { runPersonalCleaner, readPersonalCleanerLog };
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, BookOpen, CheckCircle2, FolderOpen, HelpCircle, Info, Keyboard, ListTodo, Settings2 } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, FolderOpen, HelpCircle, Info, Keyboard, ListTodo, Settings2, Wrench } from "lucide-react";
 
 interface HelpCenterDialogProps {
   open: boolean;
@@ -15,6 +15,7 @@ const SECTIONS: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "naming", label: "命名规则", icon: <FolderOpen className="h-4 w-4" /> },
   { key: "fields", label: "字段说明", icon: <Info className="h-4 w-4" /> },
   { key: "complex", label: "复杂文件夹", icon: <Settings2 className="h-4 w-4" /> },
+  { key: "personal-cleaner", label: "个人清理工具", icon: <Wrench className="h-4 w-4" /> },
   { key: "shortcuts", label: "快捷键", icon: <Keyboard className="h-4 w-4" /> },
   { key: "faq", label: "常见问题", icon: <HelpCircle className="h-4 w-4" /> },
   { key: "about", label: "关于", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -192,6 +193,50 @@ function Content({ section }: { section: string }) {
             <AlertTriangle className="inline-block h-4 w-4 mr-1.5 -mt-0.5" />
             选择方案 B 时，报表中的占位符需要生成后手动补全。
           </div>
+        </div>
+      );
+
+    case "personal-cleaner":
+      return (
+        <div className="space-y-3">
+          <h2 className={h2}>个人清理工具</h2>
+          <p className={p}>个人清理工具是面向本机维护的高级页面，和 OMM 日报生成流程相互独立。它调用内置 EdgeCleaner 脚本，执行时需要管理员权限。</p>
+          <div className={warn}>
+            <AlertTriangle className="inline-block h-4 w-4 mr-1.5 -mt-0.5" />
+            建议先点“模拟运行”查看将处理的文件和项目，再点“确认执行”。危险项会在真实执行前二次确认。
+          </div>
+
+          <h3 className={h3}>Edge 标准深度清理</h3>
+          <ul className={ul}>
+            <li>清理历史、Cookie、网站本地存储、缓存、会话、密码、自动填充、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据。</li>
+            <li>默认保留书签、扩展本体、Edge 界面设置和微软账户登录。</li>
+            <li>默认会备份 <code className={code}>Bookmarks</code>、<code className={code}>Preferences</code>、<code className={code}>Secure Preferences</code> 和 <code className={code}>Extensions</code>。</li>
+            <li>勾选“保留密码和自动填充”后，已保存密码和表单/支付自动填充数据不会被清理。</li>
+          </ul>
+
+          <h3 className={h3}>危险 Edge 操作</h3>
+          <ul className={ul}>
+            <li><strong>ResetEdge</strong>：把 Edge 清理到接近初始状态，会强制清理多数用户数据。</li>
+            <li><strong>清书签</strong>：删除 Edge 书签和书签排序数据。</li>
+            <li><strong>清扩展本体</strong>：删除已安装扩展，下次需要重新安装。</li>
+            <li><strong>清微软账户/同步</strong>：清理账户与同步数据，会导致 Edge 退出微软账号登录状态。</li>
+          </ul>
+
+          <h3 className={h3}>Windows / 个人专项</h3>
+          <ul className={ul}>
+            <li><strong>Windows 通知历史</strong>：清理通知中心数据库和通知计数，真实执行时会重启 Explorer/任务栏。</li>
+            <li><strong>截图文件夹</strong>：按最近 N 天删除 <code className={code}>Pictures\Screenshots</code> 里的截图，0 表示不清理。</li>
+            <li><strong>剪贴板历史</strong>：清理 Windows 剪贴板历史，保留固定项，不关闭 Win+V 功能。</li>
+            <li><strong>opencode 快捷方式</strong>：删除开始菜单中名称包含 opencode/OpenCode 的快捷方式。</li>
+            <li><strong>WiFi 配置管理</strong>：填写要保留的 WiFi 前缀后，会忘记不匹配前缀的已保存 WiFi；留空则不处理 WiFi。</li>
+          </ul>
+
+          <h3 className={h3}>日志与结果</h3>
+          <ul className={ul}>
+            <li>页面会把脚本输出写入配置目录下的 <code className={code}>personal-cleaner-logs</code>。</li>
+            <li>如果管理员权限弹窗被取消，日志可能会停留在“等待脚本启动”。</li>
+            <li>清理脚本结束后会写入 JSON 摘要，页面会显示“已完成”。</li>
+          </ul>
         </div>
       );
 

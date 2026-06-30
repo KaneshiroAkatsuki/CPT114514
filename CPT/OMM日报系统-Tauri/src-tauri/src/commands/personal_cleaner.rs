@@ -1,0 +1,306 @@
+use crate::AppState;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{command, AppHandle, Manager, State};
+
+#[derive(Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCleanerOptions {
+    pub dry_run: bool,
+    pub clean_edge: bool,
+    pub keep_passwords_autofill: bool,
+    pub clear_site_preferences: bool,
+    pub reset_edge: bool,
+    pub clear_bookmarks: bool,
+    pub clear_extensions: bool,
+    pub clear_microsoft_account: bool,
+    pub clear_windows_notifications: bool,
+    pub clear_screenshots_days: Option<i64>,
+    pub clear_clipboard_history: bool,
+    pub clear_opencode_shortcuts: bool,
+    #[serde(default)]
+    pub keep_wifi_prefixes: Vec<String>,
+    pub skip_backup: bool,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCleanerRunInfo {
+    pub run_id: String,
+    pub script_path: String,
+    pub log_path: String,
+    pub summary_path: String,
+    pub launched: bool,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCleanerLogInfo {
+    pub log: String,
+    pub done: bool,
+    pub summary: Option<serde_json::Value>,
+}
+
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+fn resolve_cleaner_script(app: &AppHandle) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(
+            resource_dir
+                .join("resources")
+                .join("tools")
+                .join("edge-cleaner")
+                .join("clean-edge.ps1"),
+        );
+        candidates.push(
+            resource_dir
+                .join("tools")
+                .join("edge-cleaner")
+                .join("clean-edge.ps1"),
+        );
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(
+                exe_dir
+                    .join("resources")
+                    .join("tools")
+                    .join("edge-cleaner")
+                    .join("clean-edge.ps1"),
+            );
+            candidates.push(
+                exe_dir
+                    .join("tools")
+                    .join("edge-cleaner")
+                    .join("clean-edge.ps1"),
+            );
+        }
+    }
+
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        candidates.push(
+            PathBuf::from(manifest_dir)
+                .join("resources")
+                .join("tools")
+                .join("edge-cleaner")
+                .join("clean-edge.ps1"),
+        );
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(
+            cwd.join("src-tauri")
+                .join("resources")
+                .join("tools")
+                .join("edge-cleaner")
+                .join("clean-edge.ps1"),
+        );
+        candidates.push(
+            cwd.join("resources")
+                .join("tools")
+                .join("edge-cleaner")
+                .join("clean-edge.ps1"),
+        );
+    }
+
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+fn effective_log_dir(state: &State<AppState>) -> Result<PathBuf, String> {
+    let config = state
+        .config
+        .lock()
+        .map_err(|_| "无法读取配置状态".to_string())?
+        .clone();
+    let base = config.effective_config_dir()?;
+    let dir = base.join("personal-cleaner-logs");
+    fs::create_dir_all(&dir).map_err(|e| format!("无法创建清理日志目录: {}", e))?;
+    Ok(dir)
+}
+
+fn push_switch(args: &mut Vec<String>, enabled: bool, name: &str) {
+    if enabled {
+        args.push(name.to_string());
+    }
+}
+
+fn build_script_args(
+    script_path: &Path,
+    log_path: &Path,
+    summary_path: &Path,
+    options: &PersonalCleanerOptions,
+) -> Vec<String> {
+    let mut args = vec![
+        "-NoProfile".to_string(),
+        "-ExecutionPolicy".to_string(),
+        "Bypass".to_string(),
+        "-File".to_string(),
+        script_path.to_string_lossy().to_string(),
+        "-NoMenu".to_string(),
+        "-LogPath".to_string(),
+        log_path.to_string_lossy().to_string(),
+        "-JsonSummaryPath".to_string(),
+        summary_path.to_string_lossy().to_string(),
+    ];
+
+    push_switch(&mut args, options.dry_run, "-DryRun");
+    push_switch(&mut args, !options.clean_edge, "-SkipEdgeCleaning");
+    push_switch(&mut args, options.skip_backup, "-SkipBackup");
+    if options.keep_passwords_autofill {
+        args.push("-KeepPasswords".to_string());
+        args.push("-KeepAutofill".to_string());
+    }
+    push_switch(
+        &mut args,
+        options.clear_site_preferences,
+        "-ClearSitePreferences",
+    );
+    push_switch(&mut args, options.reset_edge, "-ResetEdge");
+    push_switch(&mut args, options.clear_bookmarks, "-ClearBookmarks");
+    push_switch(&mut args, options.clear_extensions, "-ClearExtensions");
+    push_switch(
+        &mut args,
+        options.clear_microsoft_account,
+        "-ClearMicrosoftAccount",
+    );
+    push_switch(
+        &mut args,
+        options.clear_windows_notifications,
+        "-ClearWindowsNotifications",
+    );
+    if let Some(days) = options.clear_screenshots_days {
+        if days > 0 {
+            args.push("-ClearScreenshotsDays".to_string());
+            args.push(days.min(365).to_string());
+        }
+    }
+    push_switch(
+        &mut args,
+        options.clear_clipboard_history,
+        "-ClearClipboardHistory",
+    );
+    push_switch(
+        &mut args,
+        options.clear_opencode_shortcuts,
+        "-ClearOpencodeShortcuts",
+    );
+
+    let prefixes: Vec<String> = options
+        .keep_wifi_prefixes
+        .iter()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .take(12)
+        .map(|p| p.to_string())
+        .collect();
+    if !prefixes.is_empty() {
+        args.push("-KeepWifiPrefixes".to_string());
+        args.push(prefixes.join(","));
+    }
+
+    args
+}
+
+fn quote_for_windows_command_line(arg: &str) -> String {
+    if arg.is_empty() {
+        return "\"\"".to_string();
+    }
+    let needs_quotes = arg.chars().any(|c| c.is_whitespace() || c == '"');
+    if !needs_quotes {
+        return arg.to_string();
+    }
+    let escaped = arg.replace('"', "\\\"");
+    format!("\"{}\"", escaped)
+}
+
+fn ps_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+#[command]
+pub async fn run_personal_cleaner(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    options: PersonalCleanerOptions,
+) -> Result<PersonalCleanerRunInfo, String> {
+    let script_path = resolve_cleaner_script(&app).ok_or_else(|| {
+        "未找到内置个人清理脚本 resources/tools/edge-cleaner/clean-edge.ps1".to_string()
+    })?;
+    let log_dir = effective_log_dir(&state)?;
+    let run_id = format!("cleaner-{}", now_millis());
+    let log_path = log_dir.join(format!("{}.log", run_id));
+    let summary_path = log_dir.join(format!("{}.json", run_id));
+
+    let script_args = build_script_args(&script_path, &log_path, &summary_path, &options);
+    let argument_line = script_args
+        .iter()
+        .map(|arg| quote_for_windows_command_line(arg))
+        .collect::<Vec<String>>()
+        .join(" ");
+
+    let command = format!(
+        "Start-Process -FilePath {} -ArgumentList {} -Verb RunAs -WindowStyle Normal",
+        ps_single_quote("powershell.exe"),
+        ps_single_quote(&argument_line)
+    );
+
+    Command::new("powershell.exe")
+        .arg("-NoProfile")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-Command")
+        .arg(command)
+        .spawn()
+        .map_err(|e| format!("无法启动个人清理工具: {}", e))?;
+
+    Ok(PersonalCleanerRunInfo {
+        run_id,
+        script_path: script_path.to_string_lossy().to_string(),
+        log_path: log_path.to_string_lossy().to_string(),
+        summary_path: summary_path.to_string_lossy().to_string(),
+        launched: true,
+    })
+}
+
+#[command]
+pub async fn read_personal_cleaner_log(
+    state: State<'_, AppState>,
+    log_path: String,
+    summary_path: String,
+) -> Result<PersonalCleanerLogInfo, String> {
+    let log_dir = effective_log_dir(&state)?;
+    for path in [&log_path, &summary_path] {
+        let parent = Path::new(path)
+            .parent()
+            .ok_or_else(|| "日志路径无效".to_string())?;
+        if parent != log_dir {
+            return Err("只能读取个人清理工具日志目录中的文件".to_string());
+        }
+    }
+
+    let log = fs::read_to_string(&log_path).unwrap_or_else(|_| {
+        if Path::new(&log_path).exists() {
+            "日志文件暂时不可读，可能正在写入中。".to_string()
+        } else {
+            "等待管理员权限确认或脚本启动...".to_string()
+        }
+    });
+
+    let summary = fs::read_to_string(&summary_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok());
+    let done = summary.is_some();
+
+    Ok(PersonalCleanerLogInfo { log, done, summary })
+}

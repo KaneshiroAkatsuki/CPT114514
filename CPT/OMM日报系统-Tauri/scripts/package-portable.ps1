@@ -49,6 +49,7 @@ $zipPath = Join-Path $OutDir ($portableBaseName + ".zip")
 $srcExe = Join-Path $SourceDir "app.exe"
 $srcSidecar = Join-Path (Join-Path (Join-Path $ROOT "src-tauri") "binaries") "generate_report.exe"
 $srcTemplate = Join-Path (Join-Path (Join-Path $ROOT "src-tauri") "resources") "template.xlsx"
+$srcCleanerDir = Join-Path (Join-Path (Join-Path (Join-Path $ROOT "src-tauri") "resources") "tools") "edge-cleaner"
 
 if (-not $SkipBuildCheck -and -not (Test-Path $srcExe)) {
     throw "App exe not found: $srcExe (Tauri builds target\release\app.exe)`nRun first: npm run tauri-build"
@@ -59,6 +60,9 @@ if (-not (Test-Path $srcSidecar)) {
 if (-not (Test-Path $srcTemplate)) {
     throw "Bundled template not found: $srcTemplate"
 }
+if (-not (Test-Path (Join-Path $srcCleanerDir "clean-edge.ps1"))) {
+    throw "Personal cleaner script not found: $srcCleanerDir"
+}
 
 if (Test-Path $portableDir) {
     Remove-Item -LiteralPath $portableDir -Recurse -Force
@@ -66,10 +70,13 @@ if (Test-Path $portableDir) {
 New-Item -ItemType Directory -Path $innerDir -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $innerDir "binaries") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $innerDir "resources") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path (Join-Path (Join-Path $innerDir "resources") "tools") "edge-cleaner") -Force | Out-Null
 
 Copy-Item -Path $srcExe -Destination (Join-Path $innerDir ($appName + ".exe")) -Force
 Copy-Item -Path $srcSidecar -Destination (Join-Path (Join-Path $innerDir "binaries") "generate_report.exe") -Force
 Copy-Item -Path $srcTemplate -Destination (Join-Path (Join-Path $innerDir "resources") "template.xlsx") -Force
+Copy-Item -Path (Join-Path $srcCleanerDir "clean-edge.ps1") -Destination (Join-Path (Join-Path (Join-Path (Join-Path $innerDir "resources") "tools") "edge-cleaner") "clean-edge.ps1") -Force
+Copy-Item -Path (Join-Path $srcCleanerDir "clean-edge.bat") -Destination (Join-Path (Join-Path (Join-Path (Join-Path $innerDir "resources") "tools") "edge-cleaner") "clean-edge.bat") -Force
 
 function Get-FileSha256($path) {
     if (Test-Path $path) {
@@ -97,6 +104,16 @@ $manifest = @{
             role   = "template"
             path   = "resources\template.xlsx"
             sha256 = Get-FileSha256 (Join-Path (Join-Path $innerDir "resources") "template.xlsx")
+        },
+        @{
+            role   = "personal_cleaner_script"
+            path   = "resources\tools\edge-cleaner\clean-edge.ps1"
+            sha256 = Get-FileSha256 (Join-Path (Join-Path (Join-Path (Join-Path $innerDir "resources") "tools") "edge-cleaner") "clean-edge.ps1")
+        },
+        @{
+            role   = "personal_cleaner_launcher"
+            path   = "resources\tools\edge-cleaner\clean-edge.bat"
+            sha256 = Get-FileSha256 (Join-Path (Join-Path (Join-Path (Join-Path $innerDir "resources") "tools") "edge-cleaner") "clean-edge.bat")
         }
     )
 }

@@ -148,6 +148,8 @@ pub fn run() {
             commands::config::sync_config_state,
             commands::config::load_recognition_rules,
             commands::config::save_recognition_rules,
+            commands::personal_cleaner::run_personal_cleaner,
+            commands::personal_cleaner::read_personal_cleaner_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

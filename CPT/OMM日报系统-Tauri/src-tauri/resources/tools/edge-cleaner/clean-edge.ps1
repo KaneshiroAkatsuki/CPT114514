@@ -1,0 +1,1478 @@
+﻿#Requires -RunAsAdministrator
+<#
+.SYNOPSIS
+    Microsoft Edge 深度补充清理工具
+.DESCRIPTION
+    设计为在 Edge 自带"清除浏览数据"之后使用，清理其容易遗漏的底层隐私数据。
+
+    默认行为（最常用）：
+      清理：历史记录、Cookie、网站本地存储、缓存、会话、密码、自动填充、站点设置
+      保留：书签、扩展本体、浏览器设置、微软账户登录状态
+
+    可选开关允许手动清理/保留更多项目。
+    除非明确使用 -ResetEdge，否则不会把 Edge 恢复出厂设置。
+#>
+
+param(
+    # 隐私类：默认清理，加 -KeepXxx 可保留
+    [switch]$KeepCookies,
+    [switch]$KeepHistory,
+    [switch]$KeepSiteStorage,
+    [switch]$KeepSessions,
+    [switch]$KeepPasswords,
+    [switch]$KeepAutofill,
+
+    # 用户资产类：默认保留，加 -ClearXxx 可清理
+    [switch]$ClearBookmarks,
+    [switch]$ClearExtensions,
+    [switch]$ClearSettings,
+    [switch]$ClearMicrosoftAccount,
+
+    # 单独把“站点设置/权限”独立出来，因为直接删 Preferences 会导致界面重置
+    [switch]$ClearSitePreferences,
+
+    # 极端选项：把 Edge 恢复到接近初始状态（仍不会删除整个 User Data 目录）
+    [switch]$ResetEdge,
+
+    # 跳过交互菜单（命令行模式）
+    [switch]$NoMenu,
+
+    # 清理 Windows 通知历史记录（不影响通知权限设置）
+    [switch]$ClearWindowsNotifications,
+
+    # 清理截图文件夹：指定删除最近 N 天，0 表示不清理（默认）
+    [int]$ClearScreenshotsDays = 0,
+
+    # 清理 Windows 剪贴板历史（保留固定项，不影响剪贴板功能）
+    [switch]$ClearClipboardHistory,
+
+    # 清理 opencode 在开始菜单生成的快捷方式
+    [switch]$ClearOpencodeShortcuts,
+
+    # 管理已知 WiFi：保留指定前缀的 WiFi，删除/忘记其他
+    [string[]]$KeepWifiPrefixes,
+
+    # 跳过清理前关键 Edge 数据备份（默认会备份 Bookmarks / Preferences / Extensions）
+    [switch]$SkipBackup,
+
+    # 跳过 Edge 浏览器数据模块，仅执行 Windows/个人专项清理
+    [switch]$SkipEdgeCleaning,
+
+    # 日志输出路径（由 Tauri 页面传入，用于界面轮询显示）
+    [string]$LogPath,
+
+    # JSON 结果摘要路径（由 Tauri 页面传入，用于判断脚本是否结束）
+    [string]$JsonSummaryPath,
+
+    # 模拟运行
+    [switch]$DryRun
+)
+
+$ErrorActionPreference = "Stop"
+
+$script:TranscriptStarted = $false
+if (-not [string]::IsNullOrWhiteSpace($LogPath)) {
+    try {
+        $logDir = Split-Path -Parent $LogPath
+        if (-not [string]::IsNullOrWhiteSpace($logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+        Start-Transcript -Path $LogPath -Force | Out-Null
+        $script:TranscriptStarted = $true
+    } catch {
+        Write-Host "无法启动日志记录: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+if ($KeepWifiPrefixes) {
+    $KeepWifiPrefixes = @(
+        $KeepWifiPrefixes |
+            ForEach-Object { $_ -split ',' } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne '' }
+    )
+}
+
+$script:UserDataRoot = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
+$script:ToolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:CleanEdgeModule = $true
+$script:CleanEdgeCaches = $true
+$script:CleanExtensionRuntime = $true
+$script:CleanMetadata = $true
+$script:CleanSecurityData = $true
+$script:CleanDiagnostics = $true
+$script:CleanOtherTempData = $true
+$script:CleanGlobalEdgeData = $true
+$script:CleanSystemTempData = $true
+
+function Write-Step {
+    param([string]$Message)
+    Write-Host "`n[+] $Message" -ForegroundColor Cyan
+}
+
+function Write-SubStep {
+    param([string]$Message)
+    Write-Host "    - $Message" -ForegroundColor Gray
+}
+
+function Write-Deep {
+    param([string]$Message)
+    Write-Host "      [深度项] $Message" -ForegroundColor DarkYellow
+}
+
+function Write-Success {
+    param([string]$Message)
+    Write-Host "    √ $Message" -ForegroundColor Green
+}
+
+function Write-Warn {
+    param([string]$Message)
+    Write-Host "    ! $Message" -ForegroundColor Yellow
+}
+
+function Stop-EdgeProcesses {
+    Write-Step "正在关闭 Microsoft Edge 进程..."
+    $edgeProcesses = Get-Process -Name "msedge" -ErrorAction SilentlyContinue
+    if ($edgeProcesses) {
+        if ($DryRun) {
+            Write-Host "        [模拟关闭] 找到 $($edgeProcesses.Count) 个 Edge 进程" -ForegroundColor DarkCyan
+            return
+        }
+        $edgeProcesses | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+        Start-Sleep -Seconds 2
+        $stillRunning = Get-Process -Name "msedge" -ErrorAction SilentlyContinue
+        if ($stillRunning) {
+            $stillRunning | Stop-Process -Force
+            Start-Sleep -Seconds 2
+        }
+        Write-Success "Edge 已关闭"
+    } else {
+        Write-Success "Edge 未运行"
+    }
+}
+
+function Get-EdgeProfileDirs {
+    if (-not (Test-Path $script:UserDataRoot)) { return @() }
+
+    $profiles = @()
+    $defaultProfile = Join-Path $script:UserDataRoot "Default"
+    if (Test-Path $defaultProfile) { $profiles += $defaultProfile }
+
+    Get-ChildItem -Path $script:UserDataRoot -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "Profile *" -or $_.Name -eq "Guest Profile" } |
+        ForEach-Object { $profiles += $_.FullName }
+
+    return $profiles | Sort-Object -Unique
+}
+
+function Backup-EdgeKeyData {
+    param(
+        [string[]]$ProfileDirs,
+        [switch]$IsDryRun
+    )
+
+    if (-not $ProfileDirs -or $ProfileDirs.Count -eq 0) {
+        Write-Host "        未找到 Edge Profile，跳过备份" -ForegroundColor Gray
+        return 0
+    }
+
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backupRoot = Join-Path $script:ToolRoot "backups\$timestamp"
+    $count = 0
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟备份] $backupRoot" -ForegroundColor DarkCyan
+    } else {
+        New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($profileDir in $ProfileDirs) {
+        $profileName = Split-Path $profileDir -Leaf
+        $profileBackup = Join-Path $backupRoot $profileName
+        if (-not $IsDryRun) {
+            New-Item -Path $profileBackup -ItemType Directory -Force | Out-Null
+        }
+
+        $itemsToBackup = @(
+            "Bookmarks",
+            "Bookmarks.bak",
+            "Preferences",
+            "Secure Preferences",
+            "Extensions"
+        )
+
+        foreach ($name in $itemsToBackup) {
+            $source = Join-Path $profileDir $name
+            if (-not (Test-Path $source)) { continue }
+
+            $destination = Join-Path $profileBackup $name
+            try {
+                if ($IsDryRun) {
+                    Write-Host "        [模拟备份] $source -> $destination" -ForegroundColor DarkCyan
+                } else {
+                    Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force -ErrorAction Stop
+                    Write-Host "        已备份: $source" -ForegroundColor DarkGreen
+                }
+                $count++
+            } catch {
+                Write-Host "        无法备份: $source - $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    if (-not $IsDryRun -and $count -gt 0) {
+        $manifest = [ordered]@{
+            CreatedAt = (Get-Date).ToString("o")
+            UserDataRoot = $script:UserDataRoot
+            Profiles = @($ProfileDirs | ForEach-Object { Split-Path $_ -Leaf })
+            Items = @("Bookmarks", "Bookmarks.bak", "Preferences", "Secure Preferences", "Extensions")
+        }
+        $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
+        Write-Host "        备份目录: $backupRoot" -ForegroundColor Green
+    }
+
+    return $count
+}
+
+function Remove-EdgeItems {
+    param(
+        [string]$BaseDir,
+        [string[]]$Patterns
+    )
+
+    $count = 0
+    foreach ($pattern in $Patterns) {
+        $searchPath = Join-Path $BaseDir $pattern
+        $parent = Split-Path -Parent $searchPath
+        $filter = Split-Path -Leaf $searchPath
+
+        if (-not (Test-Path $parent)) { continue }
+
+        $items = Get-ChildItem -Path $parent -Filter $filter -Recurse -Force -ErrorAction SilentlyContinue
+        foreach ($item in $items) {
+            try {
+                if ($DryRun) {
+                    Write-Host "        [模拟删除] $($item.FullName)" -ForegroundColor DarkCyan
+                } else {
+                    Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
+                    Write-Host "        已删除: $($item.FullName)" -ForegroundColor DarkGreen
+                }
+                $count++
+            } catch {
+                Write-Host "        无法删除: $($item.FullName)" -ForegroundColor Red
+            }
+        }
+    }
+    return $count
+}
+
+function Remove-GlobalItems {
+    param(
+        [string[]]$Names
+    )
+
+    $count = 0
+    foreach ($name in $Names) {
+        $path = Join-Path $script:UserDataRoot $name
+        if (-not (Test-Path $path)) { continue }
+        try {
+            if ($DryRun) {
+                Write-Host "        [模拟删除] $path" -ForegroundColor DarkCyan
+            } else {
+                Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+                Write-Host "        已删除: $path" -ForegroundColor DarkGreen
+            }
+            $count++
+        } catch {
+            Write-Host "        无法删除: $path" -ForegroundColor Red
+        }
+    }
+    return $count
+}
+
+function Show-Summary {
+    param(
+        [System.Collections.Specialized.OrderedDictionary]$Results,
+        [hashtable]$Skipped,
+        [hashtable]$DeepItems,
+        [hashtable]$Choices
+    )
+
+    Write-Host "`n========================================" -ForegroundColor White
+    Write-Host "           清 理 结 果 汇 总              " -ForegroundColor White
+    Write-Host "========================================" -ForegroundColor White
+
+    foreach ($category in $Results.Keys) {
+        $isDeep = if ($DeepItems[$category]) { "（深度项）" } else { "" }
+        Write-Host "  √ $category $isDeep : $($Results[$category]) 项" -ForegroundColor Green
+    }
+
+    Write-Host "`n  本次处理策略：" -ForegroundColor Cyan
+    foreach ($key in $Choices.Keys | Sort-Object) {
+        if ($key -eq "清理前备份") {
+            $status = if ($Choices[$key]) { "启用" } else { "跳过" }
+        } else {
+            $status = if ($Choices[$key]) { "清理" } else { "保留" }
+        }
+        $color = if ($Choices[$key]) { "Green" } else { "Yellow" }
+        Write-Host "    - $key : $status" -ForegroundColor $color
+    }
+
+    Write-Host "========================================" -ForegroundColor White
+}
+
+function Show-DeepExplanation {
+    Write-Host "`n[说明] 以下项目是 Edge 自带'清除浏览数据'容易遗漏的深度项：" -ForegroundColor Cyan
+    Write-Host "  1. IndexedDB / Local Storage / Session Storage：网站本地数据库" -ForegroundColor Gray
+    Write-Host "  2. Service Worker / File System / blob_storage：后台脚本与文件缓存" -ForegroundColor Gray
+    Write-Host "  3. GPUCache / Code Cache / ShaderCache：渲染与着色器缓存" -ForegroundColor Gray
+    Write-Host "  4. Extension State / Rules / Scripts：扩展的运行时缓存与规则" -ForegroundColor Gray
+    Write-Host "  5. Safe Browsing / TransportSecurity / DIPS：安全与隐私状态" -ForegroundColor Gray
+    Write-Host "  6. BrowserMetrics / crashpad / *.log：诊断、崩溃报告与日志" -ForegroundColor Gray
+}
+
+function Read-MultiSelect {
+    param(
+        [string]$Prompt,
+        [string[]]$Allowed,
+        [string[]]$Default = @()
+    )
+
+    $allowedSet = @{}
+    foreach ($item in $Allowed) { $allowedSet[$item.ToLowerInvariant()] = $true }
+    $defaultText = if ($Default.Count -gt 0) { " [$($Default -join ',')]" } else { "" }
+
+    while ($true) {
+        $inputText = Read-Host "$Prompt$defaultText"
+        if ([string]::IsNullOrWhiteSpace($inputText)) { return $Default }
+
+        $tokens = $inputText -split '[,，\s]+' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ -ne '' }
+        $invalid = @($tokens | Where-Object { -not $allowedSet.ContainsKey($_) })
+        if ($invalid.Count -eq 0) { return @($tokens | Select-Object -Unique) }
+
+        Write-Warn "无效输入: $($invalid -join ', ')"
+    }
+}
+
+function Set-EdgeCleaningDisabled {
+    $script:CleanEdgeModule = $false
+    $script:KeepHistory = $true
+    $script:KeepCookies = $true
+    $script:KeepSiteStorage = $true
+    $script:KeepSessions = $true
+    $script:KeepPasswords = $true
+    $script:KeepAutofill = $true
+    $script:ClearSitePreferences = $false
+    $script:ClearSettings = $false
+    $script:ClearBookmarks = $false
+    $script:ClearExtensions = $false
+    $script:ClearMicrosoftAccount = $false
+    $script:CleanEdgeCaches = $false
+    $script:CleanExtensionRuntime = $false
+    $script:CleanMetadata = $false
+    $script:CleanSecurityData = $false
+    $script:CleanDiagnostics = $false
+    $script:CleanOtherTempData = $false
+    $script:CleanGlobalEdgeData = $false
+    $script:CleanSystemTempData = $false
+}
+
+function Show-EdgeSubMenu {
+    Write-Host "`nEdge 子项目（可多选，直接回车使用推荐项）：" -ForegroundColor Cyan
+    Write-Host "  1  历史记录、下载索引、Top Sites、预测数据" -ForegroundColor White
+    Write-Host "  2  Cookie 与站点凭证" -ForegroundColor White
+    Write-Host "  3  网站本地存储（IndexedDB / Local Storage / Service Worker）" -ForegroundColor White
+    Write-Host "  4  缓存（Cache / Code Cache / GPUCache / ShaderCache）" -ForegroundColor White
+    Write-Host "  5  会话与恢复数据" -ForegroundColor White
+    Write-Host "  6  已保存密码" -ForegroundColor White
+    Write-Host "  7  自动填充与付款表单" -ForegroundColor White
+    Write-Host "  8  站点设置与权限（保留界面 Preferences）" -ForegroundColor White
+    Write-Host "  9  浏览器界面设置（会删除 Preferences）" -ForegroundColor Yellow
+    Write-Host "  10 书签" -ForegroundColor Yellow
+    Write-Host "  11 扩展运行时缓存" -ForegroundColor White
+    Write-Host "  12 扩展本体" -ForegroundColor Yellow
+    Write-Host "  13 微软账户与同步数据" -ForegroundColor Yellow
+    Write-Host "  14 缩略图、Favicons、Shortcuts 等站点元数据" -ForegroundColor White
+    Write-Host "  15 安全与隐私状态（HSTS / DIPS / Reporting）" -ForegroundColor White
+    Write-Host "  16 诊断日志、崩溃报告和临时数据" -ForegroundColor White
+    Write-Host "  A  全选（激进，不等同 ResetEdge；扩展本体仍需包含 12）" -ForegroundColor Gray
+
+    $default = @('1','2','3','4','5','6','7','11','14','15','16')
+    $edgeChoices = Read-MultiSelect -Prompt "输入 Edge 子项目编号" -Allowed @('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','a') -Default $default
+    if ($edgeChoices -contains 'a') {
+        $edgeChoices = @('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16')
+    }
+
+    $script:KeepHistory = -not ($edgeChoices -contains '1')
+    $script:KeepCookies = -not ($edgeChoices -contains '2')
+    $script:KeepSiteStorage = -not ($edgeChoices -contains '3')
+    $script:CleanEdgeCaches = ($edgeChoices -contains '4')
+    $script:KeepSessions = -not ($edgeChoices -contains '5')
+    $script:KeepPasswords = -not ($edgeChoices -contains '6')
+    $script:KeepAutofill = -not ($edgeChoices -contains '7')
+    $script:ClearSitePreferences = ($edgeChoices -contains '8')
+    $script:ClearSettings = ($edgeChoices -contains '9')
+    $script:ClearBookmarks = ($edgeChoices -contains '10')
+    $script:CleanExtensionRuntime = ($edgeChoices -contains '11')
+    $script:ClearExtensions = ($edgeChoices -contains '12')
+    $script:ClearMicrosoftAccount = ($edgeChoices -contains '13')
+    $script:CleanMetadata = ($edgeChoices -contains '14')
+    $script:CleanSecurityData = ($edgeChoices -contains '15')
+    $script:CleanDiagnostics = ($edgeChoices -contains '16')
+    $script:CleanOtherTempData = ($edgeChoices -contains '16')
+    $script:CleanGlobalEdgeData = ($edgeChoices | Where-Object { $_ -in @('14','15','16') }).Count -gt 0
+    $script:CleanSystemTempData = ($edgeChoices -contains '16')
+}
+
+function Show-Menu {
+    Write-Host "`n请选择要清理的大类（可多选，用逗号分隔）：" -ForegroundColor Cyan
+    Write-Host "  1. Edge 浏览器数据（进入子菜单）" -ForegroundColor White
+    Write-Host "  2. Windows 通知中心/操作中心通知卡片" -ForegroundColor White
+    Write-Host "  3. 截图文件夹" -ForegroundColor White
+    Write-Host "  4. Windows 剪贴板历史" -ForegroundColor White
+    Write-Host "  5. opencode 开始菜单快捷方式" -ForegroundColor White
+    Write-Host "  6. WiFi 配置文件" -ForegroundColor White
+    Write-Host "  D. 模拟运行（不会真删）" -ForegroundColor Gray
+    Write-Host "  R. ResetEdge 激进模式" -ForegroundColor Yellow
+
+    $modules = Read-MultiSelect -Prompt "输入大类编号" -Allowed @('1','2','3','4','5','6','d','r') -Default @('1')
+
+    if ($modules -contains 'd') { $script:DryRun = $true }
+    if ($modules -contains 'r') {
+        $script:ResetEdge = $true
+        if (-not ($modules -contains '1')) { $modules += '1' }
+    }
+
+    if ($modules -contains '1') {
+        $script:CleanEdgeModule = $true
+        if (-not $script:ResetEdge) { Show-EdgeSubMenu }
+    } else {
+        Set-EdgeCleaningDisabled
+    }
+
+    $script:ClearWindowsNotifications = ($modules -contains '2')
+    if ($modules -contains '3') {
+        do {
+            $daysInput = Read-Host "删除截图文件夹中最近 N 天的截图（0 = 不清理，1 = 今天，2 = 今天+昨天）"
+        } while ($daysInput -notmatch '^\d+$')
+        $script:ClearScreenshotsDays = [int]$daysInput
+    } else {
+        $script:ClearScreenshotsDays = 0
+    }
+    $script:ClearClipboardHistory = ($modules -contains '4')
+    $script:ClearOpencodeShortcuts = ($modules -contains '5')
+    if ($modules -contains '6') {
+        $wifiInput = Read-Host "保留哪些 WiFi 前缀（多个用逗号分隔，如 cpt3；留空 = 不保留任何前缀）"
+        $script:KeepWifiPrefixes = ($wifiInput -split ',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+        if ($script:KeepWifiPrefixes.Count -eq 0) {
+            Write-Warn "未输入保留前缀；将忘记所有已保存 WiFi 配置文件"
+            $script:KeepWifiPrefixes = @('__KEEP_NOTHING__')
+        }
+    }
+}
+
+function Clear-PreferencesSiteSettings {
+    param(
+        [string]$ProfileDir,
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+    $prefsPath = Join-Path $ProfileDir "Preferences"
+
+    if (-not (Test-Path $prefsPath)) { return 0 }
+
+    try {
+        if ($IsDryRun) {
+            Write-Host "        [模拟修改] $prefsPath" -ForegroundColor DarkCyan
+            return 1
+        }
+
+        $content = Get-Content -Path $prefsPath -Raw -Encoding utf8 -ErrorAction Stop
+        $json = $content | ConvertFrom-Json -ErrorAction Stop
+
+        $keysToRemove = @(
+            'content_settings'
+            'default_content_setting_values'
+            'password_hash_data_list'
+            'background_password_check'
+            'edge_password_is_using_new_login_db_path'
+            'edge_password_login_db_path_flip_flop_count'
+            'were_old_google_logins_removed'
+            'last_time_password_store_metrics_reported'
+            'last_time_obsolete_http_credentials_removed'
+        )
+
+        foreach ($key in $keysToRemove) {
+            if (Get-Member -InputObject $json.profile -Name $key -MemberType Properties -ErrorAction SilentlyContinue) {
+                $json.profile.PSObject.Properties.Remove($key)
+            }
+        }
+
+        $newContent = $json | ConvertTo-Json -Depth 100 -Compress
+        Set-Content -Path $prefsPath -Value $newContent -Encoding utf8 -NoNewline -ErrorAction Stop
+        Write-Host "        已清理站点设置: $prefsPath" -ForegroundColor DarkGreen
+        $count++
+    } catch {
+        Write-Host "        无法修改 $prefsPath - $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    return $count
+}
+
+function Clear-WindowsNotificationHistory {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+
+    # 方法1: 调用 Windows Runtime API。部分 PowerShell 会话会返回 0x80070490，失败后继续走数据库方案。
+    try {
+        if ($IsDryRun) {
+            Write-Host "        [模拟调用] ToastNotificationManager.History.Clear()" -ForegroundColor DarkCyan
+            $count++
+        } else {
+            $null = Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+            [Windows.UI.Notifications.ToastNotificationManager]::History.Clear() | Out-Null
+            Write-Host "        已清空通知中心显示" -ForegroundColor DarkGreen
+            $count++
+        }
+    } catch {
+        Write-Host "        无法通过 API 清空通知中心: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    # 方法2: 停止 WPN 服务并删除通知数据库。数据库通常被 WpnUserService_* 或 WpnService 锁定。
+    $serviceNames = @()
+    $serviceNames += Get-Service -Name "WpnUserService*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $serviceNames += Get-Service -Name "WpnService" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $serviceNames = @($serviceNames | Sort-Object -Unique)
+    $stoppedServices = @()
+
+    foreach ($serviceName in $serviceNames) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟停止服务] $serviceName" -ForegroundColor DarkCyan
+                $stoppedServices += $serviceName
+                continue
+            }
+
+            $svc = Get-Service -Name $serviceName -ErrorAction Stop
+            if ($svc.Status -ne 'Stopped') {
+                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 700
+            }
+
+            $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -ne 'Stopped') {
+                $query = sc.exe queryex $serviceName 2>$null
+                $pidLine = $query | Select-String 'PID\s*:\s*(\d+)'
+                if ($pidLine -and [int]$pidLine.Matches[0].Groups[1].Value -gt 0) {
+                    $pid = [int]$pidLine.Matches[0].Groups[1].Value
+                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    Start-Sleep -Milliseconds 700
+                }
+            }
+
+            Write-Host "        已停止通知服务: $serviceName" -ForegroundColor DarkGreen
+            $stoppedServices += $serviceName
+            $count++
+        } catch {
+            Write-Host "        无法停止通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    $notificationDir = "$env:LOCALAPPDATA\Microsoft\Windows\Notifications"
+    $notificationPatterns = @(
+        "wpndatabase.db",
+        "wpndatabase.db-wal",
+        "wpndatabase.db-shm",
+        "wpndatabase.db-journal",
+        "wpndatabase.db-*"
+    )
+
+    if (Test-Path $notificationDir) {
+        $processedNotificationFiles = @{}
+        foreach ($pattern in $notificationPatterns) {
+            Get-ChildItem -Path $notificationDir -Filter $pattern -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($processedNotificationFiles.ContainsKey($_.FullName)) { return }
+                $processedNotificationFiles[$_.FullName] = $true
+                try {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟删除] $($_.FullName)" -ForegroundColor DarkCyan
+                    } else {
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                        Write-Host "        已删除通知数据库文件: $($_.FullName)" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                } catch {
+                    Write-Host "        无法删除通知数据库文件: $($_.FullName) - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+        }
+    } else {
+        Write-Host "        通知数据库目录不存在: $notificationDir" -ForegroundColor Gray
+    }
+
+    # 方法3: 清理通知设置中的历史计数和时间戳。
+    $settingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
+    if (Test-Path $settingsPath) {
+        try {
+            Get-ChildItem -Path $settingsPath -ErrorAction SilentlyContinue | ForEach-Object {
+                $itemPath = $_.PSPath
+                $props = Get-ItemProperty -Path $itemPath -ErrorAction SilentlyContinue
+                $propNames = $props.PSObject.Properties.Name | Where-Object { $_ -match 'LastNotificationAddedTime|PeriodicNotificationCount|PeriodicInteractionCount|IsOptOutCandidate' }
+                foreach ($propName in $propNames) {
+                    try {
+                        if ($IsDryRun) {
+                            Write-Host "        [模拟清理] $($_.PSChildName) -> $propName" -ForegroundColor DarkCyan
+                        } else {
+                            Remove-ItemProperty -Path $itemPath -Name $propName -ErrorAction Stop
+                            Write-Host "        已清理: $($_.PSChildName) -> $propName" -ForegroundColor DarkGreen
+                        }
+                        $count++
+                    } catch {
+                        Write-Host "        无法清理: $($_.PSChildName) -> $propName" -ForegroundColor Yellow
+                    }
+                }
+            }
+        } catch {
+            Write-Host "        无法读取通知设置注册表: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    # 方法4: 重启相关服务和 Shell UI，让操作中心重新读取空数据库。
+    foreach ($serviceName in $stoppedServices) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟启动服务] $serviceName" -ForegroundColor DarkCyan
+            } else {
+                Start-Service -Name $serviceName -ErrorAction SilentlyContinue
+                Write-Host "        已启动通知服务: $serviceName" -ForegroundColor DarkGreen
+            }
+        } catch {
+            Write-Host "        无法启动通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    $shellProcesses = @("ShellExperienceHost", "StartMenuExperienceHost", "RuntimeBroker")
+    foreach ($processName in $shellProcesses) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟刷新 UI] $processName" -ForegroundColor DarkCyan
+            } else {
+                Get-Process -Name $processName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
+
+    try {
+        if (-not $IsDryRun) {
+            Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 800
+            Start-Process explorer.exe | Out-Null
+            Write-Host "        已重启 Explorer 刷新通知中心界面" -ForegroundColor DarkGreen
+            $count++
+        } else {
+            Write-Host "        [模拟重启] explorer.exe" -ForegroundColor DarkCyan
+            $count++
+        }
+    } catch {
+        Write-Host "        无法重启 Explorer: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    return $count
+}
+
+function Clear-Screenshots {
+    param(
+        [int]$DaysToDelete,
+        [switch]$IsDryRun,
+        [switch]$RequireConfirm
+    )
+
+    $count = 0
+    $screenshotsDir = "$env:USERPROFILE\Pictures\Screenshots"
+
+    if (-not (Test-Path $screenshotsDir)) {
+        Write-Host "        截图目录不存在: $screenshotsDir" -ForegroundColor Gray
+        return 0
+    }
+
+    if ($DaysToDelete -lt 0) { $DaysToDelete = 0 }
+
+    # 计算截止时间：删除最近 N 天（含当天）的文件
+    $cutoff = (Get-Date).Date.AddDays(-$DaysToDelete)
+
+    $itemsToDelete = Get-ChildItem -Path $screenshotsDir -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTime -ge $cutoff }
+
+    $totalSize = ($itemsToDelete | Measure-Object -Property Length -Sum).Sum
+    $sizeText = if ($totalSize -gt 1GB) { "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -gt 1MB) { "{0:N2} MB" -f ($totalSize / 1MB) } elseif ($totalSize -gt 1KB) { "{0:N2} KB" -f ($totalSize / 1KB) } else { "$totalSize B" }
+
+    if ($DaysToDelete -eq 0) {
+        Write-Host "        不清理截图" -ForegroundColor Gray
+        return 0
+    }
+
+    Write-Host "        将删除 $($itemsToDelete.Count) 个文件（约 $sizeText），删除 $($cutoff.ToString('yyyy-MM-dd')) 之后的截图" -ForegroundColor Yellow
+
+    if ($RequireConfirm -and -not $IsDryRun) {
+        $confirm = Read-Host "        确认删除这些截图？输入 'yes' 确认"
+        if ($confirm -ne 'yes') {
+            Write-Host "        已取消截图清理" -ForegroundColor Yellow
+            return 0
+        }
+    }
+
+    foreach ($item in $itemsToDelete) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟删除] $($item.FullName)" -ForegroundColor DarkCyan
+            } else {
+                Remove-Item -Path $item.FullName -Force -ErrorAction Stop
+                Write-Host "        已删除: $($item.FullName)" -ForegroundColor DarkGreen
+            }
+            $count++
+        } catch {
+            Write-Host "        无法删除: $($item.FullName)" -ForegroundColor Red
+        }
+    }
+
+    return $count
+}
+
+function Clear-ClipboardHistory {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+
+    # 方法1: 调用 Windows Runtime API 清空剪贴板历史界面
+    try {
+        if ($IsDryRun) {
+            Write-Host "        [模拟调用] Clipboard.ClearHistory()" -ForegroundColor DarkCyan
+            $count++
+        } else {
+            $null = Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue
+            [Windows.ApplicationModel.DataTransfer.Clipboard, Windows.ApplicationModel.DataTransfer, ContentType = WindowsRuntime] | Out-Null
+            [Windows.ApplicationModel.DataTransfer.Clipboard]::ClearHistory() | Out-Null
+            Write-Host "        已通过 API 清空剪贴板历史界面" -ForegroundColor DarkGreen
+            $count++
+        }
+    } catch {
+        Write-Host "        无法通过 API 清空剪贴板历史: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    # 方法2: 删除剪贴板历史数据目录
+    $historyDir = "$env:LOCALAPPDATA\Microsoft\Windows\Clipboard\HistoryData"
+
+    if (-not (Test-Path $historyDir)) {
+        Write-Host "        剪贴板历史目录不存在: $historyDir" -ForegroundColor Gray
+    } else {
+        Get-ChildItem -Path $historyDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                if ($IsDryRun) {
+                    Write-Host "        [模拟删除] $($_.FullName)" -ForegroundColor DarkCyan
+                } else {
+                    if ($_.PSIsContainer) {
+                        Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction Stop
+                    } else {
+                        Remove-Item -Path $_.FullName -Force -ErrorAction Stop
+                    }
+                    Write-Host "        已删除: $($_.FullName)" -ForegroundColor DarkGreen
+                }
+                $count++
+            } catch {
+                Write-Host "        无法删除: $($_.FullName)" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    # 方法3: 清理注册表中的历史时间戳
+    $clipboardRegPath = "HKCU:\Software\Microsoft\Clipboard"
+    if (Test-Path $clipboardRegPath) {
+        $propNames = @("HistoryOldItemsLastCleanupTimestamp")
+        foreach ($propName in $propNames) {
+            try {
+                if (Get-ItemProperty -Path $clipboardRegPath -Name $propName -ErrorAction SilentlyContinue) {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟清理] 注册表: $clipboardRegPath -> $propName" -ForegroundColor DarkCyan
+                    } else {
+                        Remove-ItemProperty -Path $clipboardRegPath -Name $propName -ErrorAction Stop
+                        Write-Host "        已清理: 注册表 $clipboardRegPath -> $propName" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                }
+            } catch {
+                Write-Host "        无法清理注册表: $clipboardRegPath -> $propName" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    return $count
+}
+
+function Clear-OpencodeShortcuts {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+    $startMenuDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+
+    if (-not (Test-Path $startMenuDir)) {
+        Write-Host "        开始菜单目录不存在: $startMenuDir" -ForegroundColor Gray
+        return 0
+    }
+
+    $patterns = @("*opencode*", "*OpenCode*")
+    $processed = @()
+
+    foreach ($pattern in $patterns) {
+        Get-ChildItem -Path $startMenuDir -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($processed -contains $_.FullName) { return }
+            $processed += $_.FullName
+
+            try {
+                if ($IsDryRun) {
+                    Write-Host "        [模拟删除] $($_.FullName)" -ForegroundColor DarkCyan
+                } else {
+                    Remove-Item -Path $_.FullName -Force -ErrorAction Stop
+                    Write-Host "        已删除: $($_.FullName)" -ForegroundColor DarkGreen
+                }
+                $count++
+            } catch {
+                Write-Host "        无法删除: $($_.FullName)" -ForegroundColor Red
+            }
+        }
+    }
+
+    return $count
+}
+
+function Clear-WifiProfiles {
+    param(
+        [string[]]$KeepPrefixes,
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+
+    try {
+        $profilesOutput = netsh wlan show profiles 2>$null
+        $profileNames = $profilesOutput | Select-String '^\s*所有用户配置文件\s*:\s*(.+)$|^\s*All User Profile\s*:\s*(.+)$' | ForEach-Object {
+            if ($_.Matches[0].Groups[1].Success) { $_.Matches[0].Groups[1].Value.Trim() }
+            else { $_.Matches[0].Groups[2].Value.Trim() }
+        }
+    } catch {
+        Write-Host "        无法获取 WiFi 配置文件列表: $($_.Exception.Message)" -ForegroundColor Red
+        return 0
+    }
+
+    if (-not $profileNames) {
+        Write-Host "        未找到任何已保存的 WiFi 配置文件" -ForegroundColor Gray
+        return 0
+    }
+
+    foreach ($ssid in $profileNames) {
+        $shouldKeep = $false
+        foreach ($prefix in $KeepPrefixes) {
+            if ($ssid -like "$prefix*") {
+                $shouldKeep = $true
+                break
+            }
+        }
+
+        if ($shouldKeep) {
+            Write-Host "        保留: $ssid" -ForegroundColor Gray
+            continue
+        }
+
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟忘记] WiFi: $ssid" -ForegroundColor DarkCyan
+            } else {
+                $result = netsh wlan delete profile name="$ssid" 2>&1
+                if ($LASTEXITCODE -eq 0 -or $result -match '已从接口|deleted from interface') {
+                    Write-Host "        已忘记 WiFi: $ssid" -ForegroundColor DarkGreen
+                } else {
+                    Write-Host "        无法忘记 WiFi: $ssid - $result" -ForegroundColor Red
+                    continue
+                }
+            }
+            $count++
+        } catch {
+            Write-Host "        无法忘记 WiFi: $ssid - $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+
+    return $count
+}
+
+# ====================== 主流程 ======================
+
+Clear-Host
+Write-Host "Microsoft Edge 深度补充清理工具" -ForegroundColor Magenta
+Write-Host "用途：在 Edge 自带'清除浏览数据'之后，清理残留的底层数据" -ForegroundColor Magenta
+Write-Host "模式: $(if ($DryRun) { '模拟运行（不会真删）' } else { '真实清理' })" -ForegroundColor Magenta
+Write-Host ""
+
+# 如果没有任何显式参数（除了可能的 DryRun / SkipBackup），显示交互菜单
+$hasExplicitSwitches = $PSBoundParameters.Keys | Where-Object { $_ -notin @('DryRun', 'NoMenu', 'SkipBackup') }
+if (-not $NoMenu -and -not $hasExplicitSwitches) {
+    Show-Menu
+}
+
+if ($SkipEdgeCleaning) {
+    Set-EdgeCleaningDisabled
+}
+
+if ($ResetEdge) {
+    Write-Warn "已启用 -ResetEdge：将清理除扩展本体和核心设置骨架外的绝大多数数据"
+}
+
+Stop-EdgeProcesses
+
+$profileDirs = Get-EdgeProfileDirs
+if ($script:CleanEdgeModule -and -not $profileDirs -and -not (Test-Path $script:UserDataRoot)) {
+    Write-Host "未找到 Microsoft Edge 用户数据目录。" -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($JsonSummaryPath)) {
+        $summaryDir = Split-Path -Parent $JsonSummaryPath
+        if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
+            New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
+        }
+        [ordered]@{
+            status = "failed"
+            dry_run = [bool]$DryRun
+            error = "未找到 Microsoft Edge 用户数据目录"
+            finished_at = (Get-Date).ToString("o")
+        } | ConvertTo-Json -Depth 5 | Set-Content -Path $JsonSummaryPath -Encoding utf8
+    }
+    if ($script:TranscriptStarted) {
+        Stop-Transcript | Out-Null
+    }
+    if (-not $NoMenu) { Read-Host "按 Enter 键退出" }
+    exit 1
+}
+
+# 如果启用 ResetEdge，则强制清理所有可选项目（扩展仍保留，除非用户同时指定 -ClearExtensions）
+if ($ResetEdge) {
+    $script:CleanEdgeModule = $true
+    $script:CleanEdgeCaches = $true
+    $script:CleanExtensionRuntime = $true
+    $script:CleanMetadata = $true
+    $script:CleanSecurityData = $true
+    $script:CleanDiagnostics = $true
+    $script:CleanOtherTempData = $true
+    $script:CleanGlobalEdgeData = $true
+    $script:CleanSystemTempData = $true
+    $KeepCookies = $false
+    $KeepHistory = $false
+    $KeepSiteStorage = $false
+    $KeepSessions = $false
+    $KeepPasswords = $false
+    $KeepAutofill = $false
+    $ClearBookmarks = $true
+    $ClearSettings = $true
+    $ClearSitePreferences = $true
+    $ClearMicrosoftAccount = $true
+}
+
+$results = [ordered]@{
+    "Edge 关键数据备份" = 0
+    "历史记录残留" = 0
+    "Cookie 与站点凭证" = 0
+    "网站本地存储" = 0
+    "各类缓存" = 0
+    "会话与恢复数据" = 0
+    "扩展缓存" = 0
+    "密码与自动填充" = 0
+    "站点设置与权限" = 0
+    "浏览器界面设置" = 0
+    "书签" = 0
+    "扩展本体" = 0
+    "微软账户与同步" = 0
+    "缩略图与站点元数据" = 0
+    "安全与隐私数据" = 0
+    "诊断日志与崩溃报告" = 0
+    "Windows 通知历史" = 0
+    "截图文件" = 0
+    "剪贴板历史" = 0
+    "opencode 快捷方式" = 0
+    "WiFi 配置文件" = 0
+    "全局数据" = 0
+    "其他临时数据" = 0
+}
+
+$deepItems = @{
+    "网站本地存储" = $true
+    "扩展缓存" = $true
+    "密码与自动填充" = $true
+    "站点设置与权限" = $true
+    "浏览器界面设置" = $true
+    "安全与隐私数据" = $true
+    "诊断日志与崩溃报告" = $true
+    "Windows 通知历史" = $true
+    "截图文件" = $true
+    "剪贴板历史" = $true
+    "opencode 快捷方式" = $true
+    "WiFi 配置文件" = $true
+    "全局数据" = $true
+}
+
+$choices = [ordered]@{
+    "Edge 浏览器数据模块" = $script:CleanEdgeModule
+    "清理前备份" = (-not $SkipBackup -and $script:CleanEdgeModule)
+    "历史记录" = -not $KeepHistory
+    "Cookie 与站点凭证" = -not $KeepCookies
+    "网站本地存储" = -not $KeepSiteStorage
+    "各类缓存" = $script:CleanEdgeCaches
+    "会话与恢复数据" = -not $KeepSessions
+    "扩展运行时缓存" = $script:CleanExtensionRuntime
+    "密码" = -not $KeepPasswords
+    "自动填充" = -not $KeepAutofill
+    "站点设置/权限" = $ClearSitePreferences
+    "浏览器界面设置" = $ClearSettings
+    "书签" = $ClearBookmarks
+    "扩展本体" = $ClearExtensions
+    "微软账户/同步" = $ClearMicrosoftAccount
+    "缩略图与站点元数据" = $script:CleanMetadata
+    "安全与隐私数据" = $script:CleanSecurityData
+    "诊断日志与崩溃报告" = $script:CleanDiagnostics
+    "Windows 通知历史" = $ClearWindowsNotifications
+    "截图文件 (删除最近 $ClearScreenshotsDays 天)" = ($ClearScreenshotsDays -gt 0)
+    "剪贴板历史" = $ClearClipboardHistory
+    "opencode 快捷方式" = $ClearOpencodeShortcuts
+    "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
+}
+
+$historyPatterns = @(
+    "History*"
+    "Visited Links"
+    "Top Sites"
+    "Media History*"
+    "Network Action Predictor*"
+    "DownloadMetadata"
+)
+
+$cookiePatterns = @(
+    "Cookies*"
+    "Trust Tokens*"
+    "Shared Dictionary"
+    "Token Service"
+    "Affiliation Database"
+)
+
+$siteStoragePatterns = @(
+    "IndexedDB"
+    "Local Storage"
+    "Session Storage"
+    "File System"
+    "Service Worker"
+    "blob_storage"
+    "databases"
+    "Storage\default"
+    "site_engagement"
+)
+
+$cachePatterns = @(
+    "Cache"
+    "Code Cache"
+    "GPUCache"
+    "Media Cache"
+    "GrShaderCache"
+    "GraphiteDawnCache"
+    "ShaderCache"
+    "optimization_guide_model*"
+    "PnaclTranslationCache"
+)
+
+$sessionPatterns = @(
+    "Sessions"
+    "Last Session"
+    "Last Tabs"
+    "Current Session"
+    "Current Tabs"
+)
+
+$extensionRuntimePatterns = @(
+    "Extension State"
+    "Extension Rules"
+    "Extension Scripts"
+    "Extension ActivityLog"
+    "Storage\ext"
+    "Local Extension Settings"
+)
+
+$extensionBodyPatterns = @(
+    "Extensions"
+)
+
+$passwordPatterns = @(
+    "Login Data"
+    "Login Data-journal"
+    "AutofillStrikeDatabase"
+    "AutofillAiModelCache"
+    "EdgeWallet"
+    "PaymentRequestMethodNames"
+    "Secure Payment Confirmation"
+)
+
+$autofillPatterns = @(
+    "Web Data*"
+)
+
+$siteSettingsPatterns = @(
+    "Preferences"
+    "Secure Preferences"
+)
+
+$sitePreferencesPatterns = @(
+    "Preferences"
+    "Secure Preferences"
+)
+
+$bookmarksPatterns = @(
+    "Bookmarks*"
+    "BookmarkMergedSurfaceOrdering"
+)
+
+$microsoftAccountPatterns = @(
+    "Login Data For Account*"
+    "Profile.pb"
+    "AccountInfo"
+    "Token Service"
+    "Sync Data"
+    "Network Persistent State"
+    "Network\Network Persistent State"
+)
+
+$metadataPatterns = @(
+    "Favicons*"
+    "Thumbnails"
+    "Shortcuts*"
+    "JumpListIcons*"
+)
+
+$securityPatterns = @(
+    "Safe Browsing Network"
+    "Network\TransportSecurity"
+    "Network\Reporting and NEL"
+    "DIPS"
+    "CertificateRevocation"
+    "Origin Bound Certs"
+)
+
+$diagnosticPatterns = @(
+    "crashpad*"
+    "BrowserMetrics*"
+    "Diagnostic*"
+    "Logs"
+    "greaselion"
+    "*.log"
+)
+
+$otherPatterns = @(
+    "QuotaManager*"
+    "Segmentation Platform"
+    "*.tmp"
+)
+
+$globalItems = @(
+    "Safe Browsing"
+    "Crashpad"
+    "CrashpadMetrics-active.pma"
+    "BrowserMetrics-spare.pma"
+    "BrowserMetrics"
+    "GrShaderCache"
+    "ShaderCache"
+    "CertificateRevocation"
+    "Diagnostic No UTC Data"
+)
+
+if ($script:CleanEdgeModule -and -not $SkipBackup) {
+    Write-Step "正在备份 Edge 关键数据..."
+    Write-Deep "备份 Bookmarks / Preferences / Secure Preferences / Extensions，便于误删后手动恢复"
+    $results["Edge 关键数据备份"] += Backup-EdgeKeyData -ProfileDirs $profileDirs -IsDryRun:$DryRun
+    Write-Success "Edge 关键数据备份完成"
+} elseif ($script:CleanEdgeModule) {
+    Write-Warn "已跳过 Edge 关键数据备份（-SkipBackup）"
+} else {
+    Write-Warn "未选择 Edge 浏览器数据模块，跳过 Edge 备份"
+}
+
+# 清理各 Profile 数据
+if ($script:CleanEdgeModule) {
+foreach ($profileDir in $profileDirs) {
+    Write-Step "正在处理 Edge 用户配置: $profileDir"
+
+    if (-not $KeepHistory) {
+        Write-SubStep "清理历史记录残留（History / Media History / Predictor 等）..."
+        Write-Deep "Edge 自带清理通常不会删除这些数据库文件本身"
+        $results["历史记录残留"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $historyPatterns
+        Write-Success "历史记录残留清理完成"
+    } else {
+        Write-Warn "跳过历史记录残留"
+    }
+
+    if (-not $KeepCookies) {
+        Write-SubStep "清理 Cookie 与站点凭证残留..."
+        $results["Cookie 与站点凭证"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $cookiePatterns
+        Write-Success "Cookie 与站点凭证清理完成"
+    } else {
+        Write-Warn "跳过 Cookie"
+    }
+
+    if (-not $KeepSiteStorage) {
+        Write-SubStep "清理网站本地存储（IndexedDB / Local Storage / Service Worker 等）..."
+        Write-Deep "这是 Edge 自带清理最容易遗漏的部分"
+        $results["网站本地存储"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $siteStoragePatterns
+        Write-Success "网站本地存储清理完成"
+    } else {
+        Write-Warn "跳过网站本地存储"
+    }
+
+    if ($script:CleanEdgeCaches) {
+        Write-SubStep "清理各类缓存（GPU / Code / Media / ShaderCache）..."
+        $results["各类缓存"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $cachePatterns
+        Write-Success "缓存清理完成"
+    } else {
+        Write-Warn "跳过各类缓存"
+    }
+
+    if (-not $KeepSessions) {
+        Write-SubStep "清理会话与恢复数据..."
+        $results["会话与恢复数据"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $sessionPatterns
+        Write-Success "会话与恢复数据清理完成"
+    } else {
+        Write-Warn "跳过会话与恢复数据"
+    }
+
+    if ($script:CleanExtensionRuntime) {
+        Write-SubStep "清理扩展运行时缓存（Extension State / Rules / Scripts / 扩展本地存储）..."
+        Write-Deep "扩展产生的本地数据常被 Edge 自带清理忽略"
+        $results["扩展缓存"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $extensionRuntimePatterns
+        Write-Success "扩展运行时缓存清理完成"
+    } else {
+        Write-Warn "跳过扩展运行时缓存"
+    }
+
+    if ($ClearExtensions) {
+        Write-SubStep "清理扩展本体..."
+        Write-Warn "此操作将删除所有已安装扩展，下次需重新安装"
+        $results["扩展本体"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $extensionBodyPatterns
+        Write-Success "扩展本体清理完成"
+    } else {
+        Write-Warn "保留扩展本体（默认）"
+    }
+
+    if (-not $KeepPasswords) {
+        Write-SubStep "清理已保存密码..."
+        $results["密码与自动填充"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $passwordPatterns
+        Write-Success "已保存密码清理完成"
+    } else {
+        Write-Warn "跳过已保存密码"
+    }
+
+    if (-not $KeepAutofill) {
+        Write-SubStep "清理自动填充数据（Web Data）..."
+        $results["密码与自动填充"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $autofillPatterns
+        Write-Success "自动填充数据清理完成"
+    } else {
+        Write-Warn "跳过自动填充数据"
+    }
+
+    if ($ClearSitePreferences) {
+        Write-SubStep "清理站点设置与权限（保留界面配置）..."
+        Write-Deep "只移除站点权限、通知、位置等，不会显示欢迎页"
+        $results["站点设置与权限"] += Clear-PreferencesSiteSettings -ProfileDir $profileDir -IsDryRun:$DryRun
+        Write-Success "站点设置与权限清理完成"
+    } else {
+        Write-Warn "保留站点设置与权限（默认，不显示欢迎页）"
+    }
+
+    if ($ClearSettings) {
+        Write-SubStep "清理浏览器界面设置（Preferences / Secure Preferences）..."
+        Write-Warn "此操作会导致 Edge 显示'欢迎使用'页面、主题/工具栏恢复默认"
+        $results["浏览器界面设置"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $sitePreferencesPatterns
+        Write-Success "浏览器界面设置清理完成"
+    } else {
+        Write-Warn "保留浏览器界面设置（默认）"
+    }
+
+    if ($ClearBookmarks) {
+        Write-SubStep "清理书签..."
+        Write-Warn "此操作将删除所有书签，无法恢复"
+        $results["书签"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $bookmarksPatterns
+        Write-Success "书签清理完成"
+    } else {
+        Write-Warn "保留书签（默认）"
+    }
+
+    if ($ClearMicrosoftAccount) {
+        Write-SubStep "清理微软账户与同步数据..."
+        Write-Warn "此操作将退出微软账户登录状态"
+        $results["微软账户与同步"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $microsoftAccountPatterns
+        Write-Success "微软账户与同步数据清理完成"
+    } else {
+        Write-Warn "保留微软账户登录状态（默认）"
+    }
+
+    if ($script:CleanMetadata) {
+        Write-SubStep "清理缩略图与站点元数据..."
+        $results["缩略图与站点元数据"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $metadataPatterns
+        Write-Success "缩略图与站点元数据清理完成"
+    } else {
+        Write-Warn "跳过缩略图与站点元数据"
+    }
+
+    if ($script:CleanSecurityData) {
+        Write-SubStep "清理安全与隐私数据（Safe Browsing Network / HSTS / DIPS）..."
+        $results["安全与隐私数据"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $securityPatterns
+        Write-Success "安全与隐私数据清理完成"
+    } else {
+        Write-Warn "跳过安全与隐私数据"
+    }
+
+    if ($script:CleanDiagnostics) {
+        Write-SubStep "清理诊断、日志与崩溃报告..."
+        $results["诊断日志与崩溃报告"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $diagnosticPatterns
+        Write-Success "诊断、日志与崩溃报告清理完成"
+    } else {
+        Write-Warn "跳过诊断、日志与崩溃报告"
+    }
+
+    if ($script:CleanOtherTempData) {
+        Write-SubStep "清理其他临时数据..."
+        $results["其他临时数据"] += Remove-EdgeItems -BaseDir $profileDir -Patterns $otherPatterns
+        Write-Success "其他临时数据清理完成"
+    } else {
+        Write-Warn "跳过其他临时数据"
+    }
+}
+} else {
+    Write-Warn "未选择 Edge 浏览器数据模块，跳过所有 Edge Profile 清理"
+}
+
+# 清理 Windows 通知历史记录
+if ($ClearWindowsNotifications) {
+    Write-Step "正在清理 Windows 通知历史记录..."
+    Write-Deep "只删除通知数据库中的历史记录，不会重置各应用的通知权限开关"
+    $results["Windows 通知历史"] += Clear-WindowsNotificationHistory -IsDryRun:$DryRun
+    Write-Success "Windows 通知历史清理完成"
+} else {
+    Write-Warn "保留 Windows 通知历史记录（默认）"
+}
+
+# 清理截图文件夹
+if ($ClearScreenshotsDays -gt 0) {
+    Write-Step "正在清理截图文件夹（删除最近 $ClearScreenshotsDays 天）..."
+    Write-Deep "路径: $env:USERPROFILE\Pictures\Screenshots"
+    $requireConfirm = -not $NoMenu
+    $results["截图文件"] += Clear-Screenshots -DaysToDelete $ClearScreenshotsDays -IsDryRun:$DryRun -RequireConfirm:$requireConfirm
+    Write-Success "截图文件夹清理完成"
+} else {
+    Write-Warn "保留截图文件夹（默认）"
+}
+
+# 清理 Windows 剪贴板历史
+if ($ClearClipboardHistory) {
+    Write-Step "正在清理 Windows 剪贴板历史..."
+    Write-Deep "只删除历史记录，保留固定项，不影响 Win+V 剪贴板功能"
+    $results["剪贴板历史"] += Clear-ClipboardHistory -IsDryRun:$DryRun
+    Write-Success "Windows 剪贴板历史清理完成"
+} else {
+    Write-Warn "保留 Windows 剪贴板历史（默认）"
+}
+
+# 清理 opencode 在开始菜单生成的快捷方式
+if ($ClearOpencodeShortcuts) {
+    Write-Step "正在清理 opencode 开始菜单快捷方式..."
+    Write-Deep "路径: $env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+    $results["opencode 快捷方式"] += Clear-OpencodeShortcuts -IsDryRun:$DryRun
+    Write-Success "opencode 快捷方式清理完成"
+} else {
+    Write-Warn "保留 opencode 开始菜单快捷方式（默认）"
+}
+
+# 清理 WiFi 配置文件
+if ($KeepWifiPrefixes.Count -gt 0) {
+    $prefixList = $KeepWifiPrefixes -join ', '
+    Write-Step "正在管理 WiFi 配置文件（保留前缀: $prefixList）..."
+    Write-Deep "使用 netsh wlan delete profile 忘记不匹配前缀的 WiFi"
+    $results["WiFi 配置文件"] += Clear-WifiProfiles -KeepPrefixes $KeepWifiPrefixes -IsDryRun:$DryRun
+    Write-Success "WiFi 配置文件管理完成"
+} else {
+    Write-Warn "保留所有 WiFi 配置文件（默认）"
+}
+
+if ($script:CleanEdgeModule -and $script:CleanGlobalEdgeData) {
+    # 清理 User Data 根目录下的全局数据
+    Write-Step "正在清理 Edge 全局数据目录（User Data 根目录）..."
+    Write-Deep "这些全局目录包含 Safe Browsing、崩溃报告、着色器缓存等"
+    $results["全局数据"] += Remove-GlobalItems -Names $globalItems
+    Write-Success "全局数据清理完成"
+} else {
+    Write-Warn "跳过 Edge 全局数据目录"
+}
+
+if ($script:CleanEdgeModule -and $script:CleanSystemTempData) {
+    # 清理系统级 Edge 临时目录
+    Write-Step "清理系统级 Edge 临时目录..."
+    $systemTempPaths = @(
+        "$env:LOCALAPPDATA\Microsoft\Edge\Temp"
+        "$env:LOCALAPPDATA\Microsoft\Edge\User Data\*.tmp"
+        "$env:LOCALAPPDATA\Temp\MicrosoftEdge*"
+        "$env:LOCALAPPDATA\Temp\edge_*"
+        "$env:PROGRAMDATA\Microsoft\EdgeUpdate\Log"
+    )
+
+    foreach ($tp in $systemTempPaths) {
+        Get-ChildItem -Path $tp -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object {
+            try {
+                if (-not $DryRun) {
+                    Remove-Item $_.FullName -Recurse -Force -ErrorAction Stop
+                } else {
+                    Write-Host "        [模拟删除] $($_.FullName)" -ForegroundColor DarkCyan
+                }
+            } catch { }
+        }
+    }
+    Write-Success "系统级临时目录清理完成"
+} else {
+    Write-Warn "跳过系统级 Edge 临时目录"
+}
+
+Show-Summary -Results $results -Skipped @{} -DeepItems $deepItems -Choices $choices
+Show-DeepExplanation
+
+if (-not [string]::IsNullOrWhiteSpace($JsonSummaryPath)) {
+    try {
+        $summaryDir = Split-Path -Parent $JsonSummaryPath
+        if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
+            New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
+        }
+        [ordered]@{
+            status = "complete"
+            dry_run = [bool]$DryRun
+            finished_at = (Get-Date).ToString("o")
+            results = $results
+            choices = $choices
+        } | ConvertTo-Json -Depth 8 | Set-Content -Path $JsonSummaryPath -Encoding utf8
+        Write-Host "`n结果摘要: $JsonSummaryPath" -ForegroundColor Green
+    } catch {
+        Write-Host "无法写入结果摘要: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+Write-Host "`n清理结束。Edge 下次启动时会重新生成必要文件。" -ForegroundColor Green
+if ($script:TranscriptStarted) {
+    Stop-Transcript | Out-Null
+}
+if (-not $NoMenu) {
+    Write-Host "按 Enter 键退出..." -ForegroundColor White
+    Read-Host | Out-Null
+}

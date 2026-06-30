@@ -10,12 +10,13 @@ import { HelpCenterDialog } from "@/components/HelpCenterDialog";
 import { ConfigLocationDialog } from "@/components/ConfigLocationDialog";
 import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
 import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
+import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
 import { useFile, useSidecar, useConfigManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
 import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask } from "@/types/record";
-import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info, Package } from "lucide-react";
+import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info, Package, Wrench } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
 function getInitials(name: string): string {
@@ -87,6 +88,7 @@ export function MainWindow() {
   // Help center dialog state
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSection, setHelpSection] = useState('quickstart');
+  const [personalCleanerOpen, setPersonalCleanerOpen] = useState(false);
 
   // Config location dialog state
   const [configLocationOpen, setConfigLocationOpen] = useState(false);
@@ -1593,10 +1595,16 @@ export function MainWindow() {
             <p className="text-xs text-slate-500">玉衡山科学院 · KANESHIRO</p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => handleHelpOpen('quickstart')} className="gap-1.5 text-slate-600 hover:text-slate-900">
-          <HelpCircle className="h-4 w-4" />
-          使用说明
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setPersonalCleanerOpen(true)} className="gap-1.5 text-slate-600 hover:text-slate-900">
+            <Wrench className="h-4 w-4" />
+            个人清理
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => handleHelpOpen('quickstart')} className="gap-1.5 text-slate-600 hover:text-slate-900">
+            <HelpCircle className="h-4 w-4" />
+            使用说明
+          </Button>
+        </div>
       </header>
 
       {/* Scrollable content */}
@@ -2402,6 +2410,11 @@ export function MainWindow() {
         open={helpOpen}
         initialSection={helpSection}
         onClose={() => setHelpOpen(false)}
+      />
+
+      <PersonalCleanerDialog
+        open={personalCleanerOpen}
+        onOpenChange={setPersonalCleanerOpen}
       />
 
       {/* Config Location Dialog */}

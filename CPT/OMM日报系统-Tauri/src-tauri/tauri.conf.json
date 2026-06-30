@@ -41,7 +41,9 @@
       "binaries/generate_report"
     ],
     "resources": [
-      "resources/template.xlsx"
+      "resources/template.xlsx",
+      "resources/tools/edge-cleaner/clean-edge.ps1",
+      "resources/tools/edge-cleaner/clean-edge.bat"
     ]
   }
 }
