@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.16";
+const APP_VERSION = "5.0.17";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -435,7 +435,7 @@ export function SettingsCenterDialog({
 
       <Section icon={<UserRound className="h-4 w-4" />} title="账户显示" description="控制页头欢迎语显示昵称还是真实姓名。">
         <FieldRow label="当前账户" hint={currentAccount.role === "admin" ? "管理员账户" : "访客账户"}>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-800 shadow-sm">
             {currentAccount.nickname} / {currentAccount.real_name}
           </div>
         </FieldRow>
@@ -564,7 +564,7 @@ export function SettingsCenterDialog({
               onChange={(event) => updateDraft({ outputDir: event.target.value })}
               placeholder={draft.useSrcOutput ? "源文件夹输出已启用" : "请选择统一输出目录"}
               disabled={draft.useSrcOutput}
-              className={draft.useSrcOutput ? "bg-slate-50" : ""}
+              className={draft.useSrcOutput ? "bg-slate-50/80" : ""}
             />
             <Button
               type="button"
@@ -588,11 +588,11 @@ export function SettingsCenterDialog({
               value={draft.configDir}
               readOnly
               placeholder="登录后自动使用账户配置目录"
-              className="bg-slate-50"
+              className="bg-slate-50/80"
             />
           </div>
         </FieldRow>
-        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
+        <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
           <div className="flex flex-wrap items-center gap-2">
             <span>当前配置来源：</span>
             <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${sourceInfo.color}`}>
@@ -601,7 +601,7 @@ export function SettingsCenterDialog({
           </div>
           <div className="mt-1 break-all">实际配置路径：{configPath || normalizedDraft.configDir || "未识别"}</div>
           {configDuplicates.length > 0 && (
-            <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-amber-800">
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1.5 text-amber-800">
               便携版目录内还发现 {configDuplicates.length} 个额外 config.json，建议只保留一个。
             </div>
           )}
@@ -642,7 +642,7 @@ export function SettingsCenterDialog({
           <button
             type="button"
             onClick={onOpenRecognitionRules}
-            className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white"
+            className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
           >
             <div className="text-sm font-medium text-slate-800">识别补充规则</div>
             <div className="mt-1 text-xs leading-5 text-slate-500 break-all">
@@ -652,7 +652,7 @@ export function SettingsCenterDialog({
           <button
             type="button"
             onClick={onOpenSpecialItems}
-            className="rounded-md border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white"
+            className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
           >
             <div className="text-sm font-medium text-slate-800">特殊大件</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">管理烧结盘等固定耗时物品。</div>
@@ -680,7 +680,7 @@ export function SettingsCenterDialog({
             </div>
           </button>
         ) : (
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm leading-6 text-slate-600">
             访客账户不显示个人清理工具。
           </div>
         )}
@@ -711,28 +711,28 @@ export function SettingsCenterDialog({
     <div className="space-y-5">
       <Section icon={<Info className="h-4 w-4" />} title="关于软件" description="版本、账户和配置位置集中展示，便于验收和排查。">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">软件名称</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">OMM 日报系统</div>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">当前版本</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">v{APP_VERSION}</div>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">当前账户</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">
               {currentAccount.nickname} / {currentAccount.real_name}
               <span className="ml-2 text-xs font-normal text-slate-500">{currentAccount.role === "admin" ? "管理员" : "访客"}</span>
             </div>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">配置来源</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">{sourceInfo.text}</div>
           </div>
         </div>
 
-        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-600">
+        <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-xs leading-6 text-slate-600 shadow-sm">
           <div>
             <span className="font-medium text-slate-700">配置文件：</span>
             <span className="break-all">{configPath || normalizedDraft.configDir || "未识别"}</span>
@@ -755,19 +755,19 @@ export function SettingsCenterDialog({
         {dataStoreInfo ? (
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
                 <div className="text-xs text-slate-500">数据库</div>
                 <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.databasePath}</div>
               </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
                 <div className="text-xs text-slate-500">数据目录</div>
                 <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.dataRoot}</div>
               </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
                 <div className="text-xs text-slate-500">账户配置</div>
                 <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.profilesDir}</div>
               </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
                 <div className="text-xs text-slate-500">日志 / 备份 / manifest</div>
                 <div className="mt-1 text-xs leading-5 text-slate-700">
                   <div className="break-all">日志：{dataStoreInfo.logsDir}</div>
@@ -776,7 +776,7 @@ export function SettingsCenterDialog({
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
               <div>
                 SQLite schema v{dataStoreInfo.schemaVersion}，账户 {dataStoreInfo.accountCount} 个，
                 {dataStoreInfo.isPortable ? "便携版数据跟随程序目录。" : "安装版数据位于当前 Windows 用户目录。"}
@@ -791,7 +791,7 @@ export function SettingsCenterDialog({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm text-slate-600">
             <span>尚未读取本地数据状态。</span>
             <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
           </div>
@@ -805,7 +805,7 @@ export function SettingsCenterDialog({
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("faq")}>常见问题</Button>
         </div>
-        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
+        <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
           日常开发验收优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。
         </div>
       </Section>
@@ -898,7 +898,7 @@ export function SettingsCenterDialog({
                   <p className="mt-1 text-sm leading-6 text-slate-600">你修改了 {changes.length} 项设置，退出前请选择如何处理。</p>
                 </div>
               </div>
-              <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+              <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/70 p-3 text-xs leading-5 text-slate-700">
                 {changes.map((change) => (
                   <li key={change}>{change}</li>
                 ))}

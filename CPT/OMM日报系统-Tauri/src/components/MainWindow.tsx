@@ -1904,13 +1904,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div
-                    className="border border-slate-200 rounded-md h-64 overflow-y-auto bg-slate-50"
+                    className="h-64 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/55 p-1 shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
                     tabIndex={0}
                     onKeyDown={handleQueueKeyDown}
                     onPaste={handleQueuePaste}
                   >
                     {queue.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-sm text-slate-400 p-4 text-center">
+                      <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-slate-400">
                         <Folder className="h-8 w-8 mb-2 text-slate-300" />
                         暂无任务，请从左侧选择日期文件夹并添加
                         <p className="text-xs mt-1">支持拖拽文件夹或 Ctrl+V 粘贴路径</p>
@@ -1919,8 +1919,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                       queue.map((item, index) => (
                         <div
                           key={index}
-                          className={`p-2.5 text-sm border-b border-slate-100 cursor-pointer hover:bg-white transition-colors ${
-                            selectedQueueItems.has(index) ? "bg-blue-50/80" : ""
+                          className={`m-1 cursor-pointer rounded-lg border px-2.5 py-2 text-sm transition-[background-color,border-color,box-shadow] ${
+                            selectedQueueItems.has(index)
+                              ? "border-blue-200 bg-blue-50/90 shadow-sm"
+                              : "border-transparent hover:border-slate-200/80 hover:bg-white/85"
                           }`}
                           onClick={() => toggleQueueItem(index)}
                           onContextMenu={(e) => handleQueueItemContextMenu(e, index)}
@@ -1929,7 +1931,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                             <span className="font-medium text-slate-800 truncate">{item.dateFolder}</span>
                             <span className="flex flex-wrap gap-1">
                               {getSchemeLabel(item).map((label, li) => (
-                                <span key={li} className={`text-[10px] px-1.5 py-0.5 rounded border ${schemePillClass(label)}`}>
+                                <span key={li} className={`rounded-full border px-2 py-0.5 text-[10px] ${schemePillClass(label)}`}>
                                   {label.replace(/[\[\]]/g, "")}
                                 </span>
                               ))}
@@ -1938,12 +1940,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                                 return (
                                   <>
                                     {pendingCount > 0 && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 font-medium">
+                                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
                                         手量待确认×{pendingCount}
                                       </span>
                                     )}
                                     {manualTaskCount > 0 && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 font-medium">
+                                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
                                         真实手量×{manualTaskCount}
                                       </span>
                                     )}
@@ -1952,7 +1954,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                               })()}
                             </span>
                           </div>
-                          <div className="text-xs text-slate-400 truncate mt-0.5">
+                          <div className="mt-1 truncate text-xs text-slate-400">
                             {item.fullPath}
                             {(() => {
                               const { pendingCount } = getManualCandidateCounts(item);
@@ -1993,35 +1995,35 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-white border border-slate-200 rounded-md shadow-lg py-1 min-w-[200px]"
+          className="fixed z-50 min-w-[230px] rounded-2xl border border-white/80 bg-white/95 p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.22)] backdrop-blur-sm"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <div className="px-3 py-1.5 text-sm text-slate-400 cursor-default">
+          <div className="cursor-default px-3 py-2 text-xs font-medium leading-5 text-slate-500">
             当前审核模式: {queue[contextMenu.index]?.reviewMode === 'A' ? '方案A(弹窗审核)' : queue[contextMenu.index]?.reviewMode === 'B' ? '方案B(留坑自填)' : '默认(跟随全局)'}
           </div>
-          <div className="border-t my-1" />
+          <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('A')}
           >
             方案A：弹窗审核
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('B')}
           >
             方案B：留坑自填
           </button>
-          <div className="border-t my-1" />
+          <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode(null)}
           >
             恢复默认（跟随全局审核模式）
           </button>
 
-          <div className="border-t my-1" />
-          <div className="px-3 py-1.5 text-sm text-slate-400 cursor-default">
+          <div className="my-1 border-t border-slate-200/70" />
+          <div className="cursor-default px-3 py-2 text-xs font-medium leading-5 text-slate-500">
             当前下班策略: {(() => {
               const item = queue[contextMenu.index];
               const v = item?.settingsOverride?.leave_strategy ?? leaveStrategy;
@@ -2029,7 +2031,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             })()}
           </div>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'auto' });
@@ -2039,7 +2041,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：智能判断
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'early' });
@@ -2049,7 +2051,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：下早班
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'normal' });
@@ -2059,7 +2061,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：不下早班
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, {
@@ -2071,9 +2073,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：恢复默认
           </button>
 
-          <div className="border-t my-1" />
+          <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2086,7 +2088,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             切换手量覆盖
           </button>
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2100,7 +2102,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           </button>
 
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100 text-amber-600"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-amber-700 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2112,9 +2114,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             手量任务管理 / 补录
           </button>
 
-          <div className="border-t my-1" />
+          <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-100 text-red-600"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
             onClick={() => {
               if (contextMenu === null) return;
               clearQueueItemOverride(contextMenu.index);
