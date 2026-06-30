@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, ClipboardList, ExternalLink, MonitorCog, ShieldAlert, Trash2, Wifi } from "lucide-react";
+import { AlertTriangle, ClipboardList, ExternalLink, EyeOff, MonitorCog, ShieldAlert, Trash2, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +27,8 @@ type BoolKey = keyof Pick<
   | "clearWindowsNotifications"
   | "clearClipboardHistory"
   | "clearOpencodeShortcuts"
+  | "cleanPrivateBrowser"
+  | "backupPrivateBrowser"
   | "skipBackup"
 >;
 
@@ -42,6 +44,8 @@ interface CleanerFormState {
   clearScreenshotsDays: number;
   clearClipboardHistory: boolean;
   clearOpencodeShortcuts: boolean;
+  cleanPrivateBrowser: boolean;
+  backupPrivateBrowser: boolean;
   keepWifiPrefixes: string;
   skipBackup: boolean;
 }
@@ -58,6 +62,8 @@ const DEFAULT_FORM: CleanerFormState = {
   clearScreenshotsDays: 0,
   clearClipboardHistory: false,
   clearOpencodeShortcuts: false,
+  cleanPrivateBrowser: false,
+  backupPrivateBrowser: true,
   keepWifiPrefixes: "",
   skipBackup: false,
 };
@@ -76,6 +82,7 @@ function hasPersonalAction(form: CleanerFormState): boolean {
     form.clearScreenshotsDays > 0 ||
     form.clearClipboardHistory ||
     form.clearOpencodeShortcuts ||
+    form.cleanPrivateBrowser ||
     parsePrefixes(form.keepWifiPrefixes).length > 0
   );
 }
@@ -87,6 +94,7 @@ function buildDangerList(form: CleanerFormState): string[] {
   if (form.clearExtensions) dangers.push("清扩展本体会删除已安装扩展");
   if (form.clearMicrosoftAccount) dangers.push("清微软账户会退出 Edge 登录/同步状态");
   if (form.clearScreenshotsDays > 0) dangers.push(`截图清理会删除最近 ${form.clearScreenshotsDays} 天截图`);
+  if (form.cleanPrivateBrowser && !form.backupPrivateBrowser) dangers.push("私人浏览器清理未启用备份");
   if (parsePrefixes(form.keepWifiPrefixes).length > 0) dangers.push("WiFi 管理会忘记不匹配保留前缀的 WiFi");
   return dangers;
 }
@@ -166,6 +174,8 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
     clearScreenshotsDays: form.clearScreenshotsDays > 0 ? form.clearScreenshotsDays : null,
     clearClipboardHistory: form.clearClipboardHistory,
     clearOpencodeShortcuts: form.clearOpencodeShortcuts,
+    cleanPrivateBrowser: form.cleanPrivateBrowser,
+    backupPrivateBrowser: form.backupPrivateBrowser,
     keepWifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
     skipBackup: form.skipBackup,
   });
@@ -331,6 +341,26 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
             title="清 opencode 开始菜单快捷方式"
             description="删除开始菜单中名称包含 opencode/OpenCode 的快捷方式。"
           />
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <div className="flex items-start gap-2">
+              <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+              <div className="flex-1 space-y-2">
+                <ToggleRow
+                  checked={form.cleanPrivateBrowser}
+                  onChange={(checked) => setBool("cleanPrivateBrowser", checked)}
+                  title="私人浏览器清理"
+                  description="清理本机私人浏览器 profile 中的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。"
+                />
+                <ToggleRow
+                  checked={form.backupPrivateBrowser}
+                  onChange={(checked) => setBool("backupPrivateBrowser", checked)}
+                  title="清理前备份私人浏览器 profile"
+                  description="真实执行前备份完整 profile，误删后可手动恢复；不勾选会直接清理。"
+                  danger={!form.backupPrivateBrowser && form.cleanPrivateBrowser}
+                />
+              </div>
+            </div>
+          </div>
           <div className="rounded-md border border-red-200 bg-red-50 p-3">
             <div className="flex items-start gap-2">
               <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />

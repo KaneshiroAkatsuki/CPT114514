@@ -49,6 +49,15 @@ param(
     # 清理 opencode 在开始菜单生成的快捷方式
     [switch]$ClearOpencodeShortcuts,
 
+    # 清理本机私人浏览器（Firefox 便携版）profile 数据
+    [switch]$CleanPrivateBrowser,
+
+    # 跳过私人浏览器 profile 备份
+    [switch]$SkipPrivateBrowserBackup,
+
+    # 私人浏览器根目录
+    [string]$PrivateBrowserRoot = "C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil",
+
     # 管理已知 WiFi：保留指定前缀的 WiFi，删除/忘记其他
     [string[]]$KeepWifiPrefixes,
 
@@ -63,6 +72,9 @@ param(
 
     # JSON 结果摘要路径（由 Tauri 页面传入，用于判断脚本是否结束）
     [string]$JsonSummaryPath,
+
+    # 清理前备份根目录
+    [string]$BackupRoot,
 
     # 模拟运行
     [switch]$DryRun
@@ -95,6 +107,7 @@ if ($KeepWifiPrefixes) {
 
 $script:UserDataRoot = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
 $script:ToolRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:BackupRoot = if ([string]::IsNullOrWhiteSpace($BackupRoot)) { Join-Path $script:ToolRoot "backups" } else { $BackupRoot }
 $script:CleanEdgeModule = $true
 $script:CleanEdgeCaches = $true
 $script:CleanExtensionRuntime = $true
@@ -177,7 +190,7 @@ function Backup-EdgeKeyData {
     }
 
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $backupRoot = Join-Path $script:ToolRoot "backups\$timestamp"
+    $backupRoot = Join-Path $script:BackupRoot "edge-$timestamp"
     $count = 0
 
     if ($IsDryRun) {
@@ -229,6 +242,190 @@ function Backup-EdgeKeyData {
         }
         $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
         Write-Host "        备份目录: $backupRoot" -ForegroundColor Green
+    }
+
+    return $count
+}
+
+function Get-PrivateBrowserProfileDirs {
+    param([string]$Root)
+
+    if ([string]::IsNullOrWhiteSpace($Root) -or -not (Test-Path -LiteralPath $Root)) {
+        return @()
+    }
+
+    $profiles = @()
+    $portableProfile = Join-Path $Root "profile"
+    if (Test-Path -LiteralPath $portableProfile) {
+        $profiles += $portableProfile
+    }
+
+    $profilesRoot = Join-Path $Root "Profiles"
+    if (Test-Path -LiteralPath $profilesRoot) {
+        Get-ChildItem -LiteralPath $profilesRoot -Directory -Force -ErrorAction SilentlyContinue |
+            ForEach-Object { $profiles += $_.FullName }
+    }
+
+    return $profiles | Sort-Object -Unique
+}
+
+function Stop-PrivateBrowserProcesses {
+    param(
+        [string]$Root,
+        [switch]$IsDryRun
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Root) -or -not (Test-Path -LiteralPath $Root)) {
+        Write-Host "        私人浏览器目录不存在，跳过关闭进程" -ForegroundColor Gray
+        return
+    }
+
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path
+    $processes = Get-Process -Name "firefox", "private_browsing" -ErrorAction SilentlyContinue |
+        Where-Object {
+            try {
+                $_.Path -and $_.Path.StartsWith($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase)
+            } catch {
+                $false
+            }
+        }
+
+    if (-not $processes) {
+        Write-Host "        私人浏览器未运行" -ForegroundColor Gray
+        return
+    }
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟关闭] 找到 $($processes.Count) 个私人浏览器进程" -ForegroundColor DarkCyan
+        return
+    }
+
+    $processes | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800
+    Write-Host "        私人浏览器已关闭" -ForegroundColor DarkGreen
+}
+
+function Backup-PrivateBrowserProfile {
+    param(
+        [string]$Root,
+        [string[]]$ProfileDirs,
+        [switch]$IsDryRun
+    )
+
+    if (-not $ProfileDirs -or $ProfileDirs.Count -eq 0) {
+        Write-Host "        未找到私人浏览器 profile，跳过备份" -ForegroundColor Gray
+        return 0
+    }
+
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backupRoot = Join-Path $script:BackupRoot "private-browser-$timestamp"
+    $count = 0
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟备份] 私人浏览器 profile -> $backupRoot" -ForegroundColor DarkCyan
+    } else {
+        New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null
+    }
+
+    foreach ($profileDir in $ProfileDirs) {
+        if (-not (Test-Path -LiteralPath $profileDir)) { continue }
+        $profileName = Split-Path $profileDir -Leaf
+        $destination = Join-Path $backupRoot $profileName
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟备份] 私人浏览器 profile: $profileName" -ForegroundColor DarkCyan
+            } else {
+                Copy-Item -LiteralPath $profileDir -Destination $destination -Recurse -Force -ErrorAction Stop
+                Write-Host "        已备份私人浏览器 profile: $profileName" -ForegroundColor DarkGreen
+            }
+            $count++
+        } catch {
+            Write-Host "        无法备份私人浏览器 profile: $profileName - $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    if (-not $IsDryRun -and $count -gt 0) {
+        $manifest = [ordered]@{
+            CreatedAt = (Get-Date).ToString("o")
+            PrivateBrowserRoot = $Root
+            Profiles = @($ProfileDirs | ForEach-Object { Split-Path $_ -Leaf })
+            Note = "完整 profile 备份，包含书签、历史、登录、Cookie 和站点数据。"
+        }
+        $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
+        Write-Host "        私人浏览器备份目录: $backupRoot" -ForegroundColor Green
+    }
+
+    return $count
+}
+
+function Clear-PrivateBrowserProfile {
+    param(
+        [string[]]$ProfileDirs,
+        [switch]$IsDryRun
+    )
+
+    $patterns = @(
+        "places.sqlite*",
+        "cookies.sqlite*",
+        "formhistory.sqlite*",
+        "favicons.sqlite*",
+        "permissions.sqlite*",
+        "content-prefs.sqlite*",
+        "webappsstore.sqlite*",
+        "storage.sqlite*",
+        "protections.sqlite*",
+        "SiteSecurityServiceState.txt",
+        "sessionstore.jsonlz4",
+        "sessionstore-backups",
+        "cache2",
+        "startupCache",
+        "shader-cache",
+        "thumbnails",
+        "jumpListCache",
+        "safebrowsing",
+        "minidumps",
+        "crashes",
+        "datareporting",
+        "saved-telemetry-pings",
+        "storage\default",
+        "storage\temporary",
+        "storage\permanent",
+        "storage\to-be-removed",
+        "storage\ls-archive.sqlite*",
+        "OfflineCache",
+        "downloads.json",
+        "logins.json",
+        "key4.db",
+        "cert9.db"
+    )
+
+    $count = 0
+    foreach ($profileDir in $ProfileDirs) {
+        if (-not (Test-Path -LiteralPath $profileDir)) { continue }
+        $profileName = Split-Path $profileDir -Leaf
+        Write-SubStep "处理私人浏览器 profile: $profileName"
+
+        foreach ($pattern in $patterns) {
+            $searchPath = Join-Path $profileDir $pattern
+            $parent = Split-Path -Parent $searchPath
+            $filter = Split-Path -Leaf $searchPath
+            if (-not (Test-Path -LiteralPath $parent)) { continue }
+
+            $items = Get-ChildItem -Path $parent -Filter $filter -Force -ErrorAction SilentlyContinue
+            foreach ($item in $items) {
+                try {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟删除] 私人浏览器数据: $($item.Name)" -ForegroundColor DarkCyan
+                    } else {
+                        Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+                        Write-Host "        已删除私人浏览器数据: $($item.Name)" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                } catch {
+                    Write-Host "        无法删除私人浏览器数据: $($item.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+        }
     }
 
     return $count
@@ -934,7 +1131,13 @@ if ($ResetEdge) {
     Write-Warn "已启用 -ResetEdge：将清理除扩展本体和核心设置骨架外的绝大多数数据"
 }
 
-Stop-EdgeProcesses
+if ($script:CleanEdgeModule) {
+    Stop-EdgeProcesses
+}
+
+if ($CleanPrivateBrowser) {
+    Stop-PrivateBrowserProcesses -Root $PrivateBrowserRoot -IsDryRun:$DryRun
+}
 
 $profileDirs = Get-EdgeProfileDirs
 if ($script:CleanEdgeModule -and -not $profileDirs -and -not (Test-Path $script:UserDataRoot)) {
@@ -1002,6 +1205,8 @@ $results = [ordered]@{
     "截图文件" = 0
     "剪贴板历史" = 0
     "opencode 快捷方式" = 0
+    "私人浏览器备份" = 0
+    "私人浏览器数据" = 0
     "WiFi 配置文件" = 0
     "全局数据" = 0
     "其他临时数据" = 0
@@ -1019,6 +1224,8 @@ $deepItems = @{
     "截图文件" = $true
     "剪贴板历史" = $true
     "opencode 快捷方式" = $true
+    "私人浏览器备份" = $true
+    "私人浏览器数据" = $true
     "WiFi 配置文件" = $true
     "全局数据" = $true
 }
@@ -1046,6 +1253,8 @@ $choices = [ordered]@{
     "截图文件 (删除最近 $ClearScreenshotsDays 天)" = ($ClearScreenshotsDays -gt 0)
     "剪贴板历史" = $ClearClipboardHistory
     "opencode 快捷方式" = $ClearOpencodeShortcuts
+    "私人浏览器清理" = $CleanPrivateBrowser
+    "私人浏览器备份" = ($CleanPrivateBrowser -and -not $SkipPrivateBrowserBackup)
     "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
 }
 
@@ -1396,6 +1605,26 @@ if ($ClearOpencodeShortcuts) {
     Write-Success "opencode 快捷方式清理完成"
 } else {
     Write-Warn "保留 opencode 开始菜单快捷方式（默认）"
+}
+
+# 清理私人浏览器 profile
+if ($CleanPrivateBrowser) {
+    Write-Step "正在清理私人浏览器 profile..."
+    Write-Deep "清理历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据"
+    $privateProfiles = Get-PrivateBrowserProfileDirs -Root $PrivateBrowserRoot
+    if (-not $privateProfiles -or $privateProfiles.Count -eq 0) {
+        Write-Warn "未找到私人浏览器 profile，跳过"
+    } else {
+        if (-not $SkipPrivateBrowserBackup) {
+            $results["私人浏览器备份"] += Backup-PrivateBrowserProfile -Root $PrivateBrowserRoot -ProfileDirs $privateProfiles -IsDryRun:$DryRun
+        } else {
+            Write-Warn "已跳过私人浏览器备份"
+        }
+        $results["私人浏览器数据"] += Clear-PrivateBrowserProfile -ProfileDirs $privateProfiles -IsDryRun:$DryRun
+        Write-Success "私人浏览器 profile 清理完成"
+    }
+} else {
+    Write-Warn "保留私人浏览器 profile（默认）"
 }
 
 # 清理 WiFi 配置文件

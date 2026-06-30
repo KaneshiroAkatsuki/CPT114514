@@ -234,6 +234,7 @@ function Content({ section }: { section: string }) {
 
           <h3 className={h3}>日志与结果</h3>
           <ul className={ul}>
+            <li>私人浏览器清理会处理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据；默认可先备份完整 profile。</li>
             <li>页面会把脚本输出写入配置目录下的 <code className={code}>personal-cleaner-logs</code>。</li>
             <li>如果管理员权限弹窗被取消，日志可能会停留在“等待脚本启动”。</li>
             <li>清理脚本结束后会写入 JSON 摘要，页面会显示“已完成”。</li>

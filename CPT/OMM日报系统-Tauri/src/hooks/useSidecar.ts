@@ -14,6 +14,8 @@ export interface PersonalCleanerOptions {
   clearScreenshotsDays?: number | null;
   clearClipboardHistory: boolean;
   clearOpencodeShortcuts: boolean;
+  cleanPrivateBrowser: boolean;
+  backupPrivateBrowser: boolean;
   keepWifiPrefixes: string[];
   skipBackup: boolean;
 }

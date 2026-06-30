@@ -47,6 +47,17 @@ Invoke-SmokeStep "Python sidecar compile" {
     Assert-LastExitCode "Python sidecar compile"
 }
 
+Invoke-SmokeStep "PowerShell cleaner parse" {
+    $cleanerPath = Join-Path $projectRoot "src-tauri\resources\tools\edge-cleaner\clean-edge.ps1"
+    $tokens = $null
+    $errors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($cleanerPath, [ref]$tokens, [ref]$errors) | Out-Null
+    if ($errors.Count -gt 0) {
+        $errors | ForEach-Object { Write-Host $_.ToString() }
+        throw "PowerShell cleaner parse failed"
+    }
+}
+
 Invoke-SmokeStep "Python sidecar stdin ping" {
     $output = '{"command":"ping"}' | & python sidecar\sidecar_main.py
     Assert-LastExitCode "Python sidecar stdin ping"

@@ -21,6 +21,8 @@ pub struct PersonalCleanerOptions {
     pub clear_screenshots_days: Option<i64>,
     pub clear_clipboard_history: bool,
     pub clear_opencode_shortcuts: bool,
+    pub clean_private_browser: bool,
+    pub backup_private_browser: bool,
     #[serde(default)]
     pub keep_wifi_prefixes: Vec<String>,
     pub skip_backup: bool,
@@ -129,6 +131,18 @@ fn effective_log_dir(state: &State<AppState>) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
+    let config = state
+        .config
+        .lock()
+        .map_err(|_| "无法读取配置状态".to_string())?
+        .clone();
+    let base = config.effective_config_dir()?;
+    let dir = base.join("personal-cleaner-backups");
+    fs::create_dir_all(&dir).map_err(|e| format!("无法创建清理备份目录: {}", e))?;
+    Ok(dir)
+}
+
 fn push_switch(args: &mut Vec<String>, enabled: bool, name: &str) {
     if enabled {
         args.push(name.to_string());
@@ -139,6 +153,7 @@ fn build_script_args(
     script_path: &Path,
     log_path: &Path,
     summary_path: &Path,
+    backup_root: &Path,
     options: &PersonalCleanerOptions,
 ) -> Vec<String> {
     let mut args = vec![
@@ -152,6 +167,8 @@ fn build_script_args(
         log_path.to_string_lossy().to_string(),
         "-JsonSummaryPath".to_string(),
         summary_path.to_string_lossy().to_string(),
+        "-BackupRoot".to_string(),
+        backup_root.to_string_lossy().to_string(),
     ];
 
     push_switch(&mut args, options.dry_run, "-DryRun");
@@ -194,6 +211,16 @@ fn build_script_args(
         &mut args,
         options.clear_opencode_shortcuts,
         "-ClearOpencodeShortcuts",
+    );
+    push_switch(
+        &mut args,
+        options.clean_private_browser,
+        "-CleanPrivateBrowser",
+    );
+    push_switch(
+        &mut args,
+        options.clean_private_browser && !options.backup_private_browser,
+        "-SkipPrivateBrowserBackup",
     );
 
     let prefixes: Vec<String> = options
@@ -238,11 +265,12 @@ pub async fn run_personal_cleaner(
         "未找到内置个人清理脚本 resources/tools/edge-cleaner/clean-edge.ps1".to_string()
     })?;
     let log_dir = effective_log_dir(&state)?;
+    let backup_root = effective_backup_dir(&state)?;
     let run_id = format!("cleaner-{}", now_millis());
     let log_path = log_dir.join(format!("{}.log", run_id));
     let summary_path = log_dir.join(format!("{}.json", run_id));
 
-    let script_args = build_script_args(&script_path, &log_path, &summary_path, &options);
+    let script_args = build_script_args(&script_path, &log_path, &summary_path, &backup_root, &options);
     let argument_line = script_args
         .iter()
         .map(|arg| quote_for_windows_command_line(arg))
