@@ -2,8 +2,8 @@
 
 ## 当前版本
 
-- 应用版本：5.0.7
-- 版本号不要随便升级；只有明确发布新版本时再改。
+- 应用版本：5.0.8
+- 版本号随实际更新或发布同步升级；除非明确要求不升版本。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
 ## 最近重点
@@ -18,11 +18,12 @@
 
 ## 最新便携版
 
-- packaged_at：2026-07-01T03:07:47
-- app：94538ea1294dafd8d59dacad4cf2c19d75ae350f596186c2cb52e356b409c6d3
+- packaged_at：2026-07-01T03:18:05
+- app：e2b68d3f912e90583dc28f2a9fb757df09e4468062cafbb6c0e8c93ecf9282e0
 - sidecar：dc0e250f9285c7df7f804d86829444ae8ac028f092bb8e7457982538e75d924a
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 - personal_cleaner_script：2591299c99282220872747a3bc67f604e13dc89640698e4e46e7fa4a9ad3c5af
+- personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
 
 ## 常用验证
 
@@ -33,7 +34,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.7
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.8
 ```
 
 ## 重要约束

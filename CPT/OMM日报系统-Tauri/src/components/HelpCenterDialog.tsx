@@ -373,7 +373,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.7。</li>
+          <li><strong>版本：</strong>5.0.8。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
           <li><strong>右键队列项：</strong>设置单日方案、下班策略、手量补录等。</li>
