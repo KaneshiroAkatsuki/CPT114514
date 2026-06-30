@@ -1965,36 +1965,6 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Logs */}
-              <Card className="flex flex-col">
-                <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-slate-900">最近状态</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLogs([])}
-                    className="h-7 text-xs text-slate-500 hover:text-slate-800"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    清空
-                  </Button>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <div className="border border-slate-200 rounded-md h-32 overflow-y-auto bg-slate-50 p-3 text-xs font-mono leading-5">
-                    {logs.length === 0 ? (
-                      <span className="text-slate-400">等待操作…</span>
-                    ) : (
-                      logs.slice(-8).map((log, index) => (
-                        <div key={index} className="py-0.5 text-slate-700">{log}</div>
-                      ))
-                    )}
-                  </div>
-                  <div className="mt-2 text-[11px] leading-4 text-slate-400">
-                    完整详细日志已移入设置中心。
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>

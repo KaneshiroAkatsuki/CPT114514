@@ -1,6 +1,6 @@
 [package]
 name = "omm-daily-report-v5"
-version = "5.0.12"
+version = "5.0.13"
 description = "OMM日报系统 - Tauri + React + Python sidecar"
 authors = ["Kaneshiro"]
 edition = "2021"

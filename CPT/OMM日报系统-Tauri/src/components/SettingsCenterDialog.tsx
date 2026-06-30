@@ -74,7 +74,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.12";
+const APP_VERSION = "5.0.13";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -680,18 +680,6 @@ export function SettingsCenterDialog({
         )}
       </Section>
 
-      <Section icon={<ClipboardList className="h-4 w-4" />} title="详细日志" description="完整运行记录从这里打开，主界面只保留最近状态。">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <div>
-            <div className="text-sm font-medium text-slate-800">查看完整详细日志</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">当前累计 {logCount} 条，可用于排查生成、识别和配置加载过程。</div>
-          </div>
-          <Button type="button" variant="outline" onClick={onOpenDetailedLogs}>
-            打开详细日志
-          </Button>
-        </div>
-      </Section>
-
       <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助" description="设置说明和日常操作说明统一放在帮助中心。">
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
@@ -766,6 +754,18 @@ export function SettingsCenterDialog({
         </div>
         <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
           日常开发验收优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。
+        </div>
+      </Section>
+
+      <Section icon={<ClipboardList className="h-4 w-4" />} title="诊断" description="一般情况下不需要打开，排查问题时再查看。">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div>
+            <div className="text-sm font-medium text-slate-800">运行诊断日志</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">当前累计 {logCount} 条，仅用于排查生成、识别和配置加载问题。</div>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenDetailedLogs}>
+            查看
+          </Button>
         </div>
       </Section>
     </div>
