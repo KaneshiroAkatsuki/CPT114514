@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerRunInfo } from "@/hooks/useSidecar";
 
 interface PersonalCleanerDialogProps {
@@ -155,6 +156,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
   const [done, setDone] = React.useState(false);
   const [running, setRunning] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [dangerConfirm, setDangerConfirm] = React.useState<{ items: string[]; resolve: (confirmed: boolean) => void } | null>(null);
   const { runPersonalCleaner, readPersonalCleanerLog } = usePersonalCleaner();
 
   const setBool = (key: BoolKey, value: boolean) => {
@@ -198,6 +200,17 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
     return () => window.clearInterval(timer);
   }, [runInfo, done, pollLog]);
 
+  const requestDangerConfirm = (items: string[]): Promise<boolean> => {
+    return new Promise((resolve) => setDangerConfirm({ items, resolve }));
+  };
+
+  const resolveDangerConfirm = (confirmed: boolean) => {
+    if (!dangerConfirm) return;
+    const { resolve } = dangerConfirm;
+    setDangerConfirm(null);
+    resolve(confirmed);
+  };
+
   const startRun = async (dryRun: boolean) => {
     setError("");
     if (!hasPersonalAction(form)) {
@@ -207,12 +220,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
 
     const dangerList = buildDangerList(form);
     if (!dryRun && dangerList.length > 0) {
-      const ok = window.confirm([
-        "以下项目属于危险操作：",
-        ...dangerList.map((item) => `- ${item}`),
-        "",
-        "建议先模拟运行。确认要真实执行吗？",
-      ].join("\n"));
+      const ok = await requestDangerConfirm(dangerList);
       if (!ok) return;
     }
 
@@ -232,6 +240,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
   const dangers = buildDangerList(form);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogHeader>
         <DialogTitle>个人清理工具（本机维护）</DialogTitle>
@@ -421,5 +430,17 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
         </div>
       </DialogFooter>
     </Dialog>
+    <ConfirmDialog
+      open={Boolean(dangerConfirm)}
+      title="确认真实执行危险清理"
+      description="以下项目属于危险操作。建议先模拟运行；确认后会请求管理员权限并真实执行。"
+      details={dangerConfirm?.items || []}
+      confirmLabel="真实执行"
+      cancelLabel="先不执行"
+      tone="danger"
+      onConfirm={() => resolveDangerConfirm(true)}
+      onCancel={() => resolveDangerConfirm(false)}
+    />
+    </>
   );
 }

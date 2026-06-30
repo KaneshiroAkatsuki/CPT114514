@@ -413,8 +413,8 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.17。</li>
-          <li><strong>界面：</strong>已完成 Apple-inspired UI 第三阶段，继续统一主界面队列、右键菜单和设置中心内部信息块。</li>
+          <li><strong>版本：</strong>5.0.18。</li>
+          <li><strong>界面：</strong>已完成 Apple-inspired UI 第四阶段，继续统一帮助中心二级列表、小弹窗和应用内确认框。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
@@ -557,10 +557,10 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                       <button
                         key={topic.id}
                         onClick={() => setActiveTopicId(topic.id)}
-                        className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                        className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
                           activeTopicId === topic.id
-                            ? "border-blue-200 bg-blue-50 text-blue-800"
-                            : "border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+                            ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
+                            : "border-transparent bg-white/55 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
                         }`}
                       >
                         <span className="block font-medium">{topic.title}</span>
@@ -568,7 +568,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                       </button>
                     ))
                   ) : (
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm leading-6 text-slate-500">
+                    <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm leading-6 text-slate-500">
                       没有找到匹配内容。可以试试“手量”“模板”“配置”“warning”“私人浏览器”。
                     </div>
                   )}
@@ -580,10 +580,10 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                     <button
                       key={topic.id}
                       onClick={() => setActiveTopicId(topic.id)}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                      className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
                         activeTopicId === topic.id
-                          ? "border-blue-200 bg-blue-50 text-blue-800"
-                          : "border-slate-100 text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+                          ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
+                          : "border-transparent bg-white/55 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
                       }`}
                     >
                       <span className="block font-medium">{topic.title}</span>
@@ -602,7 +602,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
           </main>
         </CardContent>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50/50 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Keyboard className="h-3.5 w-3.5" />
             <span>搜索会匹配标题、摘要和关键词。</span>

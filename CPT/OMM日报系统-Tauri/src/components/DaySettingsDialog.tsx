@@ -52,21 +52,21 @@ export function DaySettingsDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-      <Card className="w-[420px] max-w-full">
-        <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
+      <Card className="w-[420px] max-w-full overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200/70 bg-white/90 px-5 py-4">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
             <Settings2 className="h-4 w-4 text-blue-600" />
             单日设置 - {folderName}
           </CardTitle>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           >
             <X className="h-4 w-4" />
           </button>
         </CardHeader>
-        <CardContent className="pt-4 space-y-5">
-          <div className="space-y-2">
+        <CardContent className="space-y-5 p-5">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/70 p-3">
             <label className="text-sm font-medium text-slate-700">下班策略</label>
             <div className="grid grid-cols-3 gap-2">
               {[
@@ -87,7 +87,7 @@ export function DaySettingsDialog({
             </div>
           </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
+          <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <p className="text-xs font-medium text-slate-500">补时长选项</p>
             <label className="flex items-center justify-between text-sm text-slate-700 cursor-pointer">
               允许补时间手量
@@ -109,7 +109,7 @@ export function DaySettingsDialog({
             </label>
           </div>
 
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center justify-between border-t border-slate-200/70 pt-4">
             {hasOverrides ? (
               <Button
                 type="button"
@@ -119,7 +119,7 @@ export function DaySettingsDialog({
                   onClear();
                   onClose();
                 }}
-                className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                className="text-amber-600 hover:bg-amber-50 hover:text-amber-700"
               >
                 恢复默认
               </Button>

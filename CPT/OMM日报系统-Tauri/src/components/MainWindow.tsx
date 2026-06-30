@@ -12,6 +12,7 @@ import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
 import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
 import { SettingsCenterDialog, type SettingsCenterDraft } from "@/components/SettingsCenterDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useFile, useSidecar, useConfigManager, useAccountManager, useDataStoreManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
@@ -39,6 +40,15 @@ type GenerateFailureDetail = {
   action?: "manual" | "review" | "check";
   type?: "failure" | "paused";
   queueIndex?: number;
+};
+
+type AppConfirmRequest = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  tone?: "info" | "warning" | "danger";
+  resolve: (confirmed: boolean) => void;
 };
 
 interface MainWindowProps {
@@ -125,6 +135,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   // 手量任务管理弹窗
   const [manualTaskOpen, setManualTaskOpen] = useState(false);
   const [manualTaskItem, setManualTaskItem] = useState<QueueItem | null>(null);
+  const [appConfirm, setAppConfirm] = useState<AppConfirmRequest | null>(null);
 
   // Shift choose dialog state
   const [shiftChoosePath, setShiftChoosePath] = useState<string | null>(null);
@@ -137,6 +148,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const { setCurrentAccountDisplayMode } = useAccountManager();
   const { getDataStoreInfo } = useDataStoreManager();
   const isAdminAccount = currentAccount.role === "admin";
+
+  const requestAppConfirm = (request: Omit<AppConfirmRequest, "resolve">): Promise<boolean> => {
+    return new Promise((resolve) => setAppConfirm({ ...request, resolve }));
+  };
+
+  const resolveAppConfirm = (confirmed: boolean) => {
+    if (!appConfirm) return;
+    const { resolve } = appConfirm;
+    setAppConfirm(null);
+    resolve(confirmed);
+  };
 
   const refreshRecognitionRules = async () => {
     const info = await loadRecognitionRules();
@@ -535,16 +557,22 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     ].join("\n");
   };
 
-  const confirmTppRangeIfNeeded = (
+  const confirmTppRangeIfNeeded = async (
     item: QueueItem,
     records: FolderRecord[],
     settings: GenerateSettings,
     actionLabel: "预览" | "生成"
-  ): boolean => {
+  ): Promise<boolean> => {
     const message = buildTppRangeRiskMessage(item, records, settings, actionLabel);
     if (!message) return true;
 
-    const ok = window.confirm(`${message}\n\n是否继续${actionLabel}？`);
+    const ok = await requestAppConfirm({
+      title: "每件时间偏低确认",
+      description: `${message}\n\n是否继续${actionLabel}？`,
+      confirmLabel: `继续${actionLabel}`,
+      cancelLabel: "先不继续",
+      tone: "warning",
+    });
     if (ok) {
       addLog(`注意: ${item.dateFolder} 每件时间 ${settings.tpp_min}~${settings.tpp_max} 分钟偏低，用户已确认继续${actionLabel}`);
     } else {
@@ -597,7 +625,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(targetItem);
-      if (!confirmTppRangeIfNeeded(targetItem, filteredRecords, settings, "预览")) {
+      if (!(await confirmTppRangeIfNeeded(targetItem, filteredRecords, settings, "预览"))) {
         return;
       }
       const previewResponse = await preview(targetItem.fullPath, filteredRecords, settings);
@@ -1338,7 +1366,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(item);
-      if (!confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成")) {
+      if (!(await confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成"))) {
         recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
         setGenerateResult({
           ok: successCount,
@@ -1588,7 +1616,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(item);
-      if (!confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成")) {
+      if (!(await confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成"))) {
         recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
         setGenerateResult({
           ok: 0,
@@ -2129,6 +2157,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       )}
 
       {/* Review Dialog */}
+      <ConfirmDialog
+        open={Boolean(appConfirm)}
+        title={appConfirm?.title || ""}
+        description={appConfirm?.description}
+        confirmLabel={appConfirm?.confirmLabel || "确认"}
+        cancelLabel={appConfirm?.cancelLabel}
+        tone={appConfirm?.tone}
+        onConfirm={() => resolveAppConfirm(true)}
+        onCancel={() => resolveAppConfirm(false)}
+      />
+
       <ReviewDialog
         open={reviewOpen}
         records={pendingRecords}
