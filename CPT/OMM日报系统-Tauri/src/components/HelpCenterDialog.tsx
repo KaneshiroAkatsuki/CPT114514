@@ -77,7 +77,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>添加日期文件夹：</strong>从下拉框添加单个日期，也可以全选添加所有识别到的日期。</li>
           <li><strong>预览或生成：</strong>先用预览检查排程，确认无误后生成 Excel 报表。</li>
         </ol>
-        <div className={text.note}>第一次使用建议先确认“生成设置”里的姓名、班次、每件时间和输出目录，再点击“保存默认设置”。</div>
+        <div className={text.note}>第一次使用建议先打开“设置中心”，确认姓名、班次、每件时间、输出目录和模板来源，再保存设置。</div>
       </div>
     ),
   },
@@ -306,6 +306,24 @@ const TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: "settings-center",
+    categoryId: "config",
+    title: "设置中心怎么用",
+    summary: "集中管理默认规则、输出、配置文件、模板和个人清理入口。",
+    keywords: ["设置中心", "设置", "保存设置", "未保存", "退出确认", "配置草稿", "个人清理入口"],
+    body: (
+      <div className="space-y-4">
+        <ul className={text.ul}>
+          <li><strong>主界面只保留摘要：</strong>日常生成所需的工作目录、队列、预览和生成仍在主界面，默认规则集中放入设置中心。</li>
+          <li><strong>先改草稿再保存：</strong>在设置中心修改内容不会立刻写入 config.json，点击“保存设置”后才会生效。</li>
+          <li><strong>退出二次确认：</strong>有未保存改动时关闭设置中心，会提示“保存并退出 / 放弃更改 / 继续编辑”，并列出变更摘要。</li>
+          <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
+          <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置和个人清理工具都可以从设置中心进入。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
     id: "config-paths",
     categoryId: "config",
     title: "配置文件和便携版",
@@ -373,7 +391,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.8。</li>
+          <li><strong>版本：</strong>5.0.9。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
           <li><strong>右键队列项：</strong>设置单日方案、下班策略、手量补录等。</li>
@@ -390,6 +408,8 @@ const LEGACY_SECTION_MAP: Record<string, string> = {
   fields: "naming-standard",
   complex: "daily-flow",
   "personal-cleaner": "personal-cleaner",
+  settings: "settings-center",
+  "settings-center": "settings-center",
   shortcuts: "about",
   faq: "faq",
   about: "about",

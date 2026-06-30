@@ -11,12 +11,13 @@ import { ConfigLocationDialog } from "@/components/ConfigLocationDialog";
 import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
 import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
+import { SettingsCenterDialog, type SettingsCenterDraft } from "@/components/SettingsCenterDialog";
 import { useFile, useSidecar, useConfigManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
 import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask } from "@/types/record";
-import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info, Package, Wrench } from "lucide-react";
+import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
 function getInitials(name: string): string {
@@ -88,6 +89,7 @@ export function MainWindow() {
   // Help center dialog state
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSection, setHelpSection] = useState('quickstart');
+  const [settingsCenterOpen, setSettingsCenterOpen] = useState(false);
   const [personalCleanerOpen, setPersonalCleanerOpen] = useState(false);
 
   // Config location dialog state
@@ -210,22 +212,113 @@ export function MainWindow() {
     saveConfig(buildConfigPatch(overrides)).catch(() => {});
   };
 
-  const handleSaveDefaultSettings = async () => {
-    if (!Number.isFinite(tppMin) || !Number.isFinite(tppMax) || tppMin <= 0 || tppMax <= 0 || tppMin > tppMax) {
-      addLog("默认设置保存失败: 每件时间范围不合法，请确认最小值不大于最大值");
+  const buildSettingsDraft = (): SettingsCenterDraft => ({
+    workDir,
+    operatorName,
+    leaveStrategy,
+    enableHand,
+    enableOther,
+    useSrcOutput,
+    outputDir,
+    shiftDefault,
+    tppMin,
+    tppMax,
+    pkgRest,
+    handMax,
+    otherMax,
+    complexDefault,
+    configDir,
+  });
+
+  const buildConfigFromSettingsDraft = (draft: SettingsCenterDraft): Config => {
+    return buildConfigPatch({
+      work_dir: draft.workDir,
+      operator_name: draft.operatorName,
+      src_output: draft.useSrcOutput,
+      output_dir: draft.outputDir,
+      leave_strategy: draft.leaveStrategy,
+      enable_hand: draft.enableHand,
+      enable_other: draft.enableOther,
+      shift_default: draft.shiftDefault,
+      complex_default: draft.complexDefault,
+      tpp_min: draft.tppMin,
+      tpp_max: draft.tppMax,
+      pkg_rest: draft.pkgRest,
+      hand_max: draft.handMax,
+      other_max: draft.otherMax,
+      config_dir: draft.configDir,
+      config_dir_ever_set: true,
+    });
+  };
+
+  const configDirFromPath = (path: string): string => {
+    return path.replace(/[\\/][^\\/]*$/, "");
+  };
+
+  const refreshDateFoldersForPath = async (path: string) => {
+    if (!path) {
+      setDateFolders([]);
+      setSelectedDateFolder("");
       return;
     }
     try {
-      const config = buildConfigPatch();
-      await saveConfig(config);
-      const info = await loadConfigWithInfo();
-      setConfigSource(info.source);
-      setConfigPath(info.path);
-      setConfigDuplicates(info.duplicate_paths || []);
-      addLog(`默认设置已保存到配置文件: ${info.path}`);
+      const folders = await listDateFolders(path);
+      setDateFolders(folders);
+      setSelectedDateFolder("");
+      addLog(`工作目录已更新，找到 ${folders.length} 个日期文件夹`);
     } catch (e) {
-      addLog(`默认设置保存失败: ${e}`);
+      setDateFolders([]);
+      setSelectedDateFolder("");
+      addLog(`工作目录已更新，但获取日期文件夹失败: ${e}`);
     }
+  };
+
+  const applySettingsDraftToState = (draft: SettingsCenterDraft) => {
+    setWorkDir(draft.workDir);
+    setOperatorName(draft.operatorName);
+    setUseSrcOutput(draft.useSrcOutput);
+    setOutputDir(draft.outputDir);
+    setLeaveStrategy(draft.leaveStrategy);
+    setEnableHand(draft.enableHand);
+    setEnableOther(draft.enableOther);
+    setShiftDefault(draft.shiftDefault);
+    setComplexDefault(draft.complexDefault);
+    setTppMin(draft.tppMin);
+    setTppMax(draft.tppMax);
+    setPkgRest(draft.pkgRest);
+    setHandMax(draft.handMax);
+    setOtherMax(draft.otherMax);
+    setConfigDir(draft.configDir);
+  };
+
+  const handleSaveSettingsCenter = async (draft: SettingsCenterDraft) => {
+    const config = buildConfigFromSettingsDraft(draft);
+    const workDirChanged = draft.workDir !== workDir;
+    const configDirChanged = draft.configDir !== configDir;
+
+    let savedConfig = config;
+    if (configDirChanged && draft.configDir.trim()) {
+      savedConfig = await migrateConfig(config, draft.configDir.trim(), "copy");
+      await saveConfig(savedConfig);
+    } else {
+      await saveConfig(config);
+    }
+
+    const effectiveDir = await syncConfigState(savedConfig);
+    const info = await loadConfigWithInfo();
+
+    applySettingsDraftToState({
+      ...draft,
+      configDir: info.config.config_dir || effectiveDir || configDirFromPath(info.path),
+    });
+    setConfigSource(info.source);
+    setConfigPath(info.path);
+    setConfigDuplicates(info.duplicate_paths || []);
+    await refreshRecognitionRules();
+    if (workDirChanged) {
+      await refreshDateFoldersForPath(draft.workDir);
+    }
+    addLog(`设置已保存到配置文件: ${info.path}`);
   };
 
   // 更新模板：弹窗选择 xlsx，调用 sidecar 替换（复制到用户配置目录）
@@ -693,14 +786,6 @@ export function MainWindow() {
     } catch (e) {
       setDateFolders([]);
       addLog(`获取日期文件夹失败: ${e}`);
-    }
-  };
-
-  const handleSelectOutputDir = async () => {
-    const path = await selectFolder(outputDir || workDir || configDir);
-    if (path) {
-      setOutputDir(path);
-      addLog(`输出目录: ${path}`);
     }
   };
 
@@ -1572,16 +1657,6 @@ export function MainWindow() {
     return labels;
   };
 
-  const configSourceLabel = (source: string): { text: string; color: string } => {
-    switch (source) {
-      case 'portable': return { text: '便携版 config.json', color: 'text-green-700 bg-green-50 border-green-200' };
-      case 'appdata': return { text: '系统 AppData', color: 'text-blue-700 bg-blue-50 border-blue-200' };
-      case 'custom': return { text: '自定义位置', color: 'text-purple-700 bg-purple-50 border-purple-200' };
-      case 'legacy': return { text: '旧版 exe 目录（已迁移）', color: 'text-amber-700 bg-amber-50 border-amber-200' };
-      default: return { text: '默认位置', color: 'text-slate-600 bg-slate-100 border-slate-200' };
-    }
-  };
-
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900">
       {/* Header */}
@@ -1596,9 +1671,9 @@ export function MainWindow() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setPersonalCleanerOpen(true)} className="gap-1.5 text-slate-600 hover:text-slate-900">
-            <Wrench className="h-4 w-4" />
-            个人清理
+          <Button variant="ghost" size="sm" onClick={() => setSettingsCenterOpen(true)} className="gap-1.5 text-slate-600 hover:text-slate-900">
+            <Settings className="h-4 w-4" />
+            设置
           </Button>
           <Button variant="ghost" size="sm" onClick={() => handleHelpOpen('quickstart')} className="gap-1.5 text-slate-600 hover:text-slate-900">
             <HelpCircle className="h-4 w-4" />
@@ -1676,402 +1751,63 @@ export function MainWindow() {
                 </CardContent>
               </Card>
 
-              {/* Settings */}
+              {/* Settings summary */}
               <Card>
                 <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3">
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                     <Settings className="h-4 w-4 text-blue-600" />
-                    生成设置
+                    当前设置
                   </CardTitle>
-                  <Button variant="secondary" size="sm" onClick={handleSaveDefaultSettings}>
-                    保存默认设置
+                  <Button variant="secondary" size="sm" onClick={() => setSettingsCenterOpen(true)}>
+                    打开设置
                   </Button>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="info-strip flex items-start gap-2">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>修改下班策略、每件时间范围、补时间开关、默认班次等全局默认值后，点击“保存默认设置”会同步写入配置文件，下次打开仍会沿用。</span>
-                  </div>
-                  {/* Leave strategy */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-start">
-                    <label className="field-label pt-1.5">下班策略</label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="leaveStrategy"
-                          value="auto"
-                          checked={leaveStrategy === 'auto'}
-                          onChange={() => setLeaveStrategy('auto')}
-                          className="text-blue-600"
-                        /> 智能判断
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer text-amber-700 font-medium">
-                        <input
-                          type="radio"
-                          name="leaveStrategy"
-                          value="early"
-                          checked={leaveStrategy === 'early'}
-                          onChange={() => setLeaveStrategy('early')}
-                        /> 下早班
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="leaveStrategy"
-                          value="normal"
-                          checked={leaveStrategy === 'normal'}
-                          onChange={() => setLeaveStrategy('normal')}
-                        /> 不下早班
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Operator + tpp */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
-                    <label className="field-label">使用者姓名</label>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Input
-                        value={operatorName}
-                        onChange={(e) => setOperatorName(e.target.value)}
-                        className="w-36"
-                        placeholder="禹欣"
-                      />
-                      <span className="form-hint">首字母: {getInitials(operatorName)}</span>
-                      <span className="field-label">每件时间</span>
-                      <input
-                        type="number"
-                        min={1.0}
-                        max={10.0}
-                        step={0.5}
-                        value={tppMin}
-                        onChange={(e) => setTppMin(parseFloat(e.target.value))}
-                        className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                      <span className="text-sm text-slate-400">~</span>
-                      <input
-                        type="number"
-                        min={1.0}
-                        max={10.0}
-                        step={0.5}
-                        value={tppMax}
-                        onChange={(e) => setTppMax(parseFloat(e.target.value))}
-                        className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                      <span className="text-sm text-slate-500">分钟</span>
-                    </div>
-                  </div>
-
-                  {/* Rest + max minutes */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
-                    <label className="field-label">包间休息</label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min={0}
-                        max={30}
-                        step={1}
-                        value={pkgRest}
-                        onChange={(e) => setPkgRest(parseInt(e.target.value))}
-                        className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                      <span className="form-hint">分钟，0 表示关闭</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
-                    <label className="field-label">手量上限</label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min={10}
-                        max={240}
-                        step={10}
-                        value={handMax}
-                        onChange={(e) => setHandMax(parseInt(e.target.value) || 120)}
-                        className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                      <span className="form-hint">分钟，仅限制系统自动补时间手量，不影响真实手量</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
-                    <label className="field-label">其他上限</label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min={10}
-                        max={240}
-                        step={10}
-                        value={otherMax}
-                        onChange={(e) => setOtherMax(parseInt(e.target.value) || 90)}
-                        className="w-16 h-9 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                      <span className="form-hint">分钟，仅限制系统自动补其他事务</span>
-                      <label className="flex items-center gap-1.5 text-sm ml-2">
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600"
-                          checked={enableHand}
-                          onChange={(e) => setEnableHand(e.target.checked)}
-                        /> 手量
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm">
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600"
-                          checked={enableOther}
-                          onChange={(e) => setEnableOther(e.target.checked)}
-                        /> 其他事务
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Review mode */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-start">
-                    <label className="field-label pt-1.5">审核模式</label>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="complexDefault"
-                          value="A"
-                          checked={complexDefault === 'A'}
-                          onChange={() => setComplexDefault('A')}
-                          className="text-blue-600"
-                        /> 方案 A：弹窗审核
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="complexDefault"
-                          value="B"
-                          checked={complexDefault === 'B'}
-                          onChange={() => setComplexDefault('B')}
-                          className="text-blue-600"
-                        /> 方案 B：留坑自填
-                      </label>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleHelpOpen('complex')}>
-                        查看说明
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Default shift */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-start">
-                    <label className="field-label pt-1.5">默认班次</label>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="shiftDefault"
-                          value="B"
-                          checked={shiftDefault === 'B'}
-                          onChange={() => setShiftDefault('B')}
-                          className="text-blue-600"
-                        /> 晚班 (B)
-                      </label>
-                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name="shiftDefault"
-                          value="A"
-                          checked={shiftDefault === 'A'}
-                          onChange={() => setShiftDefault('A')}
-                          className="text-blue-600"
-                        /> 早班 (A)
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Config file */}
-                  <div className="grid grid-cols-1 sm:grid-cols-[88px_1fr] gap-2 sm:gap-3 items-center">
-                    <label className="field-label">配置文件</label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={configDir}
-                        placeholder="默认保存到 %APPDATA%\OMM日报系统"
-                        readOnly
-                        className="flex-1 bg-slate-50"
-                      />
-                      <Button variant="secondary" size="sm" onClick={async () => {
-                        const path = await selectFolder(configDir || workDir);
-                        if (path) {
-                          try {
-                            const currentConfig = buildConfigPatch();
-                            const migrated = await migrateConfig(currentConfig as unknown as Config, path, 'copy');
-                            const newDir = (migrated as unknown as Config).config_dir || path;
-                            setConfigDir(newDir);
-                            setConfigSource('custom');
-                            setConfigPath(`${newDir}\\config.json`);
-                            setConfigDuplicates([]);
-                            await syncConfigState(migrated);
-                            await refreshRecognitionRules();
-                            persistConfig({ config_dir: newDir });
-                            addLog(`配置文件目录: ${newDir}`);
-                          } catch (e) {
-                            addLog(`配置迁移失败: ${e}`);
-                          }
-                        }
-                      }}>
-                        浏览…
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="info-strip flex items-start gap-2">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span>当前配置来源：</span>
-                        {configSource ? (
-                          <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${configSourceLabel(configSource).color}`}>
-                            {configSourceLabel(configSource).text}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-500">未识别</span>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-xs px-1.5 text-slate-500 hover:text-slate-800"
-                          onClick={async () => {
-                            try {
-                              const info = await loadConfigWithInfo();
-                              setConfigSource(info.source);
-                              setConfigPath(info.path);
-                              setConfigDuplicates(info.duplicate_paths || []);
-                              setConfigDir(info.config.config_dir || info.path.replace('\\config.json', ''));
-                            } catch (e) {
-                              addLog(`刷新配置信息失败: ${e}`);
-                            }
-                          }}
-                        >
-                          <RefreshCw className="h-3 w-3 mr-1" />
-                          刷新
-                        </Button>
-                      </div>
-                      <div className="text-xs text-slate-600 break-all">实际配置路径：{configPath || configDir}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        <span className="break-all">
-                          识别补充：{recognitionRulesPath || "recognition-rules.json"}（独立保存，重置普通配置不会清空）
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => setRecognitionRulesOpen(true)}
-                        >
-                          识别补充
-                        </Button>
-                      </div>
-                      {configDuplicates.length > 0 && (
-                        <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
-                          <strong>注意：</strong>在便携版目录内还发现了 {configDuplicates.length} 个 config.json，程序当前使用上方路径。建议只保留一个配置文件，避免 confusion：
-                          <ul className="list-disc list-inside mt-1 space-y-0.5">
-                            {configDuplicates.map((p, i) => (
-                              <li key={i} className="break-all">{p}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Template */}
-                  <div className="soft-panel space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <FileSpreadsheet className="h-4 w-4 text-slate-500 shrink-0" />
-                      <span className="field-label">报表模板</span>
-                      <div className="flex-1" />
-                      <div className="flex gap-1.5">
-                        <Button variant="outline" size="sm" onClick={handleReplaceTemplate}>
-                          更新模板
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleResetTemplate}>
-                          重置为内置
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={handleViewTemplatePaths}>
-                          查看位置
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={handleRefreshTemplateInfo}>
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-600 break-all flex items-start gap-2">
-                      {templateInfo && templateInfo.exists ? (
-                        <>
-                          <span className={`status-pill border shrink-0 ${
-                            templateInfo.source === 'user' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            templateInfo.source === 'bundled' ? 'bg-green-50 text-green-700 border-green-200' :
-                            'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}>
-                            {templateSourceLabel(templateInfo.source)}
-                          </span>
-                          <span className="pt-0.5">{templateInfo.path}</span>
-                        </>
-                      ) : (
-                        <span className="text-red-700">未找到模板，将无法生成报表。请点击「更新模板」选择 xlsx 文件，或检查工作目录。</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Special items */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Package className="h-4 w-4 text-slate-500 shrink-0" />
-                    <span className="field-label">特殊大件</span>
-                    <Button variant="outline" size="sm" onClick={() => setSpecialItemsOpen(true)}>
-                      管理特殊物品
-                    </Button>
-                    {specialItems.length > 0 ? (
-                      <span className="form-hint">
-                        {specialItems.map((it) => `${it.name}(${it.minutes}分钟/件)`).join("，")}
-                      </span>
-                    ) : (
-                      <span className="form-hint">未设置，特殊大件规则不生效</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Output */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <FolderOpen className="h-4 w-4 text-blue-600" />
-                    输出目录
-                  </CardTitle>
-                </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder={useSrcOutput ? "已启用“输出到源文件夹”，无需填写" : "请选择统一输出目录"}
-                      value={outputDir}
-                      onChange={(e) => setOutputDir(e.target.value)}
-                      disabled={useSrcOutput}
-                      className={useSrcOutput ? "bg-slate-50" : ""}
-                    />
-                    <Button variant="secondary" size="sm" onClick={handleSelectOutputDir} disabled={useSrcOutput}>选择</Button>
-                  </div>
-                  <div className="soft-panel">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-1 rounded text-blue-600"
-                        checked={useSrcOutput}
-                        onChange={(e) => setUseSrcOutput(e.target.checked)}
-                      />
-                      <div className="flex-1">
-                        <span className="text-sm font-medium text-slate-800">输出到源文件夹</span>
-                        <p className="form-hint mt-0.5">
-                          {useSrcOutput
-                            ? "当前每份报表会保存到对应日期文件夹（例如 6.13A 的结果保存到 6.13A 文件夹内）；输入框空白是正常状态，不会输出到程序目录。"
-                            : "当前会保存到上方统一输出目录，请确认路径已填写。"}
-                        </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">使用者</div>
+                      <div className="mt-1 text-sm font-medium text-slate-800">
+                        {operatorName || "未设置"}
+                        <span className="ml-2 text-xs font-normal text-slate-500">{getInitials(operatorName)}</span>
                       </div>
-                    </label>
+                    </div>
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">时间策略</div>
+                      <div className="mt-1 text-sm font-medium text-slate-800">
+                        {leaveStrategy === 'early' ? '下早班' : leaveStrategy === 'normal' ? '不下早班' : '智能判断'} · {tppMin}~{tppMax} 分钟/件
+                      </div>
+                    </div>
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">补时长</div>
+                      <div className="mt-1 text-sm font-medium text-slate-800">
+                        手量{enableHand ? '开' : '关'}（{handMax}分钟） · 其他{enableOther ? '开' : '关'}（{otherMax}分钟）
+                      </div>
+                    </div>
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">输出</div>
+                      <div className="mt-1 truncate text-sm font-medium text-slate-800" title={useSrcOutput ? '输出到源日期文件夹' : outputDir}>
+                        {useSrcOutput ? '源日期文件夹' : (outputDir || '统一输出目录未设置')}
+                      </div>
+                    </div>
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">审核与班次</div>
+                      <div className="mt-1 text-sm font-medium text-slate-800">
+                        {complexDefault === 'A' ? '方案 A' : '方案 B'} · 默认{shiftDefault}班
+                      </div>
+                    </div>
+                    <div className="soft-panel">
+                      <div className="text-xs text-slate-500">模板</div>
+                      <div className="mt-1 truncate text-sm font-medium text-slate-800" title={templateInfo?.path || ''}>
+                        {templateInfo?.exists ? templateSourceLabel(templateInfo.source) : '未找到模板'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="info-strip flex items-start gap-2">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>默认规则、输出目录、配置文件、模板、特殊大件、识别补充和个人清理都集中到设置中心。修改设置会先进入草稿，保存后才写入配置文件。</span>
                   </div>
                 </CardContent>
               </Card>
-
               {/* Actions */}
               <Card className="bg-slate-50/60 border-slate-200">
                 <CardContent className="pt-4">
@@ -2403,6 +2139,30 @@ export function MainWindow() {
         onGenerate={handlePreviewGenerate}
         onOpenManual={handlePreviewOpenManual}
         onOpenDaySettings={handlePreviewOpenDaySettings}
+      />
+
+      <SettingsCenterDialog
+        open={settingsCenterOpen}
+        value={buildSettingsDraft()}
+        configSource={configSource}
+        configPath={configPath}
+        configDuplicates={configDuplicates}
+        recognitionRulesPath={recognitionRulesPath}
+        recognitionRulesExists={recognitionRulesExists}
+        templateInfo={templateInfo}
+        onOpenChange={setSettingsCenterOpen}
+        onSave={handleSaveSettingsCenter}
+        onBrowseWorkDir={(defaultPath) => selectFolder(defaultPath || configDir)}
+        onBrowseOutputDir={(defaultPath) => selectFolder(defaultPath || outputDir || workDir || configDir)}
+        onBrowseConfigDir={(defaultPath) => selectFolder(defaultPath || configDir || workDir)}
+        onOpenRecognitionRules={() => setRecognitionRulesOpen(true)}
+        onOpenSpecialItems={() => setSpecialItemsOpen(true)}
+        onReplaceTemplate={handleReplaceTemplate}
+        onResetTemplate={handleResetTemplate}
+        onViewTemplatePaths={handleViewTemplatePaths}
+        onRefreshTemplate={handleRefreshTemplateInfo}
+        onOpenPersonalCleaner={() => setPersonalCleanerOpen(true)}
+        onOpenHelp={handleHelpOpen}
       />
 
       {/* Help Center Dialog */}
