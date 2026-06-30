@@ -1,7 +1,7 @@
-import { MainWindow } from "@/components/MainWindow";
+import { AccountGate } from "@/components/AccountGate";
 
 function App() {
-  return <MainWindow />;
+  return <AccountGate />;
 }
 
 export default App;

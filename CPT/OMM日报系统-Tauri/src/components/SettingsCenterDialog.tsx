@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { TemplateInfo } from "@/types/record";
+import type { DisplayNameMode, PublicAccount, TemplateInfo } from "@/types/record";
 
 export interface SettingsCenterDraft {
   workDir: string;
@@ -53,11 +53,12 @@ interface SettingsCenterDialogProps {
   recognitionRulesPath: string;
   recognitionRulesExists: boolean;
   templateInfo: TemplateInfo | null;
+  currentAccount: PublicAccount;
+  canUsePersonalCleaner: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: SettingsCenterDraft) => Promise<void>;
   onBrowseWorkDir: (defaultPath: string) => Promise<string | null>;
   onBrowseOutputDir: (defaultPath: string) => Promise<string | null>;
-  onBrowseConfigDir: (defaultPath: string) => Promise<string | null>;
   onOpenRecognitionRules: () => void;
   onOpenSpecialItems: () => void;
   onReplaceTemplate: () => void;
@@ -65,6 +66,8 @@ interface SettingsCenterDialogProps {
   onViewTemplatePaths: () => void;
   onRefreshTemplate: () => void;
   onOpenPersonalCleaner: () => void;
+  onSwitchAccount: () => void;
+  onDisplayNameModeChange: (mode: DisplayNameMode) => Promise<void>;
   onOpenHelp: (section: string) => void;
 }
 
@@ -118,6 +121,7 @@ function outputModeText(draft: SettingsCenterDraft): string {
 function configSourceLabel(source: string): { text: string; color: string } {
   switch (source) {
     case "portable": return { text: "便携版 config.json", color: "text-green-700 bg-green-50 border-green-200" };
+    case "profile": return { text: "账户 profile", color: "text-indigo-700 bg-indigo-50 border-indigo-200" };
     case "appdata": return { text: "系统 AppData", color: "text-blue-700 bg-blue-50 border-blue-200" };
     case "custom": return { text: "自定义位置", color: "text-purple-700 bg-purple-50 border-purple-200" };
     case "legacy": return { text: "旧版 exe 目录（已迁移）", color: "text-amber-700 bg-amber-50 border-amber-200" };
@@ -298,11 +302,12 @@ export function SettingsCenterDialog({
   recognitionRulesPath,
   recognitionRulesExists,
   templateInfo,
+  currentAccount,
+  canUsePersonalCleaner,
   onOpenChange,
   onSave,
   onBrowseWorkDir,
   onBrowseOutputDir,
-  onBrowseConfigDir,
   onOpenRecognitionRules,
   onOpenSpecialItems,
   onReplaceTemplate,
@@ -310,6 +315,8 @@ export function SettingsCenterDialog({
   onViewTemplatePaths,
   onRefreshTemplate,
   onOpenPersonalCleaner,
+  onSwitchAccount,
+  onDisplayNameModeChange,
   onOpenHelp,
 }: SettingsCenterDialogProps) {
   const [activeTab, setActiveTab] = React.useState<SettingsTab>("basic");
@@ -318,6 +325,7 @@ export function SettingsCenterDialog({
   const [confirmExit, setConfirmExit] = React.useState(false);
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [accountSaving, setAccountSaving] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -408,6 +416,35 @@ export function SettingsCenterDialog({
               查看审核模式说明
             </Button>
           </div>
+        </FieldRow>
+      </Section>
+
+      <Section icon={<UserRound className="h-4 w-4" />} title="账户显示" description="控制页头欢迎语显示昵称还是真实姓名。">
+        <FieldRow label="当前账户" hint={currentAccount.role === "admin" ? "管理员账户" : "访客账户"}>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+            {currentAccount.nickname} / {currentAccount.real_name}
+          </div>
+        </FieldRow>
+        <FieldRow label="欢迎语显示">
+          <Segmented
+            value={currentAccount.display_name_mode}
+            onChange={async (displayMode) => {
+              setAccountSaving(true);
+              setError("");
+              try {
+                await onDisplayNameModeChange(displayMode);
+              } catch (e) {
+                setError(`账户显示设置保存失败: ${e}`);
+              } finally {
+                setAccountSaving(false);
+              }
+            }}
+            options={[
+              { value: "nickname", label: "显示昵称" },
+              { value: "real_name", label: "显示真名" },
+            ]}
+          />
+          {accountSaving && <p className="mt-2 text-xs text-slate-500">正在保存账户显示设置...</p>}
         </FieldRow>
       </Section>
     </div>
@@ -531,23 +568,14 @@ export function SettingsCenterDialog({
       </Section>
 
       <Section icon={<Settings2 className="h-4 w-4" />} title="配置文件" description="保存工作目录、使用者姓名、生成规则和输出目录。">
-        <FieldRow label="配置目录" hint="保存时会迁移到此目录。">
+        <FieldRow label="配置目录" hint="账户模式下由当前账户 profile 管理。">
           <div className="flex gap-2">
             <Input
               value={draft.configDir}
-              onChange={(event) => updateDraft({ configDir: event.target.value })}
-              placeholder="默认保存到系统 AppData"
+              readOnly
+              placeholder="登录后自动使用账户配置目录"
+              className="bg-slate-50"
             />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={async () => {
-                const path = await onBrowseConfigDir(draft.configDir || draft.workDir);
-                if (path) updateDraft({ configDir: path });
-              }}
-            >
-              浏览
-            </Button>
           </div>
         </FieldRow>
         <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
@@ -622,20 +650,26 @@ export function SettingsCenterDialog({
 
   const renderTools = () => (
     <div className="space-y-5">
-      <Section icon={<Wrench className="h-4 w-4" />} title="本机工具" description="账户模式后续再接入；当前先集中入口，避免主界面拥挤。">
-        <button
-          type="button"
-          onClick={onOpenPersonalCleaner}
-          className="rounded-md border border-amber-200 bg-amber-50 p-3 text-left hover:bg-amber-100"
-        >
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
-            <AlertTriangle className="h-4 w-4" />
-            个人清理工具
+      <Section icon={<Wrench className="h-4 w-4" />} title="本机工具" description="管理员账户可使用本机维护工具，访客账户隐藏危险操作。">
+        {canUsePersonalCleaner ? (
+          <button
+            type="button"
+            onClick={onOpenPersonalCleaner}
+            className="rounded-md border border-amber-200 bg-amber-50 p-3 text-left hover:bg-amber-100"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+              <AlertTriangle className="h-4 w-4" />
+              个人清理工具
+            </div>
+            <div className="mt-1 text-xs leading-5 text-amber-800">
+              Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。执行前仍会按危险项二次确认。
+            </div>
+          </button>
+        ) : (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+            访客账户不显示个人清理工具。
           </div>
-          <div className="mt-1 text-xs leading-5 text-amber-800">
-            Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。执行前仍会按危险项二次确认。
-          </div>
-        </button>
+        )}
       </Section>
 
       <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助" description="设置说明和日常操作说明统一放在帮助中心。">
@@ -643,6 +677,17 @@ export function SettingsCenterDialog({
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("quickstart")}>快速上手</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("personal-cleaner")}>个人清理说明</Button>
+        </div>
+      </Section>
+
+      <Section icon={<UserRound className="h-4 w-4" />} title="账户" description="切换账户会回到登录页，并加载另一套默认配置。">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-700">
+            不是您？当前为 <span className="font-medium">{currentAccount.nickname}</span>
+          </div>
+          <Button type="button" variant="outline" onClick={onSwitchAccount}>
+            切换账户 / 退出登录
+          </Button>
         </div>
       </Section>
     </div>

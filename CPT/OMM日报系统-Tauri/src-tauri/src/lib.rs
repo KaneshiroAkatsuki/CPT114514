@@ -148,6 +148,12 @@ pub fn run() {
             commands::config::sync_config_state,
             commands::config::load_recognition_rules,
             commands::config::save_recognition_rules,
+            commands::accounts::load_accounts,
+            commands::accounts::login_account,
+            commands::accounts::register_account,
+            commands::accounts::logout_account,
+            commands::accounts::reset_account_pin,
+            commands::accounts::set_current_account_display_mode,
             commands::personal_cleaner::run_personal_cleaner,
             commands::personal_cleaner::read_personal_cleaner_log,
         ])

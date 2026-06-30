@@ -157,6 +157,29 @@ export interface ConfigLoadInfo {
   duplicate_paths: string[];
 }
 
+export type AccountRole = 'admin' | 'guest';
+export type DisplayNameMode = 'nickname' | 'real_name';
+
+export interface PublicAccount {
+  id: string;
+  nickname: string;
+  real_name: string;
+  role: AccountRole;
+  display_name_mode: DisplayNameMode;
+  display_name: string;
+}
+
+export interface AccountsInfo {
+  accounts: PublicAccount[];
+  current_account?: PublicAccount | null;
+  storage_root: string;
+}
+
+export interface AccountSession {
+  account: PublicAccount;
+  profile_dir: string;
+}
+
 export interface StationAliasRule {
   alias: string;
   station: string;

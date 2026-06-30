@@ -71,7 +71,7 @@ const TOPICS: HelpTopic[] = [
     keywords: ["快速开始", "生成日报", "工作目录", "日期文件夹", "预览"],
     body: (
       <div className="space-y-4">
-        <p className={text.p}>最短路径只需要三步，适合每天正常生成日报时使用。</p>
+        <p className={text.p}>登录账户后，最短路径只需要三步，适合每天正常生成日报时使用。</p>
         <ol className={text.ol}>
           <li><strong>选择工作目录：</strong>选择包含日期文件夹和日报模板的根目录。</li>
           <li><strong>添加日期文件夹：</strong>从下拉框添加单个日期，也可以全选添加所有识别到的日期。</li>
@@ -306,6 +306,25 @@ const TOPICS: HelpTopic[] = [
     ),
   },
   {
+    id: "account-login",
+    categoryId: "config",
+    title: "账户登录和个人配置",
+    summary: "本地账户、管理员/访客权限、PIN 重置和账户 profile。",
+    keywords: ["账户", "登录", "注册", "PIN", "密码", "管理员", "访客", "Kaneshiro", "114514", "切换账户"],
+    body: (
+      <div className="space-y-4">
+        <ul className={text.ul}>
+          <li><strong>默认管理员：</strong><code className={text.code}>Kaneshiro</code> / <code className={text.code}>禹欣</code>，初始 PIN 为 <code className={text.code}>114514</code>。</li>
+          <li><strong>新员工注册：</strong>输入昵称、真实姓名和 4-6 位数字 PIN，注册后默认为访客账户。</li>
+          <li><strong>登录方式：</strong>可以用昵称或真实姓名登录；PIN 只保存加盐哈希，不保存明文。</li>
+          <li><strong>忘记 PIN：</strong>访客可输入管理员 PIN 重置；管理员 PIN 忘记时不会提供普通重置入口。</li>
+          <li><strong>账户配置：</strong>每个账户使用独立 profile，默认规则、工作目录、输出目录、识别补充规则和清理日志都会随账户切换。</li>
+          <li><strong>页头显示：</strong>设置中心可切换欢迎语显示昵称或真实姓名，例如“欢迎您，Dr. Kaneshiro”。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
     id: "settings-center",
     categoryId: "config",
     title: "设置中心怎么用",
@@ -391,7 +410,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.9。</li>
+          <li><strong>版本：</strong>5.0.10。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
           <li><strong>右键队列项：</strong>设置单日方案、下班策略、手量补录等。</li>

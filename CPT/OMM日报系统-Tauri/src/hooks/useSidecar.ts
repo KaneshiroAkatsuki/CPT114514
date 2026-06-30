@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Config, ConfigLoadInfo, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo } from "@/types/record";
+import type { AccountSession, AccountsInfo, Config, ConfigLoadInfo, DisplayNameMode, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo, PublicAccount } from "@/types/record";
 
 export interface PersonalCleanerOptions {
   dryRun: boolean;
@@ -141,6 +141,34 @@ export function useConfigManager() {
   };
 
   return { loadConfigWithInfo, loadConfig, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules };
+}
+
+export function useAccountManager() {
+  const loadAccounts = async (): Promise<AccountsInfo> => {
+    return await invoke<AccountsInfo>("load_accounts");
+  };
+
+  const loginAccount = async (login: string, pin: string): Promise<AccountSession> => {
+    return await invoke<AccountSession>("login_account", { login, pin });
+  };
+
+  const registerAccount = async (nickname: string, realName: string, pin: string): Promise<AccountSession> => {
+    return await invoke<AccountSession>("register_account", { nickname, realName, pin });
+  };
+
+  const logoutAccount = async (): Promise<void> => {
+    await invoke("logout_account");
+  };
+
+  const resetAccountPin = async (targetAccountId: string, adminPin: string, newPin: string): Promise<void> => {
+    await invoke("reset_account_pin", { targetAccountId, adminPin, newPin });
+  };
+
+  const setCurrentAccountDisplayMode = async (mode: DisplayNameMode): Promise<PublicAccount> => {
+    return await invoke<PublicAccount>("set_current_account_display_mode", { mode });
+  };
+
+  return { loadAccounts, loginAccount, registerAccount, logoutAccount, resetAccountPin, setCurrentAccountDisplayMode };
 }
 
 export function usePersonalCleaner() {

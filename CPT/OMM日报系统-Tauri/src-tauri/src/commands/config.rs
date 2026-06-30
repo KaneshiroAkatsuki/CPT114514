@@ -1,4 +1,5 @@
 use crate::AppState;
+use super::accounts;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -262,6 +263,24 @@ fn find_all_portable_configs(root: &Path) -> Vec<PathBuf> {
     found.into_iter().map(|(_, path)| path).collect()
 }
 
+fn read_config_from_path(path: &Path) -> Result<AppConfig, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read config: {}", e))?;
+    serde_json::from_str::<AppConfig>(&content)
+        .map_err(|e| format!("Failed to parse config: {}", e))
+}
+
+fn write_config_to_path(path: &Path, config: &AppConfig) -> Result<(), String> {
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+    fs::write(path, content)
+        .map_err(|e| format!("Failed to write config: {}", e))
+}
+
 #[command]
 pub async fn load_config() -> Result<AppConfig, String> {
     let result = load_config_with_info().await?;
@@ -270,6 +289,42 @@ pub async fn load_config() -> Result<AppConfig, String> {
 
 #[command]
 pub async fn load_config_with_info() -> Result<ConfigLoadInfo, String> {
+    if let Some(profile_path) = accounts::current_profile_config_path()? {
+        let profile_dir = profile_path
+            .parent()
+            .ok_or("无法获取账户配置目录")?
+            .to_path_buf();
+        if profile_path.exists() {
+            let mut config = read_config_from_path(&profile_path)?;
+            config.config_dir = Some(profile_dir.to_string_lossy().to_string());
+            config.config_dir_ever_set = Some(true);
+            return Ok(ConfigLoadInfo {
+                config,
+                source: "profile".to_string(),
+                path: profile_path.to_string_lossy().to_string(),
+                duplicate_paths: vec![],
+            });
+        }
+
+        let mut seed = load_config_with_info_base().await?;
+        seed.config.config_dir = Some(profile_dir.to_string_lossy().to_string());
+        seed.config.config_dir_ever_set = Some(true);
+        if let Some(account) = accounts::current_account_record()? {
+            seed.config.operator_name = account.real_name;
+        }
+        write_config_to_path(&profile_path, &seed.config)?;
+        return Ok(ConfigLoadInfo {
+            config: seed.config,
+            source: "profile".to_string(),
+            path: profile_path.to_string_lossy().to_string(),
+            duplicate_paths: vec![],
+        });
+    }
+
+    load_config_with_info_base().await
+}
+
+async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
     let default_config = AppConfig::new();
 
     // 便携版优先：如果便携版目录（含子目录）里已有 config.json，
@@ -367,20 +422,22 @@ pub async fn load_config_with_info() -> Result<ConfigLoadInfo, String> {
 
 #[command]
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
-    let path = config.effective_config_path()?;
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-    
-    // Ensure directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    if let Some(profile_path) = accounts::current_profile_config_path()? {
+        let profile_dir = profile_path
+            .parent()
+            .ok_or("无法获取账户配置目录")?
+            .to_string_lossy()
+            .to_string();
+        let profile_config = AppConfig {
+            config_dir: Some(profile_dir),
+            config_dir_ever_set: Some(true),
+            ..config
+        };
+        return write_config_to_path(&profile_path, &profile_config);
     }
-    
-    fs::write(&path, content)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
-    
-    Ok(())
+
+    let path = config.effective_config_path()?;
+    write_config_to_path(&path, &config)
 }
 
 #[command]

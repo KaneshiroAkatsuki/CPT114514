@@ -12,11 +12,11 @@ import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
 import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
 import { SettingsCenterDialog, type SettingsCenterDraft } from "@/components/SettingsCenterDialog";
-import { useFile, useSidecar, useConfigManager } from "@/hooks/useSidecar";
+import { useFile, useSidecar, useConfigManager, useAccountManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
-import type { FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask } from "@/types/record";
+import type { DisplayNameMode, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount } from "@/types/record";
 import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
@@ -41,9 +41,15 @@ type GenerateFailureDetail = {
   queueIndex?: number;
 };
 
-export function MainWindow() {
+interface MainWindowProps {
+  currentAccount: PublicAccount;
+  onAccountUpdated: (account: PublicAccount) => void;
+  onSwitchAccount: () => void;
+}
+
+export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }: MainWindowProps) {
   const [workDir, setWorkDir] = useState("");
-  const [operatorName, setOperatorName] = useState("禹欣");
+  const [operatorName, setOperatorName] = useState(currentAccount.real_name || "禹欣");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selectedQueueItems, setSelectedQueueItems] = useState<Set<number>>(new Set());
   const [logs, setLogs] = useState<string[]>([]);
@@ -126,6 +132,8 @@ export function MainWindow() {
   const { selectFolder, selectXlsxFile, openFolder } = useFile();
   const { parseFolders, generate, preview, listDateFolders, listChildFolders, getTemplateInfo, replaceTemplate, resetTemplate, getTemplatePaths } = useSidecar();
   const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules } = useConfigManager();
+  const { setCurrentAccountDisplayMode } = useAccountManager();
+  const isAdminAccount = currentAccount.role === "admin";
 
   const refreshRecognitionRules = async () => {
     const info = await loadRecognitionRules();
@@ -133,6 +141,11 @@ export function MainWindow() {
     setRecognitionRulesPath(info.path);
     setRecognitionRulesExists(info.exists);
     return info;
+  };
+
+  const handleDisplayNameModeChange = async (mode: DisplayNameMode) => {
+    const account = await setCurrentAccountDisplayMode(mode);
+    onAccountUpdated(account);
   };
 
   // Load saved config on startup
@@ -294,18 +307,11 @@ export function MainWindow() {
   const handleSaveSettingsCenter = async (draft: SettingsCenterDraft) => {
     const config = buildConfigFromSettingsDraft(draft);
     const workDirChanged = draft.workDir !== workDir;
-    const configDirChanged = draft.configDir !== configDir;
 
-    let savedConfig = config;
-    if (configDirChanged && draft.configDir.trim()) {
-      savedConfig = await migrateConfig(config, draft.configDir.trim(), "copy");
-      await saveConfig(savedConfig);
-    } else {
-      await saveConfig(config);
-    }
+    await saveConfig(config);
 
-    const effectiveDir = await syncConfigState(savedConfig);
     const info = await loadConfigWithInfo();
+    const effectiveDir = await syncConfigState(info.config);
 
     applySettingsDraftToState({
       ...draft,
@@ -1667,7 +1673,10 @@ export function MainWindow() {
           </div>
           <div>
             <h1 className="text-base font-semibold text-slate-900 leading-tight">OMM 日报自动生成</h1>
-            <p className="text-xs text-slate-500">玉衡山科学院 · KANESHIRO</p>
+            <p className="text-xs text-slate-500">
+              欢迎您，Dr. {currentAccount.display_name}
+              <span className="ml-1 text-slate-400">· {isAdminAccount ? "管理员" : "访客"}</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -2150,18 +2159,23 @@ export function MainWindow() {
         recognitionRulesPath={recognitionRulesPath}
         recognitionRulesExists={recognitionRulesExists}
         templateInfo={templateInfo}
+        currentAccount={currentAccount}
+        canUsePersonalCleaner={isAdminAccount}
         onOpenChange={setSettingsCenterOpen}
         onSave={handleSaveSettingsCenter}
         onBrowseWorkDir={(defaultPath) => selectFolder(defaultPath || configDir)}
         onBrowseOutputDir={(defaultPath) => selectFolder(defaultPath || outputDir || workDir || configDir)}
-        onBrowseConfigDir={(defaultPath) => selectFolder(defaultPath || configDir || workDir)}
         onOpenRecognitionRules={() => setRecognitionRulesOpen(true)}
         onOpenSpecialItems={() => setSpecialItemsOpen(true)}
         onReplaceTemplate={handleReplaceTemplate}
         onResetTemplate={handleResetTemplate}
         onViewTemplatePaths={handleViewTemplatePaths}
         onRefreshTemplate={handleRefreshTemplateInfo}
-        onOpenPersonalCleaner={() => setPersonalCleanerOpen(true)}
+        onOpenPersonalCleaner={() => {
+          if (isAdminAccount) setPersonalCleanerOpen(true);
+        }}
+        onSwitchAccount={onSwitchAccount}
+        onDisplayNameModeChange={handleDisplayNameModeChange}
         onOpenHelp={handleHelpOpen}
       />
 
@@ -2172,10 +2186,12 @@ export function MainWindow() {
         onClose={() => setHelpOpen(false)}
       />
 
-      <PersonalCleanerDialog
-        open={personalCleanerOpen}
-        onOpenChange={setPersonalCleanerOpen}
-      />
+      {isAdminAccount && (
+        <PersonalCleanerDialog
+          open={personalCleanerOpen}
+          onOpenChange={setPersonalCleanerOpen}
+        />
+      )}
 
       {/* Config Location Dialog */}
       <ConfigLocationDialog
