@@ -56,6 +56,7 @@ interface SettingsCenterDialogProps {
   templateInfo: TemplateInfo | null;
   currentAccount: PublicAccount;
   canUsePersonalCleaner: boolean;
+  logCount: number;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: SettingsCenterDraft) => Promise<void>;
   onBrowseWorkDir: (defaultPath: string) => Promise<string | null>;
@@ -69,10 +70,11 @@ interface SettingsCenterDialogProps {
   onOpenPersonalCleaner: () => void;
   onSwitchAccount: () => void;
   onDisplayNameModeChange: (mode: DisplayNameMode) => Promise<void>;
+  onOpenDetailedLogs: () => void;
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.11";
+const APP_VERSION = "5.0.12";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -308,6 +310,7 @@ export function SettingsCenterDialog({
   templateInfo,
   currentAccount,
   canUsePersonalCleaner,
+  logCount,
   onOpenChange,
   onSave,
   onBrowseWorkDir,
@@ -321,6 +324,7 @@ export function SettingsCenterDialog({
   onOpenPersonalCleaner,
   onSwitchAccount,
   onDisplayNameModeChange,
+  onOpenDetailedLogs,
   onOpenHelp,
 }: SettingsCenterDialogProps) {
   const [activeTab, setActiveTab] = React.useState<SettingsTab>("basic");
@@ -674,6 +678,18 @@ export function SettingsCenterDialog({
             访客账户不显示个人清理工具。
           </div>
         )}
+      </Section>
+
+      <Section icon={<ClipboardList className="h-4 w-4" />} title="详细日志" description="完整运行记录从这里打开，主界面只保留最近状态。">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div>
+            <div className="text-sm font-medium text-slate-800">查看完整详细日志</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">当前累计 {logCount} 条，可用于排查生成、识别和配置加载过程。</div>
+          </div>
+          <Button type="button" variant="outline" onClick={onOpenDetailedLogs}>
+            打开详细日志
+          </Button>
+        </div>
       </Section>
 
       <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助" description="设置说明和日常操作说明统一放在帮助中心。">

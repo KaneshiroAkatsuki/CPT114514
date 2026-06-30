@@ -53,6 +53,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selectedQueueItems, setSelectedQueueItems] = useState<Set<number>>(new Set());
   const [logs, setLogs] = useState<string[]>([]);
+  const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [lastOutputPath, setLastOutputPath] = useState<string | null>(null);
@@ -638,6 +639,16 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
   const addLog = (msg: string) => {
     setLogs((prev) => [...prev, msg]);
+  };
+
+  const handleCopyDetailedLogs = async () => {
+    if (logs.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(logs.join("\n"));
+      addLog("详细日志已复制到剪贴板");
+    } catch (e) {
+      addLog(`详细日志复制失败: ${e}`);
+    }
   };
 
   const detectShift = (folderName: string): 'A' | 'B' | null => {
@@ -1958,7 +1969,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               {/* Logs */}
               <Card className="flex flex-col">
                 <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-slate-900">运行日志</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-slate-900">最近状态</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1970,14 +1981,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                   </Button>
                 </CardHeader>
                 <CardContent className="flex-1">
-                  <div className="border border-slate-200 rounded-md h-48 overflow-y-auto bg-slate-50 p-3 text-xs font-mono leading-5">
+                  <div className="border border-slate-200 rounded-md h-32 overflow-y-auto bg-slate-50 p-3 text-xs font-mono leading-5">
                     {logs.length === 0 ? (
                       <span className="text-slate-400">等待操作…</span>
                     ) : (
-                      logs.map((log, index) => (
+                      logs.slice(-8).map((log, index) => (
                         <div key={index} className="py-0.5 text-slate-700">{log}</div>
                       ))
                     )}
+                  </div>
+                  <div className="mt-2 text-[11px] leading-4 text-slate-400">
+                    完整详细日志已移入设置中心。
                   </div>
                 </CardContent>
               </Card>
@@ -2161,6 +2175,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         templateInfo={templateInfo}
         currentAccount={currentAccount}
         canUsePersonalCleaner={isAdminAccount}
+        logCount={logs.length}
         onOpenChange={setSettingsCenterOpen}
         onSave={handleSaveSettingsCenter}
         onBrowseWorkDir={(defaultPath) => selectFolder(defaultPath || configDir)}
@@ -2176,8 +2191,47 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         }}
         onSwitchAccount={onSwitchAccount}
         onDisplayNameModeChange={handleDisplayNameModeChange}
+        onOpenDetailedLogs={() => setLogDialogOpen(true)}
         onOpenHelp={handleHelpOpen}
       />
+
+      {logDialogOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
+          <div className="mx-4 flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">详细日志</h2>
+                <p className="mt-1 text-xs text-slate-500">共 {logs.length} 条运行记录</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLogDialogOpen(false)}>
+                <X className="h-4 w-4 mr-1" />
+                关闭
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
+              {logs.length === 0 ? (
+                <div className="text-slate-400">暂无详细日志。</div>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={`${index}-${log}`} className="flex gap-3 border-b border-white/5 py-1">
+                    <span className="w-10 shrink-0 select-none text-right text-slate-500">{index + 1}</span>
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{log}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">
+              <Button type="button" variant="outline" onClick={handleCopyDetailedLogs} disabled={logs.length === 0}>
+                复制日志
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setLogs([])} disabled={logs.length === 0}>
+                <Trash2 className="h-4 w-4 mr-1" />
+                清空日志
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Help Center Dialog */}
       <HelpCenterDialog
