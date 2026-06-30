@@ -13,12 +13,13 @@
 - 文件名疑似错误/需确认 warning 已实现。
 - 个人电脑清理功能已集成到单独页面。
 - 个人清理已支持本机私人浏览器 profile 清理和可选备份。
+- 帮助中心已按任务分类重构，并新增关键词搜索。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-- packaged_at：2026-07-01T02:48:51
-- app：54f396503db6939b66f8f0db71c97a50fdff8d6e1eab485dd65828502a2e6532
+- packaged_at：2026-07-01T03:07:47
+- app：94538ea1294dafd8d59dacad4cf2c19d75ae350f596186c2cb52e356b409c6d3
 - sidecar：dc0e250f9285c7df7f804d86829444ae8ac028f092bb8e7457982538e75d924a
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 - personal_cleaner_script：2591299c99282220872747a3bc67f604e13dc89640698e4e46e7fa4a9ad3c5af
