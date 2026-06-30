@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AccountSession, AccountsInfo, Config, ConfigLoadInfo, DisplayNameMode, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo, PublicAccount } from "@/types/record";
+import type { AccountSession, AccountsInfo, Config, ConfigLoadInfo, DataStoreInfo, DisplayNameMode, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo, PublicAccount } from "@/types/record";
 
 export interface PersonalCleanerOptions {
   dryRun: boolean;
@@ -169,6 +169,14 @@ export function useAccountManager() {
   };
 
   return { loadAccounts, loginAccount, registerAccount, logoutAccount, resetAccountPin, setCurrentAccountDisplayMode };
+}
+
+export function useDataStoreManager() {
+  const getDataStoreInfo = async (): Promise<DataStoreInfo> => {
+    return await invoke<DataStoreInfo>("get_data_store_info");
+  };
+
+  return { getDataStoreInfo };
 }
 
 export function usePersonalCleaner() {

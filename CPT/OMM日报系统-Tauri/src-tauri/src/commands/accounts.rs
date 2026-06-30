@@ -1,4 +1,6 @@
+use super::data_store;
 use rand::RngCore;
+use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -85,55 +87,13 @@ fn now_string() -> String {
         .unwrap_or_else(|_| "0".to_string())
 }
 
-fn portable_root_from_exe() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let exe_dir = exe.parent()?.to_path_buf();
-    let has_portable_resources = exe_dir.join("resources").join("template.xlsx").is_file()
-        && exe_dir.join("binaries").join("generate_report.exe").is_file();
-    if has_portable_resources {
-        return Some(exe_dir);
-    }
-    None
-}
-
-fn default_config_base_dir() -> Result<PathBuf, String> {
-    if let Some(portable_root) = portable_root_from_exe() {
-        return Ok(portable_root);
-    }
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        if !appdata.is_empty() {
-            let dir = PathBuf::from(appdata).join("OMM日报系统");
-            fs::create_dir_all(&dir).map_err(|e| format!("无法创建配置目录: {}", e))?;
-            return Ok(dir);
-        }
-    }
-    let exe_dir = std::env::current_exe()
-        .map_err(|e| format!("无法获取程序路径: {}", e))?
-        .parent()
-        .ok_or("无法获取程序目录")?
-        .to_path_buf();
-    Ok(exe_dir)
-}
-
 pub fn account_storage_root() -> Result<PathBuf, String> {
-    let root = default_config_base_dir()?.join(".omm");
-    fs::create_dir_all(root.join("accounts")).map_err(|e| format!("无法创建账户目录: {}", e))?;
-    fs::create_dir_all(root.join("profiles")).map_err(|e| format!("无法创建账户配置目录: {}", e))?;
-    Ok(root)
-}
-
-fn accounts_path() -> Result<PathBuf, String> {
-    Ok(account_storage_root()?.join("accounts").join("accounts.json"))
-}
-
-fn session_path() -> Result<PathBuf, String> {
-    Ok(account_storage_root()?.join("accounts").join("session.json"))
+    data_store::data_root()
 }
 
 pub fn profile_dir_for_account(account_id: &str) -> Result<PathBuf, String> {
-    let safe_id = sanitize_id(account_id);
-    let dir = account_storage_root()?.join("profiles").join(safe_id);
-    fs::create_dir_all(&dir).map_err(|e| format!("无法创建账户配置目录: {}", e))?;
+    let dir = data_store::profile_dir_for_account(account_id)?;
+    migrate_legacy_profile_if_needed(account_id, &dir)?;
     Ok(dir)
 }
 
@@ -270,51 +230,213 @@ fn admin_account() -> AccountRecord {
     }
 }
 
+fn role_to_db(role: &AccountRole) -> &'static str {
+    match role {
+        AccountRole::Admin => "admin",
+        AccountRole::Guest => "guest",
+    }
+}
+
+fn role_from_db(value: &str) -> AccountRole {
+    match value {
+        "admin" => AccountRole::Admin,
+        _ => AccountRole::Guest,
+    }
+}
+
+fn display_mode_to_db(mode: &DisplayNameMode) -> &'static str {
+    match mode {
+        DisplayNameMode::Nickname => "nickname",
+        DisplayNameMode::RealName => "real_name",
+    }
+}
+
+fn display_mode_from_db(value: &str) -> DisplayNameMode {
+    match value {
+        "real_name" => DisplayNameMode::RealName,
+        _ => DisplayNameMode::Nickname,
+    }
+}
+
+fn read_store_from_database() -> Result<AccountStore, String> {
+    let conn = data_store::open_database()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, nickname, real_name, role, pin_salt, pin_hash, display_name_mode, created_at
+             FROM accounts
+             ORDER BY CASE WHEN role = 'admin' THEN 0 ELSE 1 END, created_at, id",
+        )
+        .map_err(|e| format!("无法读取账户数据库: {}", e))?;
+    let rows = stmt
+        .query_map([], |row| {
+            let role: String = row.get(3)?;
+            let display_name_mode: String = row.get(6)?;
+            Ok(AccountRecord {
+                id: row.get(0)?,
+                nickname: row.get(1)?,
+                real_name: row.get(2)?,
+                role: role_from_db(&role),
+                pin_salt: row.get(4)?,
+                pin_hash: row.get(5)?,
+                display_name_mode: display_mode_from_db(&display_name_mode),
+                created_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| format!("无法查询账户数据库: {}", e))?;
+
+    let mut accounts = Vec::new();
+    for row in rows {
+        accounts.push(row.map_err(|e| format!("无法解析账户数据库: {}", e))?);
+    }
+    Ok(AccountStore {
+        version: ACCOUNT_STORE_VERSION,
+        accounts,
+    })
+}
+
+fn write_store_to_database(store: &AccountStore) -> Result<(), String> {
+    let mut conn = data_store::open_database()?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("无法开启账户数据库事务: {}", e))?;
+    tx.execute("DELETE FROM accounts", [])
+        .map_err(|e| format!("无法更新账户数据库: {}", e))?;
+    for account in &store.accounts {
+        tx.execute(
+            "INSERT INTO accounts
+             (id, nickname, real_name, role, pin_salt, pin_hash, display_name_mode, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, strftime('%s','now'))",
+            params![
+                account.id,
+                account.nickname,
+                account.real_name,
+                role_to_db(&account.role),
+                account.pin_salt,
+                account.pin_hash,
+                display_mode_to_db(&account.display_name_mode),
+                account.created_at,
+            ],
+        )
+        .map_err(|e| format!("无法写入账户数据库: {}", e))?;
+    }
+    tx.commit()
+        .map_err(|e| format!("无法保存账户数据库事务: {}", e))
+}
+
+fn read_legacy_store() -> Result<Option<AccountStore>, String> {
+    let path = data_store::legacy_accounts_path()?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path).map_err(|e| format!("无法读取旧账户文件: {}", e))?;
+    let mut store = serde_json::from_str::<AccountStore>(&content).unwrap_or_default();
+    store.version = ACCOUNT_STORE_VERSION;
+    Ok(Some(store))
+}
+
+fn read_session_from_database() -> Result<Option<AccountSessionFile>, String> {
+    let conn = data_store::open_database()?;
+    let current_account_id = conn
+        .query_row(
+            "SELECT current_account_id FROM account_session WHERE id = 1",
+            [],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()
+        .map_err(|e| format!("无法读取登录状态数据库: {}", e))?;
+    Ok(current_account_id.map(|current_account_id| AccountSessionFile { current_account_id }))
+}
+
+fn write_session_to_database(session: &AccountSessionFile) -> Result<(), String> {
+    let conn = data_store::open_database()?;
+    conn.execute(
+        "INSERT INTO account_session (id, current_account_id, updated_at)
+         VALUES (1, ?1, strftime('%s','now'))
+         ON CONFLICT(id) DO UPDATE SET
+           current_account_id = excluded.current_account_id,
+           updated_at = excluded.updated_at",
+        params![session.current_account_id],
+    )
+    .map_err(|e| format!("无法写入登录状态数据库: {}", e))?;
+    Ok(())
+}
+
+fn read_legacy_session() -> Result<Option<AccountSessionFile>, String> {
+    let path = data_store::legacy_session_path()?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path).map_err(|e| format!("无法读取旧登录状态: {}", e))?;
+    Ok(Some(
+        serde_json::from_str::<AccountSessionFile>(&content).unwrap_or_default(),
+    ))
+}
+
+fn copy_profile_file_if_missing(legacy_dir: &PathBuf, new_dir: &PathBuf, file_name: &str) -> Result<(), String> {
+    let source = legacy_dir.join(file_name);
+    let target = new_dir.join(file_name);
+    if source.is_file() && !target.exists() {
+        fs::copy(&source, &target).map_err(|e| {
+            format!(
+                "无法迁移旧账户配置 {} -> {}: {}",
+                source.display(),
+                target.display(),
+                e
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn migrate_legacy_profile_if_needed(account_id: &str, new_dir: &PathBuf) -> Result<(), String> {
+    let legacy_dir = data_store::legacy_profile_dir_for_account(account_id)?;
+    if !legacy_dir.is_dir() {
+        return Ok(());
+    }
+    fs::create_dir_all(new_dir).map_err(|e| format!("无法创建账户配置目录: {}", e))?;
+    copy_profile_file_if_missing(&legacy_dir, new_dir, "config.json")?;
+    copy_profile_file_if_missing(&legacy_dir, new_dir, "recognition-rules.json")?;
+    Ok(())
+}
+
 fn read_store() -> Result<AccountStore, String> {
-    let path = accounts_path()?;
-    let mut store = if path.exists() {
-        let content = fs::read_to_string(&path).map_err(|e| format!("无法读取账户文件: {}", e))?;
-        serde_json::from_str::<AccountStore>(&content).unwrap_or_default()
-    } else {
-        AccountStore {
-            version: ACCOUNT_STORE_VERSION,
-            accounts: vec![],
+    let mut store = read_store_from_database()?;
+    if store.accounts.is_empty() {
+        if let Some(legacy_store) = read_legacy_store()? {
+            if !legacy_store.accounts.is_empty() {
+                store = legacy_store;
+                write_store_to_database(&store)?;
+            }
         }
-    };
+    }
 
     store.version = ACCOUNT_STORE_VERSION;
     if !store.accounts.iter().any(|account| account.id == ADMIN_ID) {
         store.accounts.insert(0, admin_account());
-        write_store(&store)?;
+        write_store_to_database(&store)?;
     }
     Ok(store)
 }
 
 fn write_store(store: &AccountStore) -> Result<(), String> {
-    let path = accounts_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("无法创建账户目录: {}", e))?;
-    }
-    let content = serde_json::to_string_pretty(store).map_err(|e| format!("无法序列化账户文件: {}", e))?;
-    fs::write(&path, content).map_err(|e| format!("无法写入账户文件: {}", e))
+    write_store_to_database(store)
 }
 
 fn read_session() -> Result<AccountSessionFile, String> {
-    let path = session_path()?;
-    if !path.exists() {
-        return Ok(AccountSessionFile::default());
+    if let Some(session) = read_session_from_database()? {
+        return Ok(session);
     }
-    let content = fs::read_to_string(&path).map_err(|e| format!("无法读取登录状态: {}", e))?;
-    Ok(serde_json::from_str::<AccountSessionFile>(&content).unwrap_or_default())
+    if let Some(legacy_session) = read_legacy_session()? {
+        if legacy_session.current_account_id.is_some() {
+            write_session_to_database(&legacy_session)?;
+            return Ok(legacy_session);
+        }
+    }
+    Ok(AccountSessionFile::default())
 }
 
 fn write_session(session: &AccountSessionFile) -> Result<(), String> {
-    let path = session_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("无法创建登录状态目录: {}", e))?;
-    }
-    let content = serde_json::to_string_pretty(session).map_err(|e| format!("无法序列化登录状态: {}", e))?;
-    fs::write(&path, content).map_err(|e| format!("无法写入登录状态: {}", e))
+    write_session_to_database(session)
 }
 
 fn find_account_by_login<'a>(store: &'a AccountStore, login: &str) -> Option<&'a AccountRecord> {

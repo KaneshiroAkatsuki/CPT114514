@@ -180,6 +180,21 @@ export interface AccountSession {
   profile_dir: string;
 }
 
+export interface DataStoreInfo {
+  dataRoot: string;
+  databasePath: string;
+  profilesDir: string;
+  logsDir: string;
+  backupsDir: string;
+  manifestsDir: string;
+  schemaVersion: number;
+  accountCount: number;
+  legacyRoot: string;
+  legacyAccountsExists: boolean;
+  legacyProfilesExists: boolean;
+  isPortable: boolean;
+}
+
 export interface StationAliasRule {
   alias: string;
   station: string;

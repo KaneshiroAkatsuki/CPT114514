@@ -4,7 +4,7 @@
     Package OMM Daily Report portable edition.
 .DESCRIPTION
     Copies the latest app exe, sidecar exe and bundled template into a
-    versioned portable directory and creates a zip plus manifest.json.
+    versioned portable directory and creates a zip plus data\manifests\portable-manifest.json.
     This avoids manual copying mistakes that lead to version mismatches.
 .PARAMETER Version
     Version tag like "v5.0.2". Defaults to version from src-tauri/tauri.conf.json.
@@ -118,7 +118,9 @@ $manifest = @{
     )
 }
 
-$manifestPath = Join-Path $portableDir "manifest.json"
+$manifestDir = Join-Path (Join-Path $innerDir "data") "manifests"
+New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+$manifestPath = Join-Path $manifestDir "portable-manifest.json"
 $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding UTF8
 
 if (Test-Path $zipPath) {

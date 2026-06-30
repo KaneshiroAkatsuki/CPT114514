@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { DisplayNameMode, PublicAccount, TemplateInfo } from "@/types/record";
+import type { DataStoreInfo, DisplayNameMode, PublicAccount, TemplateInfo } from "@/types/record";
 
 export interface SettingsCenterDraft {
   workDir: string;
@@ -57,6 +57,7 @@ interface SettingsCenterDialogProps {
   currentAccount: PublicAccount;
   canUsePersonalCleaner: boolean;
   logCount: number;
+  dataStoreInfo: DataStoreInfo | null;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: SettingsCenterDraft) => Promise<void>;
   onBrowseWorkDir: (defaultPath: string) => Promise<string | null>;
@@ -71,10 +72,12 @@ interface SettingsCenterDialogProps {
   onSwitchAccount: () => void;
   onDisplayNameModeChange: (mode: DisplayNameMode) => Promise<void>;
   onOpenDetailedLogs: () => void;
+  onRefreshDataStore: () => Promise<DataStoreInfo | null>;
+  onOpenDataRoot: () => void;
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.13";
+const APP_VERSION = "5.0.14";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -311,6 +314,7 @@ export function SettingsCenterDialog({
   currentAccount,
   canUsePersonalCleaner,
   logCount,
+  dataStoreInfo,
   onOpenChange,
   onSave,
   onBrowseWorkDir,
@@ -325,6 +329,8 @@ export function SettingsCenterDialog({
   onSwitchAccount,
   onDisplayNameModeChange,
   onOpenDetailedLogs,
+  onRefreshDataStore,
+  onOpenDataRoot,
   onOpenHelp,
 }: SettingsCenterDialogProps) {
   const [activeTab, setActiveTab] = React.useState<SettingsTab>("basic");
@@ -743,6 +749,53 @@ export function SettingsCenterDialog({
             </span>
           </div>
         </div>
+      </Section>
+
+      <Section icon={<Package className="h-4 w-4" />} title="本地数据管理" description="账号、配置、日志、备份和 manifest 统一收纳在本地 data 目录。">
+        {dataStoreInfo ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-500">数据库</div>
+                <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.databasePath}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-500">数据目录</div>
+                <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.dataRoot}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-500">账户配置</div>
+                <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.profilesDir}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs text-slate-500">日志 / 备份 / manifest</div>
+                <div className="mt-1 text-xs leading-5 text-slate-700">
+                  <div className="break-all">日志：{dataStoreInfo.logsDir}</div>
+                  <div className="break-all">备份：{dataStoreInfo.backupsDir}</div>
+                  <div className="break-all">manifest：{dataStoreInfo.manifestsDir}</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
+              <div>
+                SQLite schema v{dataStoreInfo.schemaVersion}，账户 {dataStoreInfo.accountCount} 个，
+                {dataStoreInfo.isPortable ? "便携版数据跟随程序目录。" : "安装版数据位于当前 Windows 用户目录。"}
+                {(dataStoreInfo.legacyAccountsExists || dataStoreInfo.legacyProfilesExists) && (
+                  <span className="ml-1">检测到旧 .omm 数据，已作为兼容导入来源保留。</span>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onOpenDataRoot}>打开数据目录</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { void onRefreshDataStore(); }}>刷新</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            <span>尚未读取本地数据状态。</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
+          </div>
+        )}
       </Section>
 
       <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助与状态" description="帮助中心会随功能更新，版本记录写入当前状态文件。">

@@ -1,4 +1,5 @@
 use crate::AppState;
+use super::data_store;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -120,27 +121,19 @@ fn resolve_cleaner_script(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn effective_log_dir(state: &State<AppState>) -> Result<PathBuf, String> {
-    let config = state
+    let _guard = state
         .config
         .lock()
-        .map_err(|_| "无法读取配置状态".to_string())?
-        .clone();
-    let base = config.effective_config_dir()?;
-    let dir = base.join("personal-cleaner-logs");
-    fs::create_dir_all(&dir).map_err(|e| format!("无法创建清理日志目录: {}", e))?;
-    Ok(dir)
+        .map_err(|_| "无法读取配置状态".to_string())?;
+    data_store::personal_cleaner_log_dir()
 }
 
 fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
-    let config = state
+    let _guard = state
         .config
         .lock()
-        .map_err(|_| "无法读取配置状态".to_string())?
-        .clone();
-    let base = config.effective_config_dir()?;
-    let dir = base.join("personal-cleaner-backups");
-    fs::create_dir_all(&dir).map_err(|e| format!("无法创建清理备份目录: {}", e))?;
-    Ok(dir)
+        .map_err(|_| "无法读取配置状态".to_string())?;
+    data_store::personal_cleaner_backup_dir()
 }
 
 fn push_switch(args: &mut Vec<String>, enabled: bool, name: &str) {

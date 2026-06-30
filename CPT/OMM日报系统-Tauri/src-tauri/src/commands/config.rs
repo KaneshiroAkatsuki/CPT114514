@@ -252,6 +252,12 @@ fn find_all_portable_configs(root: &Path) -> Vec<PathBuf> {
                     found.push((depth, path));
                 }
             } else if path.is_dir() {
+                if matches!(
+                    path.file_name().and_then(|s| s.to_str()),
+                    Some("data" | ".omm" | "node_modules" | "target")
+                ) {
+                    continue;
+                }
                 visit(&path, depth + 1, found);
             }
         }

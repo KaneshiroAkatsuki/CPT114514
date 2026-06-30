@@ -449,7 +449,7 @@ sidecar/
 1. 拆分 `generate_report.py`。
 2. 增加模板解析、sidecar 命令、报表生成的测试。
 3. 增加 release smoke test：启动 sidecar，发送 `ping` 和 `get_template_info`。
-4. 给发布产物写 `manifest.json`，记录主程序版本、sidecar hash、模板 hash。
+4. 给发布产物写 `data/manifests/portable-manifest.json`，记录主程序版本、sidecar hash、模板 hash。
 
 ## 10. 建议验收步骤
 
@@ -482,4 +482,3 @@ $env:YX_BUNDLED_TEMPLATE="$PWD\resources\template.xlsx"
 3. 在没有工作目录模板的情况下也能生成报表。
 4. 点击“更新模板”后，模板来源变成 `[用户自定义]`。
 5. 点击“重置为内置”后，模板来源回到 `[内置模板]`。
-

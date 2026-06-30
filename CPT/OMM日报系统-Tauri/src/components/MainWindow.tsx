@@ -12,11 +12,11 @@ import { SpecialItemsDialog } from "@/components/SpecialItemsDialog";
 import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
 import { SettingsCenterDialog, type SettingsCenterDraft } from "@/components/SettingsCenterDialog";
-import { useFile, useSidecar, useConfigManager, useAccountManager } from "@/hooks/useSidecar";
+import { useFile, useSidecar, useConfigManager, useAccountManager, useDataStoreManager } from "@/hooks/useSidecar";
 import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
-import type { DisplayNameMode, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount } from "@/types/record";
+import type { DisplayNameMode, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount, DataStoreInfo } from "@/types/record";
 import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
@@ -83,6 +83,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [recognitionRules, setRecognitionRules] = useState<RecognitionRules>(emptyRecognitionRules());
   const [recognitionRulesPath, setRecognitionRulesPath] = useState("");
   const [recognitionRulesExists, setRecognitionRulesExists] = useState(false);
+  const [dataStoreInfo, setDataStoreInfo] = useState<DataStoreInfo | null>(null);
 
   // Preview dialog state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -134,6 +135,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const { parseFolders, generate, preview, listDateFolders, listChildFolders, getTemplateInfo, replaceTemplate, resetTemplate, getTemplatePaths } = useSidecar();
   const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules } = useConfigManager();
   const { setCurrentAccountDisplayMode } = useAccountManager();
+  const { getDataStoreInfo } = useDataStoreManager();
   const isAdminAccount = currentAccount.role === "admin";
 
   const refreshRecognitionRules = async () => {
@@ -196,7 +198,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     });
     // 加载模板信息
     getTemplateInfo().then(setTemplateInfo).catch(() => { /* ignore */ });
+    refreshDataStoreInfo().catch(() => { /* logged in helper */ });
   }, []);
+
+  useEffect(() => {
+    if (settingsCenterOpen) {
+      refreshDataStoreInfo().catch(() => { /* logged in helper */ });
+    }
+  }, [settingsCenterOpen]);
 
   // 统一构造需要持久化的配置对象，避免不同保存入口遗漏字段。
   const buildConfigPatch = (overrides?: Partial<Config>): Config => {
@@ -639,6 +648,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
   const addLog = (msg: string) => {
     setLogs((prev) => [...prev, msg]);
+  };
+
+  const refreshDataStoreInfo = async () => {
+    try {
+      const info = await getDataStoreInfo();
+      setDataStoreInfo(info);
+      return info;
+    } catch (e) {
+      addLog(`本地数据状态读取失败: ${e}`);
+      return null;
+    }
   };
 
   const handleCopyDetailedLogs = async () => {
@@ -2146,6 +2166,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         currentAccount={currentAccount}
         canUsePersonalCleaner={isAdminAccount}
         logCount={logs.length}
+        dataStoreInfo={dataStoreInfo}
         onOpenChange={setSettingsCenterOpen}
         onSave={handleSaveSettingsCenter}
         onBrowseWorkDir={(defaultPath) => selectFolder(defaultPath || configDir)}
@@ -2162,6 +2183,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         onSwitchAccount={onSwitchAccount}
         onDisplayNameModeChange={handleDisplayNameModeChange}
         onOpenDetailedLogs={() => setLogDialogOpen(true)}
+        onRefreshDataStore={refreshDataStoreInfo}
+        onOpenDataRoot={() => {
+          if (dataStoreInfo?.dataRoot) openFolder(dataStoreInfo.dataRoot);
+        }}
         onOpenHelp={handleHelpOpen}
       />
 

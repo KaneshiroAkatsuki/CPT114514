@@ -318,7 +318,8 @@ const TOPICS: HelpTopic[] = [
           <li><strong>新员工注册：</strong>输入昵称、真实姓名和 4-6 位数字 PIN，注册后默认为访客账户。</li>
           <li><strong>登录方式：</strong>可以用昵称或真实姓名登录；PIN 只保存加盐哈希，不保存明文。</li>
           <li><strong>忘记 PIN：</strong>访客可输入管理员 PIN 重置；管理员 PIN 忘记时不会提供普通重置入口。</li>
-          <li><strong>账户配置：</strong>每个账户使用独立 profile，默认规则、工作目录、输出目录、识别补充规则和清理日志都会随账户切换。</li>
+          <li><strong>账户数据：</strong>账号、PIN 哈希和当前登录状态保存在本地 <code className={text.code}>data/omm.db</code>，旧 <code className={text.code}>.omm</code> 文件只作为首次导入来源保留。</li>
+          <li><strong>账户配置：</strong>每个账户使用独立 profile，默认规则、工作目录、输出目录和识别补充规则收纳在 <code className={text.code}>data/profiles</code>。</li>
           <li><strong>页头显示：</strong>设置中心可切换欢迎语显示昵称或真实姓名，例如“欢迎您，Dr. Kaneshiro”。</li>
         </ul>
       </div>
@@ -339,7 +340,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
           <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置、个人清理工具和关于软件都可以从设置中心进入。</li>
           <li><strong>诊断日志：</strong>主界面不显示日志；排查问题时在“关于软件”的“诊断”区域查看。</li>
-          <li><strong>关于软件：</strong>显示当前版本、账户、配置文件、识别补充和模板来源，便于验收和排查。</li>
+          <li><strong>关于软件：</strong>显示当前版本、账户、配置文件、识别补充、模板来源和本地数据管理信息，便于验收和排查。</li>
         </ul>
       </div>
     ),
@@ -353,10 +354,10 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li>普通配置默认保存在 <code className={text.code}>%APPDATA%\OMM日报系统</code>。</li>
-          <li>便携版启动时会优先识别自身目录内任意位置的 <code className={text.code}>config.json</code>，并把后续保存写回该配置所在目录。</li>
-          <li>识别补充规则保存在 <code className={text.code}>recognition-rules.json</code>，与 config.json 位于同一配置目录。</li>
-          <li>配置文件和工作目录选择窗口应默认打开当前显示的目录，方便核对和切换。</li>
+          <li>本地数据统一收纳在 <code className={text.code}>data</code> 目录；安装版位于 <code className={text.code}>%APPDATA%\OMM日报系统\data</code>，便携版位于程序同级 <code className={text.code}>data</code>。</li>
+          <li>账号和登录状态保存在 <code className={text.code}>data/omm.db</code>；PIN 仍只保存加盐哈希，不保存明文。</li>
+          <li>账户配置保存在 <code className={text.code}>data/profiles/&lt;账号&gt;/config.json</code>，识别补充规则与该配置同目录。</li>
+          <li>便携版仍兼容旧 <code className={text.code}>config.json</code>；新扫描会跳过 <code className={text.code}>data</code> 和旧 <code className={text.code}>.omm</code>，避免把内部 profile 误判为重复配置。</li>
         </ul>
       </div>
     ),
@@ -375,7 +376,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
           <li><strong>Windows 专项：</strong>通知历史、截图文件夹、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
           <li><strong>私人浏览器：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据；默认可先备份完整 profile。</li>
-          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>personal-cleaner-logs</code>，备份写入 <code className={text.code}>personal-cleaner-backups</code>。</li>
+          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
         </ul>
       </div>
     ),
@@ -412,8 +413,8 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.13。</li>
-          <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充和模板来源；诊断日志也收纳在这里。</li>
+          <li><strong>版本：</strong>5.0.14。</li>
+          <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
