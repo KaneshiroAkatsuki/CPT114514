@@ -81,7 +81,7 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
   const hasDurationAuto = recognized.duration_minutes !== undefined && recognized.duration_minutes !== null && recognized.duration_minutes > 0;
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 text-xs space-y-1.5">
+    <div className="space-y-1.5 rounded-xl border border-slate-200/80 bg-white/70 p-2.5 text-xs shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="flex items-start gap-1.5 text-slate-600">
         <Folder className="h-3.5 w-3.5 shrink-0 mt-0.5" />
         <span className="break-all flex-1">来源：{candidate.folderName}</span>
@@ -325,7 +325,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
       </DialogHeader>
       <DialogContent className="space-y-4">
         {hasCandidates && (
-          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-800">
             已从日期文件夹发现 {item?.manualCandidates?.length || 0} 个手量文件夹，请确认耗时后保存。
             {autoRecognizedCount > 0 && (
               <span className="ml-1">其中 {autoRecognizedCount} 条耗时已自动识别，仍需人工确认。</span>
@@ -333,7 +333,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
           </div>
         )}
         {hasIncomplete && (
-          <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-700 border border-amber-200">
+          <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-700">
             存在未补齐的真实手量字段，正式生成前请补全。
           </div>
         )}
@@ -342,14 +342,14 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
           <div className="space-y-2">
             <label className="text-sm font-medium">粘贴文件夹名识别</label>
             <textarea
-              className="h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="h-32 w-full rounded-lg border border-slate-200/90 bg-white/80 px-3 py-2 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
               placeholder="每行一个文件夹名，支持 -手量-姓名 强特征"
               value={rawInput}
               onChange={(e) => setRawInput(e.target.value)}
             />
             <Button size="sm" variant="secondary" onClick={handleRecognize}>识别手量</Button>
             {recognizeLog.length > 0 && (
-              <div className="max-h-24 overflow-y-auto rounded bg-slate-50 p-2 text-xs text-slate-600">
+              <div className="max-h-24 overflow-y-auto rounded-lg border border-slate-200/80 bg-white/70 p-2 text-xs text-slate-600">
                 {recognizeLog.map((l, i) => (
                   <div key={i}>{l}</div>
                 ))}
@@ -359,7 +359,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">当前手量记录（{tasks.length} 条）</label>
-            <div className="max-h-80 overflow-y-auto rounded-md border space-y-2 p-2">
+            <div className="max-h-80 space-y-2 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/60 p-2">
               {tasks.length === 0 ? (
                 <div className="p-4 text-sm text-slate-400">暂无手量记录</div>
               ) : (
@@ -376,7 +376,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                 return (
                     <div
                       key={t.id}
-                      className={`rounded-md border p-2 space-y-2 ${errs.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
+                      className={`space-y-2 rounded-xl border p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${errs.length > 0 ? 'border-amber-200 bg-amber-50/90' : 'border-slate-200/80 bg-white/80'}`}
                     >
                       {candidate && <CandidateInfo candidate={candidate} task={t} ownerName={ownerName} />}
                       {ownerName && t.operator && t.operator !== ownerName && !candidate && (
@@ -451,7 +451,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                     <div className="space-y-0.5 col-span-3">
                       <label className="text-[10px] text-slate-500">计时方式</label>
                       <select
-                        className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                        className="h-7 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-xs focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
                         value={t.counting_mode || 'separate'}
                         onChange={(e) => handleUpdate(t.id, { counting_mode: e.target.value as RealManualTask['counting_mode'] })}
                       >

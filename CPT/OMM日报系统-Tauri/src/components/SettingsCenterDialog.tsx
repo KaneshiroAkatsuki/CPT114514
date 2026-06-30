@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.15";
+const APP_VERSION = "5.0.16";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -669,7 +669,7 @@ export function SettingsCenterDialog({
           <button
             type="button"
             onClick={onOpenPersonalCleaner}
-            className="rounded-md border border-amber-200 bg-amber-50 p-3 text-left hover:bg-amber-100"
+            className="rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-left transition hover:bg-amber-100/90"
           >
             <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
               <AlertTriangle className="h-4 w-4" />

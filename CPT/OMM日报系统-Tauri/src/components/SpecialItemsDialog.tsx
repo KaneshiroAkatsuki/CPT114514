@@ -80,9 +80,9 @@ export function SpecialItemsDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-[520px] mx-4">
-        <CardHeader className="pb-2 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+      <Card className="mx-4 w-[520px] overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="border-b border-slate-200/70 bg-white/90 pb-2">
           <CardTitle className="text-base">特殊大件物品管理</CardTitle>
         </CardHeader>
         <CardContent className="pt-4">
@@ -91,7 +91,7 @@ export function SpecialItemsDialog({
           </p>
 
           {/* 列表 */}
-          <div className="border border-slate-200 rounded-md mb-3">
+          <div className="mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/70">
             {localItems.length === 0 && !adding ? (
               <div className="px-3 py-6 text-center text-sm text-slate-400">
                 暂无特殊物品，点击下方「添加物品」
@@ -220,7 +220,7 @@ export function SpecialItemsDialog({
           )}
 
           {/* 底部按钮 */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-3">
             <Button variant="outline" onClick={onClose}>
               取消
             </Button>

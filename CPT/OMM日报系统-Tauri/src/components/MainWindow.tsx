@@ -2191,9 +2191,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       />
 
       {logDialogOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
-          <div className="mx-4 flex max-h-[82vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <div className="mx-4 flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+            <div className="flex items-center justify-between border-b border-slate-200/70 bg-white/90 px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">详细日志</h2>
                 <p className="mt-1 text-xs text-slate-500">共 {logs.length} 条运行记录</p>
@@ -2215,7 +2215,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                 ))
               )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
               <Button type="button" variant="outline" onClick={handleCopyDetailedLogs} disabled={logs.length === 0}>
                 复制日志
               </Button>
@@ -2258,12 +2258,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
       {/* Template Paths Dialog */}
       {templatePathsOpen && templatePaths && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <div className="mx-4 flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl border border-white/70 bg-white/95 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">模板位置</h2>
 
             {/* 当前生效模板 */}
-            <div className="mb-4">
+            <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
               <div className="text-xs font-medium text-slate-500 mb-1">当前生效模板</div>
               {templatePaths.current_path ? (
                 <>
@@ -2294,10 +2294,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               )}
             </div>
 
-            <div className="border-t border-slate-100 my-2" />
+            <div className="my-2 border-t border-slate-200/70" />
 
             {/* 内置打包模板 */}
-            <div className="mb-4">
+            <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
               <div className="text-xs font-medium text-slate-500 mb-1">
                 软件内置模板 {templatePaths.bundled_exists ? '' : '（不存在）'}
               </div>
@@ -2321,10 +2321,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               )}
             </div>
 
-            <div className="border-t border-slate-100 my-2" />
+            <div className="my-2 border-t border-slate-200/70" />
 
             {/* 用户自定义模板 */}
-            <div className="mb-2">
+            <div className="mb-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
               <div className="text-xs font-medium text-slate-500 mb-1">
                 用户自定义模板 {templatePaths.user_template_exists ? '（已设置）' : '（未设置，点击「更新模板」可设置）'}
               </div>
@@ -2345,14 +2345,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               )}
             </div>
 
-            <div className="border-t border-slate-100 my-2" />
+            <div className="my-2 border-t border-slate-200/70" />
 
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="mb-3 rounded-lg border border-blue-200/70 bg-blue-50/80 p-3 text-xs leading-5 text-blue-800">
               说明：生成报表时按以下优先级查找模板 —— 用户自定义模板 &gt; 工作目录模板 &gt; 内置模板。
               点击「更新模板」可上传新模板到用户配置目录；点击「重置为内置」会清除自定义模板，回退到内置模板。
             </p>
 
-            <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
+            <div className="mt-2 flex justify-end gap-2 border-t border-slate-200/70 pt-3">
               <Button onClick={() => setTemplatePathsOpen(false)}>关闭</Button>
             </div>
           </div>
@@ -2361,8 +2361,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
       {/* Generation Complete Dialog */}
       {generateResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <div className="mx-4 flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl border border-white/70 bg-white/95 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">
               {generateResult.status === 'paused'
                 ? '生成已暂停，需要先处理手量'
@@ -2380,8 +2380,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
             {/* 生成结果列表 */}
             {generateResult.outputPaths.length > 0 && (
-              <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-slate-200 rounded-md">
-                <div className="px-3 py-2 bg-slate-50 text-xs font-medium text-slate-600 border-b border-slate-200 sticky top-0">
+              <div className="mb-3 mt-2 flex-1 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/70">
+                <div className="sticky top-0 border-b border-slate-200/70 bg-slate-50/90 px-3 py-2 text-xs font-medium text-slate-600">
                   生成结果（共 {generateResult.outputPaths.length} 份）
                 </div>
                 <ul className="divide-y divide-slate-100">
@@ -2419,8 +2419,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
             {/* 未处理项列表 */}
             {generateResult.pendingItems.length > 0 && (
-              <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-amber-200 rounded-md">
-                <div className="px-3 py-2 bg-amber-50 text-xs font-medium text-amber-700 border-b border-amber-200 sticky top-0">
+              <div className="mb-3 mt-2 flex-1 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50/80">
+                <div className="sticky top-0 border-b border-amber-200 bg-amber-50/95 px-3 py-2 text-xs font-medium text-amber-700">
                   以下日期尚未生成
                 </div>
                 <ul className="divide-y divide-amber-100">
@@ -2435,8 +2435,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
             {/* 失败明细 */}
             {generateResult.failures.length > 0 && (
-              <div className="mt-2 mb-3 overflow-y-auto flex-1 border border-red-200 rounded-md">
-                <div className="px-3 py-2 bg-red-50 text-xs font-medium text-red-700 border-b border-red-200 sticky top-0">
+              <div className="mb-3 mt-2 flex-1 overflow-y-auto rounded-xl border border-red-200 bg-red-50/80">
+                <div className="sticky top-0 border-b border-red-200 bg-red-50/95 px-3 py-2 text-xs font-medium text-red-700">
                   {generateResult.status === 'paused' ? '暂停原因' : '失败原因'}（共 {generateResult.failures.length} 项）
                 </div>
                 <ul className="divide-y divide-red-100">
@@ -2485,7 +2485,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
             {/* 排程警告醒目提示 */}
             {generateResult.schedWarnings.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-3">
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/90 p-3">
                 <p className="text-sm font-semibold text-amber-900 mb-1">⚠ 排程警告（请人工核对）</p>
                 <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
                   {generateResult.schedWarnings.map((w, i) => (
@@ -2495,7 +2495,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               </div>
             )}
 
-            <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-slate-100">
+            <div className="mt-3 flex justify-end gap-2 border-t border-slate-200/70 pt-3">
               {generateResult.commonParent && (
                 <Button
                   variant="secondary"

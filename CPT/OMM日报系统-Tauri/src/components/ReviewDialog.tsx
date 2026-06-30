@@ -187,9 +187,9 @@ export function ReviewDialog({
   const problemFields = [...info.missing, ...info.placeholders];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col mx-4">
-        <CardHeader className="shrink-0 border-b">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+      <Card className="mx-4 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="shrink-0 border-b border-slate-200/70 bg-white/90">
           <CardTitle className="flex items-center justify-between">
             <span>审核缺失字段</span>
             <span className="text-sm font-normal text-slate-500">
@@ -198,7 +198,7 @@ export function ReviewDialog({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto pt-4">
-          <div className="border rounded-md p-3 space-y-2">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="font-medium text-sm text-slate-900">
               {currentFolder}
             </div>
@@ -244,11 +244,11 @@ export function ReviewDialog({
           </div>
         </CardContent>
         {error && (
-          <div className="shrink-0 border-t border-red-200 bg-red-50 px-4 py-2">
+          <div className="shrink-0 border-t border-red-200 bg-red-50/90 px-4 py-2">
             <p className="text-sm text-red-700 font-medium">{error}</p>
           </div>
         )}
-        <div className="shrink-0 border-t p-4 flex justify-end gap-3">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-200/70 bg-slate-50/80 p-4">
           <Button variant="outline" onClick={onCancel}>
             取消
           </Button>

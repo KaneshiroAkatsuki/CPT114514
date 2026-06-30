@@ -102,9 +102,9 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="w-[900px] max-w-full h-[680px] max-h-[90vh] flex flex-col overflow-hidden rounded-lg border-slate-200 shadow-xl">
-        <CardHeader className="shrink-0 border-b border-slate-100 bg-slate-50/50 px-5 py-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+      <Card className="flex h-[680px] max-h-[90vh] w-[900px] max-w-full flex-col overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="shrink-0 border-b border-slate-200/70 bg-white/90 px-5 py-3">
           <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <Clock className="h-4 w-4 text-blue-600" />
             {title}
@@ -115,7 +115,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
           {/* Stats grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {statItems.map((item) => (
-              <div key={item.label} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div key={item.label} className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <div className="text-xs text-slate-500">{item.label}</div>
                 <div className="text-sm font-semibold text-slate-800">{item.value}</div>
               </div>
@@ -132,14 +132,14 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
                   <p className="text-sm leading-6 mt-0.5 opacity-90">{summary.decision.message}</p>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {contributionItems.map((item) => (
-                      <div key={item.label} className="rounded bg-white/60 px-2 py-1.5">
+                        <div key={item.label} className="rounded-lg bg-white/70 px-2 py-1.5">
                         <div className="text-xs opacity-80">{item.label}</div>
                         <div className="text-sm font-medium">{formatMinutes(item.value)}</div>
                       </div>
                     ))}
                   </div>
                   {summary.decision.options && summary.decision.options.length > 0 && (
-                    <div className="mt-3 space-y-1.5 rounded bg-white/60 p-2.5">
+                    <div className="mt-3 space-y-1.5 rounded-xl bg-white/70 p-2.5">
                       <p className="text-sm font-medium">可选处理方式</p>
                       {summary.decision.options.map((opt) => (
                         <div key={opt.key} className="text-sm leading-6">
@@ -175,18 +175,18 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
 
           {!summary.decision && (
             summary.meets_required ? (
-              <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-2">
+              <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50/90 px-4 py-3">
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                 <span className="text-sm font-medium text-green-800">已满足最低有效时长要求</span>
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 flex items-start gap-2">
+                <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50/90 px-4 py-3">
                   <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                   <span className="text-sm font-medium text-red-800">有效时长不足</span>
                 </div>
                 {summary.estimates && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3">
                     <p className="text-sm leading-6 text-amber-900 whitespace-pre-line">
                       还差 {Math.round(summary.estimates.need_minutes)} 分钟{"\n"}
                       乐观估计: 还需约 {summary.estimates.optimistic} 件{"\n"}
@@ -220,7 +220,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
 
           {/* Warnings */}
           {(warnings.length > 0 || schedule_warnings.length > 0) && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3">
               <div className="flex items-center gap-1.5 mb-2">
                 <Info className="h-4 w-4 text-amber-600" />
                 <span className="text-sm font-semibold text-amber-900">警告与提示</span>
@@ -249,9 +249,9 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
           )}
 
           {/* Table */}
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="border-b border-slate-200 bg-slate-50/80">
                 <tr>
                   <th className="px-3 py-2.5 text-center font-medium text-slate-700 w-14">序号</th>
                   <th className="px-3 py-2.5 text-center font-medium text-slate-700">产品</th>
@@ -298,7 +298,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
           </div>
         </CardContent>
 
-        <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 px-5 py-3 flex justify-end">
+        <div className="flex shrink-0 justify-end border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
           <Button onClick={onClose}>关闭</Button>
         </div>
       </Card>

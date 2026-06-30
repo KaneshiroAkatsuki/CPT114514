@@ -16,9 +16,9 @@ export function ConfigLocationDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="w-[520px] max-w-full rounded-lg border-slate-200 shadow-xl">
-        <CardHeader className="border-b border-slate-100 bg-slate-50/50 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+      <Card className="w-[520px] max-w-full rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="border-b border-slate-200/70 bg-white/90 px-5 py-4">
           <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <Settings className="h-4 w-4 text-blue-600" />
             配置文件位置
@@ -32,7 +32,7 @@ export function ConfigLocationDialog({
             </p>
           </div>
 
-          <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 space-y-2">
+          <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3">
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
               <div className="text-sm leading-6 text-blue-800">

@@ -413,8 +413,8 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.15。</li>
-          <li><strong>界面：</strong>已进入 Apple-inspired UI 第一阶段，统一全局字体、背景、按钮、卡片、弹窗、登录页、主窗口外框、设置中心和帮助中心基础风格。</li>
+          <li><strong>版本：</strong>5.0.16。</li>
+          <li><strong>界面：</strong>已完成 Apple-inspired UI 第二阶段，继续统一预览、审核、手量补录、个人清理、识别补充、模板位置和生成结果等复杂弹窗。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>

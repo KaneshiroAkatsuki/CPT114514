@@ -113,7 +113,7 @@ function ToggleRow({
   danger?: boolean;
 }) {
   return (
-    <label className={`flex gap-3 rounded-md border p-3 ${danger ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
+    <label className={`flex gap-3 rounded-xl border p-3 transition ${danger ? "border-red-200 bg-red-50/90" : "border-slate-200/80 bg-white/70 hover:bg-white"}`}>
       <input
         type="checkbox"
         className="mt-1 h-4 w-4"
@@ -143,7 +143,7 @@ function Section({
         {icon}
         <span>{title}</span>
       </div>
-      <div className="grid grid-cols-1 gap-2">{children}</div>
+      <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">{children}</div>
     </section>
   );
 }
@@ -240,7 +240,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
         </div>
       </DialogHeader>
       <DialogContent className="space-y-5">
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-800">
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
@@ -315,7 +315,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
             title="清 Windows 通知历史"
             description="清理通知中心数据库和通知计数，真实执行时会重启 Explorer/任务栏以刷新操作中心。"
           />
-          <div className="rounded-md border border-slate-200 bg-white p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3">
             <label className="text-sm font-medium text-slate-800">清截图文件夹</label>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               删除用户图片目录 Screenshots 中最近 N 天的截图。0 表示不清理。
@@ -324,7 +324,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
               type="number"
               min={0}
               max={365}
-              className="mt-2 h-8 w-32 rounded-md border px-2 text-sm"
+              className="mt-2 h-8 w-32 rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
               value={form.clearScreenshotsDays}
               onChange={(event) => setForm((prev) => ({ ...prev, clearScreenshotsDays: Math.max(0, Number(event.target.value) || 0) }))}
             />
@@ -341,7 +341,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
             title="清 opencode 开始菜单快捷方式"
             description="删除开始菜单中名称包含 opencode/OpenCode 的快捷方式。"
           />
-          <div className="rounded-md border border-slate-200 bg-white p-3">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3">
             <div className="flex items-start gap-2">
               <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
               <div className="flex-1 space-y-2">
@@ -361,7 +361,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
               </div>
             </div>
           </div>
-          <div className="rounded-md border border-red-200 bg-red-50 p-3">
+          <div className="rounded-xl border border-red-200 bg-red-50/90 p-3">
             <div className="flex items-start gap-2">
               <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
               <div className="flex-1">
@@ -370,7 +370,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
                   填写要保留的 WiFi 前缀，例如 cpt3。真实执行会忘记其他已保存 WiFi 配置；留空则不处理 WiFi。
                 </p>
                 <input
-                  className="mt-2 h-8 w-full rounded-md border border-red-200 bg-white px-2 text-sm"
+                  className="mt-2 h-8 w-full rounded-lg border border-red-200 bg-white/90 px-2 text-sm focus-visible:border-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
                   placeholder="例如：cpt3，多个前缀用逗号分隔"
                   value={form.keepWifiPrefixes}
                   onChange={(event) => setForm((prev) => ({ ...prev, keepWifiPrefixes: event.target.value }))}
@@ -381,7 +381,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
         </Section>
 
         {dangers.length > 0 && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <div className="rounded-lg border border-red-200 bg-red-50/90 p-3 text-sm text-red-800">
             <div className="mb-1 font-medium">已选择危险项：</div>
             {dangers.map((item) => (
               <div key={item}>- {item}</div>
@@ -389,7 +389,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
           </div>
         )}
 
-        <div className="rounded-md border bg-slate-950 p-3 text-xs text-slate-100">
+        <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.18)]">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="font-medium">运行日志</span>
             {runInfo && (
@@ -402,7 +402,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-lg border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
         )}
       </DialogContent>
       <DialogFooter className="items-center justify-between">

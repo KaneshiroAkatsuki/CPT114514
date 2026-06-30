@@ -92,8 +92,8 @@ export function RecognitionRulesDialog({
           补充规则独立保存，不会随普通配置重置而清空。
         </div>
       </DialogHeader>
-      <DialogContent className="space-y-4 max-h-[78vh] overflow-y-auto">
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 space-y-1">
+      <DialogContent className="max-h-[78vh] space-y-4 overflow-y-auto">
+        <div className="space-y-1 rounded-xl border border-blue-200/80 bg-blue-50/80 p-3 text-sm text-blue-800">
           <div>规则文件：<code className="break-all">{path || "recognition-rules.json"}</code></div>
           <div>状态：{exists ? "已存在，将继续写回此文件" : "尚未创建，保存后自动创建"}</div>
           <div>内置规则仍始终生效：806 料号取后三位、CNC=035、FAI=开发、烧结盘多品名、焊接 289/290/424-429。</div>
@@ -110,7 +110,7 @@ export function RecognitionRulesDialog({
           </div>
           <Input value={testInput} onChange={(e) => setTestInput(e.target.value)} />
           {testResult && (
-            <div className="rounded-md border bg-slate-50 p-2 text-xs text-slate-700 space-y-1">
+            <div className="space-y-1 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-xs text-slate-700 shadow-sm">
               <div>工站：{testResult.station || "-"}</div>
               <div>品名：{testResult.product || "-"}</div>
               <div>类型：{testResult.test_type || "-"}</div>
@@ -139,7 +139,7 @@ export function RecognitionRulesDialog({
             </Button>
           </div>
           {stationAliases.map((rule: StationAliasRule, index: number) => (
-            <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
+            <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/65 p-2">
               <Input placeholder="匹配词，如 FAI" value={rule.alias} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { alias: e.target.value }) }))} />
               <Input placeholder="工站，如 开发" value={rule.station} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { station: e.target.value }) }))} />
               <Input placeholder="默认类型" value={rule.default_test_type || ""} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { default_test_type: e.target.value }) }))} />
@@ -162,7 +162,7 @@ export function RecognitionRulesDialog({
             </Button>
           </div>
           {productAliases.map((rule: ProductAliasRule, index: number) => (
-            <div key={index} className="grid grid-cols-[1fr_90px_90px_1fr_auto] gap-2">
+            <div key={index} className="grid grid-cols-[1fr_90px_90px_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/65 p-2">
               <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { pattern: e.target.value }) }))} />
               <Input placeholder="品名" value={rule.product} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { product: e.target.value }) }))} />
               <Input placeholder="工站(可空)" value={rule.station || ""} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { station: e.target.value }) }))} />
@@ -179,10 +179,10 @@ export function RecognitionRulesDialog({
             <h3 className="text-sm font-semibold text-slate-800">烧结盘 / 焊接特殊补充</h3>
           </div>
           <div className="text-xs text-slate-500">烧结盘多品名用逗号分隔；焊接规则适合补新编号。</div>
-          <div className="space-y-1">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">
             <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ ...d, sinter_plate_rules: [...sinterRules, { pattern: "", products: [], note: "" }] }))}>添加烧结盘规则</Button>
             {sinterRules.map((rule: SinterPlateRule, index: number) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
+              <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-lg bg-white/75 p-2">
                 <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { pattern: e.target.value }) }))} />
                 <Input placeholder="品名，如 511,512" value={(rule.products || []).join(",")} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { products: e.target.value.split(/[,，]/).map((p) => p.trim()).filter(Boolean) }) }))} />
                 <Input placeholder="备注" value={rule.note || ""} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { note: e.target.value }) }))} />
@@ -190,10 +190,10 @@ export function RecognitionRulesDialog({
               </div>
             ))}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">
             <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ ...d, welding_rules: [...weldingRules, { pattern: "", product: "", note: "" }] }))}>添加焊接规则</Button>
             {weldingRules.map((rule: WeldingRule, index: number) => (
-              <div key={index} className="grid grid-cols-[1fr_100px_1fr_auto] gap-2">
+              <div key={index} className="grid grid-cols-[1fr_100px_1fr_auto] gap-2 rounded-lg bg-white/75 p-2">
                 <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { pattern: e.target.value }) }))} />
                 <Input placeholder="品名" value={rule.product} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { product: e.target.value }) }))} />
                 <Input placeholder="备注" value={rule.note || ""} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { note: e.target.value }) }))} />
@@ -210,9 +210,9 @@ export function RecognitionRulesDialog({
               <Plus className="h-3.5 w-3.5 mr-1" />添加
             </Button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200/80 bg-white/55 p-2 md:grid-cols-4">
             {ignoredTokens.map((token: string, index: number) => (
-              <div key={index} className="flex gap-1">
+              <div key={index} className="flex gap-1 rounded-lg bg-white/75 p-1">
                 <Input value={token} onChange={(e) => setDraft((d) => ({ ...d, ignored_tokens: updateAt(ignoredTokens.map((value) => ({ value })), index, { value: e.target.value }).map((x) => x.value) }))} />
                 <Button variant="ghost" size="sm" onClick={() => setDraft((d) => ({ ...d, ignored_tokens: removeAt(ignoredTokens, index) }))}><Trash2 className="h-4 w-4 text-red-600" /></Button>
               </div>
@@ -220,7 +220,7 @@ export function RecognitionRulesDialog({
           </div>
         </section>
 
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3 text-xs text-amber-800">
           清空下方补充只会清空 <code>recognition-rules.json</code> 的用户补充规则，内置识别能力不会消失。
         </div>
       </DialogContent>
