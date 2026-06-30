@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri-dev": "tauri dev",
-    "tauri-build": "tauri build"
+    "tauri-build": "tauri build",
+    "smoke": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.0",
