@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.0.10
+- 应用版本：5.0.11
 - 版本号随实际更新或发布同步升级；除非明确要求不升版本。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -15,6 +15,7 @@
 - 个人清理已支持本机私人浏览器 profile 清理和可选备份。
 - 帮助中心已按任务分类重构，并新增关键词搜索。
 - 设置中心已新增：默认规则/路径/模板/工具入口集中管理，改动先进入草稿，关闭时会提示保存/放弃/继续编辑。
+- 设置中心已新增“关于软件”：显示版本、当前账户、配置文件、识别补充和模板来源。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
@@ -36,7 +37,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.10
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.11
 ```
 
 ## 重要约束

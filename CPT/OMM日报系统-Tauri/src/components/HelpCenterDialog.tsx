@@ -337,7 +337,8 @@ const TOPICS: HelpTopic[] = [
           <li><strong>先改草稿再保存：</strong>在设置中心修改内容不会立刻写入 config.json，点击“保存设置”后才会生效。</li>
           <li><strong>退出二次确认：</strong>有未保存改动时关闭设置中心，会提示“保存并退出 / 放弃更改 / 继续编辑”，并列出变更摘要。</li>
           <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
-          <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置和个人清理工具都可以从设置中心进入。</li>
+          <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置、个人清理工具和关于软件都可以从设置中心进入。</li>
+          <li><strong>关于软件：</strong>显示当前版本、账户、配置文件、识别补充和模板来源，便于验收和排查。</li>
         </ul>
       </div>
     ),
@@ -404,13 +405,15 @@ const TOPICS: HelpTopic[] = [
   {
     id: "about",
     categoryId: "about",
-    title: "版本和快捷键",
-    summary: "当前版本、配置路径和常用操作。",
-    keywords: ["关于", "版本", "快捷键", "Ctrl+V", "Delete", "右键"],
+    title: "版本、关于软件和快捷键",
+    summary: "当前版本、关于软件栏目、配置路径和常用操作。",
+    keywords: ["关于", "关于软件", "版本", "快捷键", "Ctrl+V", "Delete", "右键", "打包", "dev"],
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.10。</li>
+          <li><strong>版本：</strong>5.0.11。</li>
+          <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充和模板来源。</li>
+          <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
           <li><strong>右键队列项：</strong>设置单日方案、下班策略、手量补录等。</li>

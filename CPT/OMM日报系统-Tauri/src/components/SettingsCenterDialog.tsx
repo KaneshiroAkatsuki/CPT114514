@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FolderOpen,
   HelpCircle,
+  Info,
   Package,
   RotateCcw,
   Save,
@@ -71,7 +72,9 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools";
+const APP_VERSION = "5.0.11";
+
+type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string }[] = [
   { id: "basic", label: "基础", icon: <UserRound className="h-4 w-4" />, description: "使用者、班次和审核模式" },
@@ -79,6 +82,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; description
   { id: "paths", label: "路径与配置", icon: <FolderOpen className="h-4 w-4" />, description: "工作目录、输出目录、配置文件" },
   { id: "assets", label: "模板规则", icon: <FileSpreadsheet className="h-4 w-4" />, description: "报表模板、特殊大件、识别补充" },
   { id: "tools", label: "工具", icon: <Wrench className="h-4 w-4" />, description: "个人清理和帮助入口" },
+  { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、账户、配置和帮助" },
 ];
 
 function normalizeDraft(draft: SettingsCenterDraft): SettingsCenterDraft {
@@ -693,12 +697,71 @@ export function SettingsCenterDialog({
     </div>
   );
 
+  const renderAbout = () => (
+    <div className="space-y-5">
+      <Section icon={<Info className="h-4 w-4" />} title="关于软件" description="版本、账户和配置位置集中展示，便于验收和排查。">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">软件名称</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">OMM 日报系统</div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">当前版本</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">v{APP_VERSION}</div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">当前账户</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">
+              {currentAccount.nickname} / {currentAccount.real_name}
+              <span className="ml-2 text-xs font-normal text-slate-500">{currentAccount.role === "admin" ? "管理员" : "访客"}</span>
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">配置来源</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">{sourceInfo.text}</div>
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-md border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-600">
+          <div>
+            <span className="font-medium text-slate-700">配置文件：</span>
+            <span className="break-all">{configPath || normalizedDraft.configDir || "未识别"}</span>
+          </div>
+          <div>
+            <span className="font-medium text-slate-700">识别补充：</span>
+            <span className="break-all">{recognitionRulesPath || "recognition-rules.json"}</span>
+            <span className="ml-1 text-slate-400">{recognitionRulesExists ? "已存在" : "未创建"}</span>
+          </div>
+          <div>
+            <span className="font-medium text-slate-700">报表模板：</span>
+            <span className="break-all">
+              {templateInfo?.exists ? `${templateSourceLabel(templateInfo.source)} · ${templateInfo.path}` : "未找到模板"}
+            </span>
+          </div>
+        </div>
+      </Section>
+
+      <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助与状态" description="帮助中心会随功能更新，版本记录写入当前状态文件。">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("about")}>版本和快捷键</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("account-login")}>账户登录说明</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("faq")}>常见问题</Button>
+        </div>
+        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
+          日常开发验收优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。
+        </div>
+      </Section>
+    </div>
+  );
+
   const renderActiveTab = () => {
     switch (activeTab) {
       case "generation": return renderGeneration();
       case "paths": return renderPaths();
       case "assets": return renderAssets();
       case "tools": return renderTools();
+      case "about": return renderAbout();
       default: return renderBasic();
     }
   };
