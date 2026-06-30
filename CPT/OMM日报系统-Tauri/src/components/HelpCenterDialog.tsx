@@ -118,6 +118,17 @@ function Content({ section }: { section: string }) {
             <li>补充规则会独立保存到 <code className={code}>recognition-rules.json</code>，不会随普通配置重置而清空。</li>
           </ul>
 
+          <h3 className={h3}>哪些文件名会提示人工确认</h3>
+          <ul className={ul}>
+            <li><strong>品名异常</strong>：品名不像三位数字、测试片、0.2/0.25，或看起来像人名/机器名。</li>
+            <li><strong>多候选</strong>：普通任务里出现多个三位数字品名，或出现多个 PCS/件数量。</li>
+            <li><strong>送测人疑似错字</strong>：出现“张三送”“张三送检”“张三送样”“张三生成”“张三上传”等可能是“张三送测”的写法；程序会先按“张三”预填送测人，并提示你确认。</li>
+            <li><strong>时间异常</strong>：送测时间无法按 0:00-23:59 理解。</li>
+            <li><strong>手量测量员异常</strong>：出现“手量/手测”但没有“-手量-姓名”，或姓名不像 2-4 个中文字。</li>
+            <li><strong>工站兜底</strong>：没有识别到明确工站时会按开发兜底，并提示你确认。</li>
+            <li><strong>CMM/OMM 后姓名</strong>：该姓名通常表示日报归属或设备段姓名，不会自动当作品名或手量测量员。</li>
+          </ul>
+
           <h3 className={h3}>任务子文件夹要求</h3>
           <p className={p}>子文件夹名最好包含上述字段，字段缺失时可启用“复杂文件夹处理方案”进行补全。</p>
         </div>

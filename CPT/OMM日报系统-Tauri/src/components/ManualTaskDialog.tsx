@@ -67,6 +67,7 @@ function formatDuration(minutes?: number | null): string {
 function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolderCandidate; task?: RealManualTask; ownerName?: string }) {
   if (!candidate) return null;
   const recognized = candidate.recognized || {};
+  const warnings = recognized.recognition_warnings || [];
   const missingFields: string[] = [];
   if (!recognized.station) missingFields.push('工站');
   if (!recognized.product) missingFields.push('品名');
@@ -111,6 +112,17 @@ function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolde
         <div className="flex items-start gap-1.5 text-amber-700">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>需人工补充：{missingFields.join('、')}</span>
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="space-y-1 text-amber-700">
+          <div className="font-medium">来源文件夹提示：</div>
+          {warnings.map((warning, index) => (
+            <div key={index} className="flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{warning}</span>
+            </div>
+          ))}
         </div>
       )}
       {task && validateRealManualTask(task).length === 0 && (
@@ -272,7 +284,8 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         duration_minutes: recognized.duration_minutes ?? 0,
         from_recognition: true,
       } as RealManualTask);
-      logs.push(`已识别：${line}`);
+      const warnings = recognized.recognition_warnings || [];
+      logs.push(warnings.length > 0 ? `已识别：${line}；需确认：${warnings.join('；')}` : `已识别：${line}`);
     }
     setTasks((prev) => [...prev, ...newTasks]);
     setRecognizeLog(logs);
@@ -374,6 +387,17 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                           <span>
                             该手量将写入 <strong>{ownerName}</strong> 日报，量测员按 <strong>{t.operator}</strong> 填写
                           </span>
+                        </div>
+                      )}
+                      {!candidate && (t.recognition_warnings || []).length > 0 && (
+                        <div className="space-y-1 text-xs text-amber-700">
+                          <div className="font-medium">来源文件夹提示：</div>
+                          {(t.recognition_warnings || []).map((warning, index) => (
+                            <div key={index} className="flex items-start gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                              <span>{warning}</span>
+                            </div>
+                          ))}
                         </div>
                       )}
                   <div className="grid grid-cols-3 gap-2">
