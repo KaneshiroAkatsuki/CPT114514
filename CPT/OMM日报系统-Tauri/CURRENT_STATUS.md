@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.0.14
+- 应用版本：5.0.15
 - 版本号随实际更新或发布同步升级；除非明确要求不升版本。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -18,6 +18,7 @@
 - 设置中心已新增“关于软件”：显示版本、当前账户、配置文件、识别补充和模板来源。
 - 主界面已隐藏日志展示；诊断日志收纳到设置中心“关于软件”中按需查看。
 - 本地数据层已新增：账号/session 写入 `data/omm.db`，账户配置迁入 `data/profiles/`，个人清理日志/备份迁入 `data/logs/` 和 `data/backups/`，便携版 manifest 后续打包写入 `data/manifests/`。
+- Apple-inspired UI 第一阶段已设计并实施：新增设计系统文档，统一全局 tokens、基础组件、登录入口、主窗口外框、设置中心和帮助中心基础视觉。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
@@ -39,7 +40,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.14
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.0.15
 ```
 
 ## 重要约束

@@ -180,21 +180,21 @@ export function AccountGate() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+      <div className="flex h-screen items-center justify-center bg-[#f5f5f7] text-sm text-slate-500">
         正在读取账户...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900">
+    <div className="min-h-screen bg-[#f5f5f7] px-4 py-8 text-slate-950">
       <div className="mx-auto flex max-w-5xl flex-col gap-5">
-        <header className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+        <header className="app-surface flex items-center gap-3 rounded-2xl px-4 py-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-[0_10px_24px_rgba(10,132,255,0.24)]">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold leading-tight">OMM 日报系统</h1>
+            <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
             <p className="text-sm text-slate-500">本地账户登录 · 配置按账户隔离</p>
           </div>
         </header>
@@ -211,12 +211,12 @@ export function AccountGate() {
             </CardHeader>
             <CardContent className="space-y-4">
               {error && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+                <div className="rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 text-sm leading-6 text-red-800">
                   {error}
                 </div>
               )}
               {message && (
-                <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm leading-6 text-green-800">
+                <div className="rounded-lg border border-green-200 bg-green-50/90 px-3 py-2 text-sm leading-6 text-green-800">
                   {message}
                 </div>
               )}
@@ -239,7 +239,7 @@ export function AccountGate() {
                       <Button variant="outline" onClick={() => { resetFormState(); setMode("register"); }}>
                         注册
                       </Button>
-                      <Button onClick={handleLogin} disabled={working} className="bg-blue-600 hover:bg-blue-700">
+                      <Button onClick={handleLogin} disabled={working}>
                         <KeyRound className="mr-1.5 h-4 w-4" />
                         登录
                       </Button>
@@ -269,7 +269,7 @@ export function AccountGate() {
                     <Button variant="outline" onClick={() => { resetFormState(); setMode("login"); }}>
                       返回登录
                     </Button>
-                    <Button onClick={handleRegister} disabled={working} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleRegister} disabled={working}>
                       注册并登录
                     </Button>
                   </div>
@@ -283,7 +283,7 @@ export function AccountGate() {
                     <select
                       value={targetAccountId}
                       onChange={(event) => setTargetAccountId(event.target.value)}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="h-9 w-full rounded-lg border border-slate-200/90 bg-white/80 px-3 py-1 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
                     >
                       {accounts.map((account) => (
                         <option key={account.id} value={account.id}>
@@ -306,7 +306,7 @@ export function AccountGate() {
                     <Button variant="outline" onClick={() => { resetFormState(); setMode("login"); }}>
                       返回登录
                     </Button>
-                    <Button onClick={handleResetPin} disabled={working} className="bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleResetPin} disabled={working}>
                       重置 PIN
                     </Button>
                   </div>
@@ -333,11 +333,11 @@ export function AccountGate() {
                       setMode("login");
                       setError("");
                     }}
-                    className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left hover:bg-white"
+                    className="app-list-item w-full px-3 py-2 text-left"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-slate-800">{account.nickname}</span>
-                      <span className={`rounded border px-1.5 py-0.5 text-xs ${
+                      <span className={`rounded-full border px-2 py-0.5 text-xs ${
                         account.role === "admin"
                           ? "border-blue-200 bg-blue-50 text-blue-700"
                           : "border-slate-200 bg-white text-slate-600"
@@ -349,8 +349,8 @@ export function AccountGate() {
                   </button>
                 ))}
               </div>
-              <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-6 text-blue-800">
-                默认管理员账户为 Kaneshiro / 禹欣。账户文件位于：
+              <div className="rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
+                默认管理员账户为 Kaneshiro / 禹欣。本地数据目录：
                 <div className="mt-1 break-all font-mono text-[11px]">{storageRoot || ".omm"}</div>
               </div>
             </CardContent>

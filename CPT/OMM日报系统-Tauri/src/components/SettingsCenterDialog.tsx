@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.14";
+const APP_VERSION = "5.0.15";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -203,7 +203,7 @@ function Section({
           <p className="text-xs leading-5 text-slate-500">{description}</p>
         </div>
       </div>
-      <div className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+      <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/75 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {children}
       </div>
     </section>
@@ -240,7 +240,7 @@ function Segmented<T extends string>({
           size="sm"
           variant={value === option.value ? "default" : "outline"}
           onClick={() => onChange(option.value)}
-          className={value === option.value ? (option.tone === "warning" ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700") : ""}
+          className={value === option.value && option.tone === "warning" ? "bg-amber-500 hover:bg-amber-600" : ""}
         >
           {option.label}
         </Button>
@@ -261,7 +261,7 @@ function ToggleRow({
   description: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2.5 transition hover:bg-white">
       <span className="min-w-0">
         <span className="block text-sm font-medium text-slate-800">{title}</span>
         <span className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span>
@@ -297,7 +297,7 @@ function NumberInput({
       step={step}
       value={Number.isFinite(value) ? value : ""}
       onChange={(event) => onChange(event.target.value === "" ? Number.NaN : Number(event.target.value))}
-      className="h-9 w-24 rounded-md border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="h-9 w-24 rounded-lg border border-slate-200/90 bg-white/80 px-2 py-1 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
     />
   );
 }
@@ -811,7 +811,7 @@ export function SettingsCenterDialog({
       </Section>
 
       <Section icon={<ClipboardList className="h-4 w-4" />} title="诊断" description="一般情况下不需要打开，排查问题时再查看。">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
           <div>
             <div className="text-sm font-medium text-slate-800">运行诊断日志</div>
             <div className="mt-1 text-xs leading-5 text-slate-500">当前累计 {logCount} 条，仅用于排查生成、识别和配置加载问题。</div>
@@ -849,17 +849,17 @@ export function SettingsCenterDialog({
 
       <DialogContent className="p-0">
         <div className="grid min-h-[560px] grid-cols-1 md:grid-cols-[190px_1fr]">
-          <aside className="border-b border-slate-200 bg-slate-50 p-3 md:border-b-0 md:border-r">
+          <aside className="border-b border-slate-200/80 bg-[#f5f5f7] p-3 md:border-b-0 md:border-r">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-md px-3 py-2 text-left transition-colors ${
+                  className={`rounded-xl px-3 py-2 text-left transition-[background-color,box-shadow,color] duration-150 ${
                     activeTab === tab.id
-                      ? "bg-white text-blue-700 shadow-sm ring-1 ring-blue-100"
-                      : "text-slate-600 hover:bg-white hover:text-slate-900"
+                      ? "bg-white text-blue-700 shadow-[0_8px_20px_rgba(15,23,42,0.07)] ring-1 ring-blue-100"
+                      : "text-slate-600 hover:bg-white/80 hover:text-slate-950"
                   }`}
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">
@@ -872,14 +872,14 @@ export function SettingsCenterDialog({
             </div>
           </aside>
 
-          <main className="max-h-[62vh] overflow-y-auto bg-slate-50/40 p-4">
+          <main className="max-h-[62vh] overflow-y-auto bg-white/45 p-4">
             {error && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 text-sm leading-6 text-red-800">
                 {error}
               </div>
             )}
             {dirty && !confirmExit && (
-              <div className="mb-4 flex items-start gap-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs leading-5 text-blue-800">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>当前有 {changes.length} 项未保存改动。保存前不会写入配置文件。</span>
               </div>
@@ -889,8 +889,8 @@ export function SettingsCenterDialog({
         </div>
 
         {confirmExit && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4">
-            <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl border border-white/70 bg-white/95 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                 <div className="min-w-0 flex-1">
@@ -919,7 +919,7 @@ export function SettingsCenterDialog({
                 >
                   放弃更改
                 </Button>
-                <Button type="button" onClick={() => saveDraft(true)} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                <Button type="button" onClick={() => saveDraft(true)} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" />
                   保存并退出
                 </Button>
@@ -941,7 +941,7 @@ export function SettingsCenterDialog({
           <Button type="button" variant="secondary" onClick={requestClose} disabled={saving}>
             关闭
           </Button>
-          <Button type="button" onClick={() => saveDraft(false)} disabled={!dirty || saving} className="bg-blue-600 hover:bg-blue-700">
+          <Button type="button" onClick={() => saveDraft(false)} disabled={!dirty || saving}>
             <Save className="mr-1.5 h-4 w-4" />
             保存设置
           </Button>

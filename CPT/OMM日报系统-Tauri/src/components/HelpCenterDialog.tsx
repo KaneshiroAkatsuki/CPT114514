@@ -45,8 +45,8 @@ const text = {
   ul: "list-disc space-y-1.5 pl-5 text-sm leading-7 text-slate-700",
   ol: "list-decimal space-y-2 pl-5 text-sm leading-7 text-slate-700",
   code: "rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-700",
-  note: "rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm leading-6 text-blue-800",
-  warn: "rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-6 text-amber-900",
+  note: "rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2.5 text-sm leading-6 text-blue-800",
+  warn: "rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2.5 text-sm leading-6 text-amber-900",
 };
 
 const CATEGORIES: HelpCategory[] = [
@@ -413,7 +413,8 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.14。</li>
+          <li><strong>版本：</strong>5.0.15。</li>
+          <li><strong>界面：</strong>已进入 Apple-inspired UI 第一阶段，统一全局字体、背景、按钮、卡片、弹窗、登录页、主窗口外框、设置中心和帮助中心基础风格。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
@@ -496,9 +497,9 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex h-[700px] max-h-[92vh] w-[980px] max-w-full flex-col overflow-hidden rounded-lg border-slate-200 shadow-xl">
-        <CardHeader className="shrink-0 border-b border-slate-100 bg-white px-5 py-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+      <Card className="flex h-[700px] max-h-[92vh] w-[980px] max-w-full flex-col overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <CardHeader className="shrink-0 border-b border-slate-200/70 bg-white/90 px-5 py-3">
           <div className="flex items-center justify-between gap-4">
             <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900">
               <BookOpen className="h-4 w-4 text-blue-600" />
@@ -507,7 +508,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
             <div className="relative w-72">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <input
-                className="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                className="h-9 w-full rounded-lg border border-slate-200/90 bg-white/85 pl-8 pr-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                 placeholder="搜索：手量、模板、warning、私人浏览器..."
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -517,7 +518,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 overflow-hidden p-0">
-          <aside className="w-64 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/70 p-3">
+          <aside className="w-64 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-[#f5f5f7] p-3">
             <nav className="space-y-1">
               {CATEGORIES.map((category) => {
                 const active = activeCategoryId === category.id && !normalizedQuery;
@@ -529,10 +530,10 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                       setQuery("");
                       if (firstTopic) setActiveTopicId(firstTopic.id);
                     }}
-                    className={`flex w-full items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors ${
+                    className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,box-shadow,color] duration-150 ${
                       active
-                        ? "border-blue-200 bg-white text-blue-700 shadow-sm"
-                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900"
+                        ? "border-blue-200 bg-white text-blue-700 shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
+                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-white/80 hover:text-slate-950"
                     }`}
                   >
                     <span className={`mt-0.5 ${active ? "text-blue-600" : "text-slate-400"}`}>{category.icon}</span>
@@ -546,8 +547,8 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
             </nav>
           </aside>
 
-          <main className="flex min-w-0 flex-1 overflow-hidden bg-white">
-            <div className="w-64 shrink-0 overflow-y-auto border-r border-slate-100 p-3">
+          <main className="flex min-w-0 flex-1 overflow-hidden bg-white/80">
+            <div className="w-64 shrink-0 overflow-y-auto border-r border-slate-200/70 p-3">
               {normalizedQuery ? (
                 <div className="space-y-2">
                   <div className="px-1 text-xs font-medium text-slate-500">搜索结果 {searchResults.length}</div>

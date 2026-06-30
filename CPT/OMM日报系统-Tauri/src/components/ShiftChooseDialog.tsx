@@ -17,7 +17,7 @@ export function ShiftChooseDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 backdrop-blur-sm">
       <Card className="w-[360px] mx-4">
         <CardHeader className="pb-2 border-b">
           <CardTitle className="text-base">选择班次</CardTitle>
@@ -36,7 +36,6 @@ export function ShiftChooseDialog({
             </Button>
             <Button
               variant="default"
-              className="bg-blue-600 hover:bg-blue-700"
               onClick={() => onChoose('B')}
             >
               B 夜班

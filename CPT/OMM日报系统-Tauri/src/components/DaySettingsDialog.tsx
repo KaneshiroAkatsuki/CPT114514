@@ -51,7 +51,7 @@ export function DaySettingsDialog({
   const hasOverrides = leaveStrategy !== undefined || enableHand !== undefined || enableOther !== undefined;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
       <Card className="w-[420px] max-w-full">
         <CardHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -80,7 +80,6 @@ export function DaySettingsDialog({
                   size="sm"
                   variant={leave === opt.key ? 'default' : 'outline'}
                   onClick={() => setLeave(opt.key as 'auto' | 'early' | 'normal')}
-                  className={leave === opt.key ? 'bg-blue-600 hover:bg-blue-700' : ''}
                 >
                   {opt.label}
                 </Button>
@@ -88,7 +87,7 @@ export function DaySettingsDialog({
             </div>
           </div>
 
-          <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/70 p-3">
             <p className="text-xs font-medium text-slate-500">补时长选项</p>
             <label className="flex items-center justify-between text-sm text-slate-700 cursor-pointer">
               允许补时间手量
@@ -146,7 +145,6 @@ export function DaySettingsDialog({
                   onSave(patch);
                   onClose();
                 }}
-                className="bg-blue-600 hover:bg-blue-700"
               >
                 保存
               </Button>

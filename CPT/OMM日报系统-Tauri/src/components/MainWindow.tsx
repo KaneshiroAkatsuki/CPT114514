@@ -1695,15 +1695,15 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 text-slate-900">
+    <div className="flex h-screen flex-col bg-[#f5f5f7] text-slate-950">
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-200 shrink-0">
+      <header className="mx-3 mt-3 flex shrink-0 items-center justify-between rounded-2xl border border-slate-200/80 bg-white/85 px-4 py-3 shadow-[0_10px_32px_rgba(15,23,42,0.07)] backdrop-blur-xl">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-[0_10px_24px_rgba(10,132,255,0.24)]">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-base font-semibold text-slate-900 leading-tight">OMM 日报自动生成</h1>
+            <h1 className="text-base font-semibold leading-tight tracking-normal text-slate-950">OMM 日报自动生成</h1>
             <p className="text-xs text-slate-500">
               欢迎您，Dr. {currentAccount.display_name}
               <span className="ml-1 text-slate-400">· {isAdminAccount ? "管理员" : "访客"}</span>
@@ -1711,11 +1711,11 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setSettingsCenterOpen(true)} className="gap-1.5 text-slate-600 hover:text-slate-900">
+          <Button variant="ghost" size="sm" onClick={() => setSettingsCenterOpen(true)} className="gap-1.5">
             <Settings className="h-4 w-4" />
             设置
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleHelpOpen('quickstart')} className="gap-1.5 text-slate-600 hover:text-slate-900">
+          <Button variant="ghost" size="sm" onClick={() => handleHelpOpen('quickstart')} className="gap-1.5">
             <HelpCircle className="h-4 w-4" />
             使用说明
           </Button>
@@ -1759,7 +1759,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     <select
                       value={selectedDateFolder}
                       onChange={(e) => setSelectedDateFolder(e.target.value)}
-                      className="h-9 min-w-[10rem] rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="h-9 min-w-[10rem] rounded-lg border border-slate-200/90 bg-white/80 px-3 py-1 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
                     >
                       <option value="">-- 请选择日期文件夹 --</option>
                       {dateFolders.map((folder) => (
@@ -1849,14 +1849,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                 </CardContent>
               </Card>
               {/* Actions */}
-              <Card className="bg-slate-50/60 border-slate-200">
+              <Card className="border-slate-200/80 bg-white/70">
                 <CardContent className="pt-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <Button
                       size="lg"
                       onClick={handleGenerate}
                       disabled={isGenerating}
-                      className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                      className="gap-2"
                     >
                       <Play className="h-4 w-4" />
                       生成报表
