@@ -1008,6 +1008,7 @@ function Invoke-NotificationClearAllButton {
 
     if ($IsDryRun) {
         Write-Host "        [模拟点击] 打开通知中心并点击“全部清除”按钮" -ForegroundColor DarkCyan
+        Write-Host "        [模拟开启] 点击“请勿打扰”按钮；如果已开启则保持开启" -ForegroundColor DarkCyan
         return 1
     }
 
@@ -1051,7 +1052,9 @@ public static class CleanerKeyboard {
         )
         $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
         $aliases = @("全部清除", "全部清理", "全部清空", "清除全部", "Clear all", "Clear all notifications")
+        $doNotDisturbAliases = @("请勿打扰", "勿扰", "Do not disturb", "Do Not Disturb", "Focus assist", "专注助手")
 
+        $clickedClearAll = $false
         for ($i = 0; $i -lt $buttons.Count; $i++) {
             $button = $buttons.Item($i)
             $name = $button.Current.Name
@@ -1069,15 +1072,64 @@ public static class CleanerKeyboard {
                 $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
                 $pattern.Invoke()
                 Start-Sleep -Milliseconds 300
-                [CleanerKeyboard]::Escape()
                 Write-Host "        已点击通知中心按钮: $name" -ForegroundColor DarkGreen
-                return 1
+                $clickedClearAll = $true
+                break
             }
         }
 
+        $dndCount = 0
+        $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        for ($i = 0; $i -lt $buttons.Count; $i++) {
+            $button = $buttons.Item($i)
+            $name = $button.Current.Name
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+            $matched = $false
+            foreach ($alias in $doNotDisturbAliases) {
+                if ($name -eq $alias -or $name -like "*$alias*") {
+                    $matched = $true
+                    break
+                }
+            }
+            if (-not $matched) { continue }
+
+            if ($name -match '(关闭|Turn off|Disable|已开启|On)') {
+                Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                break
+            }
+
+            try {
+                $togglePattern = $button.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                if ($togglePattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off) {
+                    $togglePattern.Toggle()
+                    Start-Sleep -Milliseconds 200
+                    Write-Host "        已开启请勿打扰: $name" -ForegroundColor DarkGreen
+                    $dndCount = 1
+                } else {
+                    Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                }
+            } catch {
+                try {
+                    $invokePattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                    $invokePattern.Invoke()
+                    Start-Sleep -Milliseconds 200
+                    Write-Host "        已点击请勿打扰按钮: $name" -ForegroundColor DarkGreen
+                    $dndCount = 1
+                } catch {
+                    Write-Host "        找到请勿打扰按钮但无法点击: $name - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+            break
+        }
+
         [CleanerKeyboard]::Escape()
+        if ($clickedClearAll) {
+            return (1 + $dndCount)
+        }
+
         Write-Host "        未找到通知中心“全部清除”按钮，可能当前没有可清理通知。" -ForegroundColor Yellow
-        return 0
+        return $dndCount
     } catch {
         try { [CleanerKeyboard]::Escape() } catch { }
         Write-Host "        无法通过通知中心按钮清理: $($_.Exception.Message)" -ForegroundColor Yellow

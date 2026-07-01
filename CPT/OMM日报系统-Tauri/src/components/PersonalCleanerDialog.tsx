@@ -291,11 +291,11 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     group: "windows",
     formKey: "clearWindowsNotifications",
     title: "Windows 通知历史",
-    summary: "点击通知中心“全部清除”，并清理通知计数。",
+    summary: "点击通知中心“全部清除”，随后尝试开启“请勿打扰”。",
     risk: "low",
     clears: ["通知中心当前显示的通知卡片", "通知历史 API 和通知计数"],
     keeps: ["不会关闭各应用通知权限"],
-    impacts: ["会短暂打开通知中心并调用“全部清除”按钮；不会重启 Explorer 或让任务栏黑屏。"],
+    impacts: ["会短暂打开通知中心，调用“全部清除”并尝试开启“请勿打扰”；不会重启 Explorer 或让任务栏黑屏。"],
     backup: "不创建备份；通知历史通常不可恢复。",
   },
   {
