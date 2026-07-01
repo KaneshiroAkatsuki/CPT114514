@@ -1759,6 +1759,54 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             <span>关键流程：先核对数量，再预览，最后生成。选择方案 B 时，报表中的占位符需要生成后手动补全。</span>
           </div>
 
+          <Card className="mb-4 border-slate-200/80 bg-white/75">
+            <CardContent className="py-4">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">日报主操作</div>
+                  <div className="mt-1 text-xs text-slate-500">先预览核对，再生成正式报表。</div>
+                </div>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={handlePreview}
+                    disabled={isGenerating || queue.length === 0}
+                    className="min-w-[132px] gap-1.5"
+                  >
+                    预览日报
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="min-w-[148px] gap-2 shadow-[0_12px_28px_rgba(10,132,255,0.22)]"
+                  >
+                    <Play className="h-4 w-4" />
+                    生成报表
+                  </Button>
+                  {lastOutputPath && !isGenerating && (
+                    <Button variant="secondary" size="lg" onClick={() => openFolder(lastOutputPath)} className="gap-1.5">
+                      <FolderOpen className="h-4 w-4" />
+                      打开输出文件夹
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {isGenerating && (
+                <div className="mx-auto mt-4 max-w-md">
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full bg-blue-500 transition-all"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-center text-sm font-medium text-slate-600">{progress}%</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {/* Left column */}
             <div className="space-y-4">
@@ -1874,47 +1922,6 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>日期文件夹请直接放在工作目录下，命名格式如 6.13A、6.13B。没有 A/B 后缀的文件夹添加时会提示选择班次。</span>
                   </div>
-                </CardContent>
-              </Card>
-              {/* Actions */}
-              <Card className="border-slate-200/80 bg-white/70">
-                <CardContent className="pt-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      size="lg"
-                      onClick={handleGenerate}
-                      disabled={isGenerating}
-                      className="gap-2"
-                    >
-                      <Play className="h-4 w-4" />
-                      生成报表
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handlePreview}
-                      disabled={isGenerating || queue.length === 0}
-                      className="gap-1.5"
-                    >
-                      预览
-                    </Button>
-                    {lastOutputPath && !isGenerating && (
-                      <Button variant="secondary" onClick={() => openFolder(lastOutputPath)} className="gap-1.5">
-                        <FolderOpen className="h-4 w-4" />
-                        打开输出文件夹
-                      </Button>
-                    )}
-                  </div>
-                  {isGenerating && (
-                    <div className="mt-4">
-                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 transition-all"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <p className="text-center text-sm mt-1.5 text-slate-600 font-medium">{progress}%</p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>

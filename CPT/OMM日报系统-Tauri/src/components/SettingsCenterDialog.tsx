@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.5.0";
+const APP_VERSION = "5.5.1";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
@@ -838,8 +838,12 @@ export function SettingsCenterDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : requestClose())}>
-      <DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : requestClose())}
+      className="flex h-[86vh] max-h-[86vh] max-w-5xl flex-col overflow-hidden"
+    >
+      <DialogHeader className="shrink-0">
         <DialogTitle className="flex items-center gap-2">
           <Settings2 className="h-5 w-5 text-blue-600" />
           设置中心
@@ -849,10 +853,10 @@ export function SettingsCenterDialog({
         </div>
       </DialogHeader>
 
-      <DialogContent className="p-0">
-        <div className="grid min-h-[560px] grid-cols-1 md:grid-cols-[190px_1fr]">
-          <aside className="border-b border-slate-200/80 bg-[#f5f5f7] p-3 md:border-b-0 md:border-r">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+      <DialogContent className="min-h-0 flex-1 overflow-hidden p-0">
+        <div className="grid h-full min-h-0 grid-cols-1 sm:grid-cols-[196px_1fr]">
+          <aside className="min-h-0 overflow-y-auto border-b border-slate-200/80 bg-[#f5f5f7] p-3 sm:border-b-0 sm:border-r">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-1">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
@@ -868,13 +872,13 @@ export function SettingsCenterDialog({
                     {tab.icon}
                     {tab.label}
                   </span>
-                  <span className="mt-1 hidden text-xs leading-5 text-slate-500 md:block">{tab.description}</span>
+                  <span className="mt-1 hidden text-xs leading-5 text-slate-500 sm:block">{tab.description}</span>
                 </button>
               ))}
             </div>
           </aside>
 
-          <main className="max-h-[62vh] overflow-y-auto bg-white/45 p-4">
+          <main className="min-h-0 overflow-y-auto bg-white/45 p-4 pr-5">
             {error && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 text-sm leading-6 text-red-800">
                 {error}
@@ -931,7 +935,7 @@ export function SettingsCenterDialog({
         )}
       </DialogContent>
 
-      <DialogFooter className="items-center justify-between">
+      <DialogFooter className="shrink-0 items-center justify-between">
         <div className="text-xs text-slate-500">
           {dirty ? `${changes.length} 项未保存` : "没有未保存改动"}
         </div>

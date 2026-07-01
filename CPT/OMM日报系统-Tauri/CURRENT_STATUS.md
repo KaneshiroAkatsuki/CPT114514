@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.5.0
+- 应用版本：5.5.1
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -28,6 +28,7 @@
 - 个人清理新增火狐浏览记录单项清理，目标为 `C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil` 下 Firefox profile，默认先备份完整 profile。
 - 个人清理中心已重构为分类导航 + 项目详情 + 执行清单确认，清理前会说明会清理什么、保留什么、可能影响和备份策略。
 - 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
+- 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
 - 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.5.0 发布物。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
@@ -35,7 +36,7 @@
 
 ## 最新便携版
 
-> 最新源码版本和便携包版本均为 5.5.0。
+> 最新源码版本为 5.5.1；本轮未打包，最新便携包版本仍为 5.5.0。
 
 - packaged_at：2026-07-02T00:44:04
 - app：9386ae115ef834ebd189d308746079ec16f09d6731208ae3e066e6dc2c47643f
@@ -56,7 +57,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.5.0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.5.1
 ```
 
 ## 重要约束
