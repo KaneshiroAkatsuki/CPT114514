@@ -790,6 +790,90 @@ function Clear-PreferencesSiteSettings {
     return $count
 }
 
+function Invoke-NotificationClearAllButton {
+    param(
+        [switch]$IsDryRun
+    )
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟点击] 打开通知中心并点击“全部清除”按钮" -ForegroundColor DarkCyan
+        return 1
+    }
+
+    try {
+        Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+        Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
+
+        if (-not ("CleanerKeyboard" -as [type])) {
+            Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class CleanerKeyboard {
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    public static void WinN() {
+        keybd_event(0x5B, 0, 0, UIntPtr.Zero);
+        keybd_event(0x4E, 0, 0, UIntPtr.Zero);
+        keybd_event(0x4E, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event(0x5B, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    public static void Escape() {
+        keybd_event(0x1B, 0, 0, UIntPtr.Zero);
+        keybd_event(0x1B, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+}
+"@ -ErrorAction Stop
+        }
+
+        [CleanerKeyboard]::WinN()
+        Start-Sleep -Milliseconds 900
+
+        $root = [System.Windows.Automation.AutomationElement]::RootElement
+        $condition = New-Object System.Windows.Automation.PropertyCondition -ArgumentList @(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Button
+        )
+        $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+        $aliases = @("全部清除", "全部清理", "全部清空", "清除全部", "Clear all", "Clear all notifications")
+
+        for ($i = 0; $i -lt $buttons.Count; $i++) {
+            $button = $buttons.Item($i)
+            $name = $button.Current.Name
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+            $matched = $false
+            foreach ($alias in $aliases) {
+                if ($name -eq $alias -or $name -like "*$alias*") {
+                    $matched = $true
+                    break
+                }
+            }
+
+            if ($matched) {
+                $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                $pattern.Invoke()
+                Start-Sleep -Milliseconds 300
+                [CleanerKeyboard]::Escape()
+                Write-Host "        已点击通知中心按钮: $name" -ForegroundColor DarkGreen
+                return 1
+            }
+        }
+
+        [CleanerKeyboard]::Escape()
+        Write-Host "        未找到通知中心“全部清除”按钮，可能当前没有可清理通知。" -ForegroundColor Yellow
+        return 0
+    } catch {
+        try { [CleanerKeyboard]::Escape() } catch { }
+        Write-Host "        无法通过通知中心按钮清理: $($_.Exception.Message)" -ForegroundColor Yellow
+        return 0
+    }
+}
+
 function Clear-WindowsNotificationHistory {
     param(
         [switch]$IsDryRun
@@ -797,7 +881,10 @@ function Clear-WindowsNotificationHistory {
 
     $count = 0
 
-    # 方法1: 调用 Windows Runtime API。部分 PowerShell 会话会返回 0x80070490，失败后继续走数据库方案。
+    # 方法1: 模拟通知中心的“全部清除”按钮，避免重启 Explorer/任务栏造成屏幕闪烁。
+    $count += Invoke-NotificationClearAllButton -IsDryRun:$IsDryRun
+
+    # 方法2: 调用 Windows Runtime API。部分 PowerShell 会话会返回 0x80070490，失败不再走破坏性数据库方案。
     try {
         if ($IsDryRun) {
             Write-Host "        [模拟调用] ToastNotificationManager.History.Clear()" -ForegroundColor DarkCyan
@@ -806,83 +893,11 @@ function Clear-WindowsNotificationHistory {
             $null = Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue
             [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
             [Windows.UI.Notifications.ToastNotificationManager]::History.Clear() | Out-Null
-            Write-Host "        已清空通知中心显示" -ForegroundColor DarkGreen
+            Write-Host "        已调用系统通知历史 API" -ForegroundColor DarkGreen
             $count++
         }
     } catch {
-        Write-Host "        无法通过 API 清空通知中心: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-
-    # 方法2: 停止 WPN 服务并删除通知数据库。数据库通常被 WpnUserService_* 或 WpnService 锁定。
-    $serviceNames = @()
-    $serviceNames += Get-Service -Name "WpnUserService*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-    $serviceNames += Get-Service -Name "WpnService" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
-    $serviceNames = @($serviceNames | Sort-Object -Unique)
-    $stoppedServices = @()
-
-    foreach ($serviceName in $serviceNames) {
-        try {
-            if ($IsDryRun) {
-                Write-Host "        [模拟停止服务] $serviceName" -ForegroundColor DarkCyan
-                $stoppedServices += $serviceName
-                continue
-            }
-
-            $svc = Get-Service -Name $serviceName -ErrorAction Stop
-            if ($svc.Status -ne 'Stopped') {
-                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Milliseconds 700
-            }
-
-            $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-            if ($svc -and $svc.Status -ne 'Stopped') {
-                $query = sc.exe queryex $serviceName 2>$null
-                $pidLine = $query | Select-String 'PID\s*:\s*(\d+)'
-                if ($pidLine -and [int]$pidLine.Matches[0].Groups[1].Value -gt 0) {
-                    $pid = [int]$pidLine.Matches[0].Groups[1].Value
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-                    Start-Sleep -Milliseconds 700
-                }
-            }
-
-            Write-Host "        已停止通知服务: $serviceName" -ForegroundColor DarkGreen
-            $stoppedServices += $serviceName
-            $count++
-        } catch {
-            Write-Host "        无法停止通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    }
-
-    $notificationDir = "$env:LOCALAPPDATA\Microsoft\Windows\Notifications"
-    $notificationPatterns = @(
-        "wpndatabase.db",
-        "wpndatabase.db-wal",
-        "wpndatabase.db-shm",
-        "wpndatabase.db-journal",
-        "wpndatabase.db-*"
-    )
-
-    if (Test-Path $notificationDir) {
-        $processedNotificationFiles = @{}
-        foreach ($pattern in $notificationPatterns) {
-            Get-ChildItem -Path $notificationDir -Filter $pattern -Force -ErrorAction SilentlyContinue | ForEach-Object {
-                if ($processedNotificationFiles.ContainsKey($_.FullName)) { return }
-                $processedNotificationFiles[$_.FullName] = $true
-                try {
-                    if ($IsDryRun) {
-                        Write-Host "        [模拟删除] $($_.FullName)" -ForegroundColor DarkCyan
-                    } else {
-                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
-                        Write-Host "        已删除通知数据库文件: $($_.FullName)" -ForegroundColor DarkGreen
-                    }
-                    $count++
-                } catch {
-                    Write-Host "        无法删除通知数据库文件: $($_.FullName) - $($_.Exception.Message)" -ForegroundColor Yellow
-                }
-            }
-        }
-    } else {
-        Write-Host "        通知数据库目录不存在: $notificationDir" -ForegroundColor Gray
+        Write-Host "        无法通过 API 清空通知历史: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
     # 方法3: 清理通知设置中的历史计数和时间戳。
@@ -910,46 +925,6 @@ function Clear-WindowsNotificationHistory {
         } catch {
             Write-Host "        无法读取通知设置注册表: $($_.Exception.Message)" -ForegroundColor Yellow
         }
-    }
-
-    # 方法4: 重启相关服务和 Shell UI，让操作中心重新读取空数据库。
-    foreach ($serviceName in $stoppedServices) {
-        try {
-            if ($IsDryRun) {
-                Write-Host "        [模拟启动服务] $serviceName" -ForegroundColor DarkCyan
-            } else {
-                Start-Service -Name $serviceName -ErrorAction SilentlyContinue
-                Write-Host "        已启动通知服务: $serviceName" -ForegroundColor DarkGreen
-            }
-        } catch {
-            Write-Host "        无法启动通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
-        }
-    }
-
-    $shellProcesses = @("ShellExperienceHost", "StartMenuExperienceHost", "RuntimeBroker")
-    foreach ($processName in $shellProcesses) {
-        try {
-            if ($IsDryRun) {
-                Write-Host "        [模拟刷新 UI] $processName" -ForegroundColor DarkCyan
-            } else {
-                Get-Process -Name $processName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            }
-        } catch { }
-    }
-
-    try {
-        if (-not $IsDryRun) {
-            Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 800
-            Start-Process explorer.exe | Out-Null
-            Write-Host "        已重启 Explorer 刷新通知中心界面" -ForegroundColor DarkGreen
-            $count++
-        } else {
-            Write-Host "        [模拟重启] explorer.exe" -ForegroundColor DarkCyan
-            $count++
-        }
-    } catch {
-        Write-Host "        无法重启 Explorer: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
     return $count
@@ -1678,7 +1653,7 @@ foreach ($profileDir in $profileDirs) {
 # 清理 Windows 通知历史记录
 if ($ClearWindowsNotifications) {
     Write-Step "正在清理 Windows 通知历史记录..."
-    Write-Deep "只删除通知数据库中的历史记录，不会重置各应用的通知权限开关"
+    Write-Deep "优先调用通知中心“全部清除”，不会重启 Explorer/任务栏，也不会重置各应用通知权限"
     $results["Windows 通知历史"] += Clear-WindowsNotificationHistory -IsDryRun:$DryRun
     Write-Success "Windows 通知历史清理完成"
 } else {

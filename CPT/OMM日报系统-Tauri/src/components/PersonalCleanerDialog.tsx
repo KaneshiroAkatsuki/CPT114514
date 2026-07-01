@@ -35,6 +35,7 @@ type CleanerShift = "A" | "B";
 type CleanerGroup = "edge" | "private" | "windows" | "network" | "backup";
 type RiskLevel = "low" | "medium" | "high" | "critical";
 type ConfirmTone = "warning" | "danger";
+type ResultTone = "info" | "warning" | "danger";
 
 type BoolKey = keyof Pick<
   CleanerFormState,
@@ -94,6 +95,21 @@ interface CleanerAction {
   keeps: string[];
   impacts: string[];
   backup: string;
+}
+
+interface CleanerSummary {
+  status?: string;
+  dry_run?: boolean;
+  finished_at?: string;
+  error?: string;
+  results?: Record<string, number>;
+}
+
+interface CleanerResultDialog {
+  title: string;
+  description: string;
+  details: string[];
+  tone: ResultTone;
 }
 
 const GROUPS: { id: CleanerGroup; title: string; subtitle: string; icon: React.ReactNode }[] = [
@@ -232,11 +248,11 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     group: "windows",
     formKey: "clearWindowsNotifications",
     title: "Windows 通知历史",
-    summary: "清理通知中心历史和计数。",
+    summary: "点击通知中心“全部清除”，并清理通知计数。",
     risk: "low",
-    clears: ["通知中心历史记录、通知计数"],
+    clears: ["通知中心当前显示的通知卡片", "通知历史 API 和通知计数"],
     keeps: ["不会关闭各应用通知权限"],
-    impacts: ["真实执行时会重启 Explorer/任务栏，以刷新操作中心。"],
+    impacts: ["会短暂打开通知中心并调用“全部清除”按钮；不会重启 Explorer 或让任务栏黑屏。"],
     backup: "不创建备份；通知历史通常不可恢复。",
   },
   {
@@ -475,6 +491,53 @@ function buildRiskItems(form: CleanerFormState, runtime: CleanerRuntime): string
     });
 }
 
+function normalizeCleanerSummary(value: unknown): CleanerSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const rawResults = raw.results && typeof raw.results === "object" ? raw.results as Record<string, unknown> : {};
+  const results: Record<string, number> = {};
+  Object.entries(rawResults).forEach(([key, count]) => {
+    const numeric = typeof count === "number" ? count : Number(count);
+    if (Number.isFinite(numeric)) results[key] = numeric;
+  });
+  return {
+    status: typeof raw.status === "string" ? raw.status : undefined,
+    dry_run: typeof raw.dry_run === "boolean" ? raw.dry_run : undefined,
+    finished_at: typeof raw.finished_at === "string" ? raw.finished_at : undefined,
+    error: typeof raw.error === "string" ? raw.error : undefined,
+    results,
+  };
+}
+
+function buildCleanerResultDialog(summaryValue: unknown, fallbackDryRun: boolean): CleanerResultDialog {
+  const summary = normalizeCleanerSummary(summaryValue);
+  const dryRun = summary?.dry_run ?? fallbackDryRun;
+  const failed = summary?.status === "failed";
+  const processed = Object.entries(summary?.results || {})
+    .filter(([, count]) => count > 0)
+    .map(([name, count]) => `${name}：${count} 项`);
+
+  if (failed) {
+    return {
+      title: "清理未完成",
+      description: summary?.error || "脚本返回失败状态，请查看运行日志。",
+      details: processed,
+      tone: "danger",
+    };
+  }
+
+  return {
+    title: dryRun ? "模拟运行完成" : "清理完成",
+    description: dryRun
+      ? "这次只是模拟，没有真实删除或修改数据。"
+      : "真实清理已经结束，本次执行清单已自动清空。",
+    details: processed.length > 0
+      ? processed
+      : ["没有发现需要处理的项目，或系统当前没有可清理内容。"],
+    tone: "info",
+  };
+}
+
 function ToggleLine({
   checked,
   onChange,
@@ -536,6 +599,9 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     tone: ConfirmTone;
     resolve: (confirmed: boolean) => void;
   } | null>(null);
+  const [resultDialog, setResultDialog] = React.useState<CleanerResultDialog | null>(null);
+  const handledSummaryPathRef = React.useRef<string | null>(null);
+  const currentRunDryRunRef = React.useRef(false);
   const { runPersonalCleaner, readPersonalCleanerLog } = usePersonalCleaner();
 
   const setBool = (key: BoolKey, value: boolean) => {
@@ -589,6 +655,10 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     skipBackup: form.skipBackup,
   });
 
+  const clearSelectedActions = React.useCallback(() => {
+    setForm((prev) => createDefaultForm(prev.screenshotShift));
+  }, []);
+
   const pollLog = React.useCallback(async (info: PersonalCleanerRunInfo) => {
     try {
       const next = await readPersonalCleanerLog(info.logPath, info.summaryPath);
@@ -597,6 +667,16 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
       if (next.done) {
         setRunning(false);
         setRunStartedAt(null);
+        if (handledSummaryPathRef.current !== info.summaryPath) {
+          handledSummaryPathRef.current = info.summaryPath;
+          const result = buildCleanerResultDialog(next.summary, currentRunDryRunRef.current);
+          setResultDialog(result);
+          const summary = normalizeCleanerSummary(next.summary);
+          const wasDryRun = summary?.dry_run ?? currentRunDryRunRef.current;
+          if (!wasDryRun && summary?.status !== "failed") {
+            clearSelectedActions();
+          }
+        }
       } else if (
         runStartedAt &&
         Date.now() - runStartedAt > 60_000 &&
@@ -609,7 +689,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     } catch (e) {
       setError(`读取日志失败: ${e}`);
     }
-  }, [readPersonalCleanerLog, runStartedAt]);
+  }, [clearSelectedActions, readPersonalCleanerLog, runStartedAt]);
 
   React.useEffect(() => {
     if (!runInfo || done || !running) return;
@@ -631,6 +711,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
   const startRun = async (dryRun: boolean) => {
     setError("");
+    setResultDialog(null);
     if (!hasPersonalAction(form, runtime)) {
       setError("请至少选择一个清理项目。");
       return;
@@ -645,6 +726,8 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
     setRunning(true);
     setDone(false);
+    currentRunDryRunRef.current = dryRun;
+    handledSummaryPathRef.current = null;
     setRunStartedAt(Date.now());
     setLog("正在请求管理员权限并启动脚本...");
     try {
@@ -990,6 +1073,18 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
         tone={runConfirm?.tone || "warning"}
         onConfirm={() => resolveRunConfirm(true)}
         onCancel={() => resolveRunConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(resultDialog)}
+        title={resultDialog?.title || "清理完成"}
+        description={resultDialog?.description}
+        details={resultDialog?.details || []}
+        confirmLabel="知道了"
+        cancelLabel={null}
+        tone={resultDialog?.tone || "info"}
+        onConfirm={() => setResultDialog(null)}
+        onCancel={() => setResultDialog(null)}
       />
     </>
   );

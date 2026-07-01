@@ -10,7 +10,7 @@ interface ConfirmDialogProps {
   description?: string;
   details?: string[];
   confirmLabel: string;
-  cancelLabel?: string;
+  cancelLabel?: string | null;
   tone?: ConfirmTone;
   onConfirm: () => void;
   onCancel: () => void;
@@ -75,9 +75,11 @@ export function ConfirmDialog({
             </ul>
           )}
           <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-4">
-            <Button type="button" variant="outline" onClick={onCancel}>
-              {cancelLabel}
-            </Button>
+            {cancelLabel && (
+              <Button type="button" variant="outline" onClick={onCancel}>
+                {cancelLabel}
+              </Button>
+            )}
             <Button type="button" onClick={onConfirm} className={styles.button}>
               {confirmLabel}
             </Button>
