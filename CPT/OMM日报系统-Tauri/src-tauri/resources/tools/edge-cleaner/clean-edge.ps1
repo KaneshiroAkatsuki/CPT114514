@@ -440,6 +440,97 @@ function Stop-AdobiEdgeAndCodexProcesses {
     return $closed
 }
 
+function Clear-SystemProxySettings {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $internetSettingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    $proxyValues = @("ProxyServer", "ProxyOverride", "AutoConfigURL")
+    $changed = 0
+
+    if (-not (Test-Path -LiteralPath $internetSettingsPath)) {
+        Write-Host "        当前用户代理设置注册表路径不存在，跳过" -ForegroundColor Gray
+        return 0
+    }
+
+    $settings = Get-ItemProperty -LiteralPath $internetSettingsPath -ErrorAction SilentlyContinue
+    $proxyEnable = 0
+    if ($settings -and $null -ne $settings.ProxyEnable) {
+        $proxyEnable = [int]$settings.ProxyEnable
+    }
+
+    $existingValues = @()
+    foreach ($name in $proxyValues) {
+        if ($settings -and $settings.PSObject.Properties.Name -contains $name) {
+            $value = [string]$settings.$name
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $existingValues += "$name=$value"
+            }
+        }
+    }
+
+    if ($proxyEnable -eq 0 -and $existingValues.Count -eq 0) {
+        Write-Host "        未发现已启用的系统代理或 PAC 地址" -ForegroundColor Gray
+    } elseif ($IsDryRun) {
+        Write-Host "        [模拟清理] 将关闭当前用户系统代理开关，并清空 ProxyServer / ProxyOverride / AutoConfigURL" -ForegroundColor DarkCyan
+        if ($proxyEnable -ne 0) {
+            Write-Host "        [当前代理] ProxyEnable=$proxyEnable" -ForegroundColor DarkCyan
+        }
+        foreach ($item in $existingValues) {
+            Write-Host "        [当前代理] $item" -ForegroundColor DarkCyan
+        }
+    } else {
+        try {
+            Set-ItemProperty -LiteralPath $internetSettingsPath -Name "ProxyEnable" -Type DWord -Value 0 -ErrorAction Stop
+            $changed++
+        } catch {
+            Write-Host "        无法关闭当前用户系统代理开关: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+
+        foreach ($name in $proxyValues) {
+            try {
+                Remove-ItemProperty -LiteralPath $internetSettingsPath -Name $name -ErrorAction SilentlyContinue
+                $changed++
+            } catch {
+                Write-Host "        无法清理 ${name}: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+
+        try {
+            $signature = @'
+[DllImport("wininet.dll", SetLastError = true)]
+public static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
+'@
+            $wininet = Add-Type -MemberDefinition $signature -Name "WinInetOptions" -Namespace "OMMCleaner" -PassThru -ErrorAction Stop
+            $wininet::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0) | Out-Null
+            $wininet::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null
+        } catch {
+            Write-Host "        系统代理刷新失败，重新打开浏览器后仍会读取新设置: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟清理] 将执行 netsh winhttp reset proxy；不会清理 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 配置" -ForegroundColor DarkCyan
+        return 1
+    }
+
+    try {
+        $netshOutput = & netsh winhttp reset proxy 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "        已重置 WinHTTP 代理" -ForegroundColor DarkGreen
+            $changed++
+        } else {
+            Write-Host "        WinHTTP 代理重置返回异常: $netshOutput" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "        无法执行 WinHTTP 代理重置: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    Write-Host "        已清理系统代理设置；未触碰 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 配置" -ForegroundColor DarkGreen
+    return $changed
+}
+
 function Backup-PrivateBrowserProfile {
     param(
         [string]$Root,
@@ -1497,6 +1588,7 @@ $results = [ordered]@{
     "安全与隐私数据" = 0
     "诊断日志与崩溃报告" = 0
     "运行进程" = 0
+    "系统代理设置" = 0
     "Windows 通知历史" = 0
     "截图文件" = 0
     "剪贴板历史" = 0
@@ -1517,6 +1609,7 @@ $deepItems = @{
     "安全与隐私数据" = $true
     "诊断日志与崩溃报告" = $true
     "运行进程" = $true
+    "系统代理设置" = $true
     "Windows 通知历史" = $true
     "截图文件" = $true
     "剪贴板历史" = $true
@@ -1560,7 +1653,9 @@ $choices = [ordered]@{
 if ($CloseAdobiProcesses) {
     Write-Step "正在关闭 Adobi / Edge / Codex 运行进程..."
     Write-Deep "只处理可执行路径位于 Adobi 根目录下的进程，并额外包含 Edge 和 Codex 前后台进程；不删除任何文件"
+    Write-Deep "如果 Adobi 中的代理软件曾修改系统代理，本项会清空当前用户系统代理和 WinHTTP 代理；不清理 Codex 自身代理配置或 HTTP_PROXY/HTTPS_PROXY 环境变量"
     $results["运行进程"] += Stop-AdobiEdgeAndCodexProcesses -Root $AdobiRoot -IsDryRun:$DryRun
+    $results["系统代理设置"] += Clear-SystemProxySettings -IsDryRun:$DryRun
     Write-Success "Adobi / Edge / Codex 运行进程处理完成"
 }
 

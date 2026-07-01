@@ -32,6 +32,7 @@
 - 个人清理 Windows 通知历史已改为优先调用通知中心“全部清除”按钮；按钮不可用时清空通知数据库兜底，不再重启 Explorer/任务栏；清理完成后会弹出结果摘要并清空真实执行清单。
 - 个人清理新增“运行进程”栏目，可关闭 `C:\Program Files\Adobe\Acrobat DC\Adobi` 目录下运行的软件进程，并包含 Edge/Codex 前后台进程；真实执行前会先弹出候选进程名、PID 和路径，该项只结束进程，不删除文件。
 - 个人清理“私人入口快捷方式”会清理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号样式入口，不删除程序文件。
+- 个人清理“关闭 Adobi / Edge / Codex 进程”已补充代理残留收尾：会清当前用户系统代理和 WinHTTP 代理，避免 lmclient 等代理软件退出后遗留代理地址；不会清 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 自身代理配置。
 - 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
 - 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
