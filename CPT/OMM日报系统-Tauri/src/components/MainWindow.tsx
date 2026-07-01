@@ -1783,23 +1783,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           {activeModule === "home" ? (
             <div className="space-y-5">
               <section className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.07)] backdrop-blur-xl">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
                   <div>
                     <div className="text-xs font-semibold tracking-[0.18em] text-slate-300">KANESHIRO·AKATSUKI</div>
                     <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">玉衡山科学院管理厅</h2>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                      登录后从这里进入日报统计和本机数据维护。常用功能保持原样，只把入口收拢得更清楚。
+                      统筹观测记录、统计生成与本机数据治理。
                     </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => setSettingsCenterOpen(true)} className="gap-1.5">
-                      <Settings className="h-4 w-4" />
-                      设置中心
-                    </Button>
-                    <Button variant="outline" onClick={() => handleHelpOpen("quickstart")} className="gap-1.5">
-                      <HelpCircle className="h-4 w-4" />
-                      帮助中心
-                    </Button>
                   </div>
                 </div>
               </section>
@@ -1817,11 +1807,11 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">可进入</span>
                   </div>
                   <h3 className="mt-4 text-lg font-semibold text-slate-950">信息统计局</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">识别日期文件夹，预览日报，生成 OMM/CMM/手量日报。</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">测量记录识别、过程统计与日报生成。</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-2 py-1">日报队列</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">预览核对</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">Excel 生成</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">记录识别</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">统计预演</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">报表归档</span>
                   </div>
                 </button>
 
@@ -1839,11 +1829,11 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     </span>
                   </div>
                   <h3 className="mt-4 text-lg font-semibold text-slate-950">数据管理局</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">本机清理、网络切换、进程维护和数据痕迹整理。</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">本机数据治理、环境校准与风险控制。</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-2 py-1">模拟运行</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">备份保护</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">高风险确认</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">数据净化</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">环境复位</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">风险校验</span>
                   </div>
                 </button>
               </section>
@@ -1870,9 +1860,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
               <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 {[
-                  { title: "推荐清理", text: "默认避开高风险项，适合日常收尾。" },
-                  { title: "自定义方案", text: "保存自己的清理组合，下次打开继续使用。" },
-                  { title: "保护规则", text: "回收站保留表格、送测/OMM 和 inspec 相关项目。" },
+                  { title: "基准净化", text: "按低风险基线执行日常治理。" },
+                  { title: "方案参数", text: "保存并复用个人治理参数。" },
+                  { title: "保护边界", text: "保留表格、送测与程序相关对象。" },
                 ].map((item) => (
                   <div key={item.title} className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
                     <div className="text-sm font-semibold text-slate-900">{item.title}</div>

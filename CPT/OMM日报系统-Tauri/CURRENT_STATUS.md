@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.6.1
+- 应用版本：5.6.2
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -43,21 +43,21 @@
 - 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
 - UI 收尾审查已补齐：通用弹窗外壳改为不滚动，滚动交给内容区；启动页和浏览器标题同步到当前 Apple-inspired 配色。
-- 项目内已生成最新 5.6.1 便携包。
+- 项目内已生成最新 5.6.2 便携包。
 - 本地账户登录已新增：默认管理员、访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-> 最新便携包版本为 5.6.1，已包含回收站保护清理和“玉衡山科学院管理厅”主页外壳。
+> 最新便携包版本为 5.6.2，已包含回收站保护清理、“玉衡山科学院管理厅”主页外壳，以及主页文案收敛调整。
 
-- packaged_at：2026-07-02T05:17:10
-- app：9d14b24eadd475fa89eb25cbe23b7e857c3adf780b5e35717d0ab05e9c1c78ad
+- packaged_at：2026-07-02T07:05:16
+- app：05a0e6f5631e8d9fb1822ac5a7520085abbd9d903a6880fc787f6e80c5cff55e
 - sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 - personal_cleaner_script：244b4fbc7c853fb1e712f5ffe10a38f2e729a1d5e51d593c7d97f27620eb5e2e
 - personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.6.1.zip`
+- 便携包：`releases/OMM日报系统_便携版_5.6.2.zip`
 - 安装包：本轮交付便携包；安装包仅按需使用。
 - 移动性检查：临时解压验证已通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`，验证目录已清理。
 
@@ -70,7 +70,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.6.1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.6.2
 ```
 
 ## 重要约束
