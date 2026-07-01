@@ -137,7 +137,9 @@ fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
         .config
         .lock()
         .map_err(|_| "无法读取配置状态".to_string())?;
-    data_store::personal_cleaner_backup_dir()
+    Ok(PathBuf::from(
+        r"C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups",
+    ))
 }
 
 fn require_admin_account() -> Result<(), String> {

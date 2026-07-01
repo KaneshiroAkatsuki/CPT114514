@@ -247,12 +247,21 @@ function Backup-EdgeKeyData {
 
     if (-not $IsDryRun -and $count -gt 0) {
         $manifest = [ordered]@{
+            BackupType = "EdgeKeyData"
             CreatedAt = (Get-Date).ToString("o")
             UserDataRoot = $script:UserDataRoot
             Profiles = @($ProfileDirs | ForEach-Object { Split-Path $_ -Leaf })
             Items = @("Bookmarks", "Bookmarks.bak", "Preferences", "Secure Preferences", "Extensions")
+            Note = "Edge 关键数据备份，包含书签、浏览器偏好、Secure Preferences 和扩展本体。"
         }
         $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
+        @(
+            "OMM 日报系统个人清理备份"
+            "类型：Edge 关键数据备份"
+            "来源：$script:UserDataRoot"
+            "内容：Bookmarks、Bookmarks.bak、Preferences、Secure Preferences、Extensions"
+            "用途：清理 Edge 前保留可手动恢复的关键数据。"
+        ) | Set-Content -Path (Join-Path $backupRoot "README.txt") -Encoding utf8
         Write-Host "        备份目录: $backupRoot" -ForegroundColor Green
     }
 
@@ -358,12 +367,20 @@ function Backup-PrivateBrowserProfile {
 
     if (-not $IsDryRun -and $count -gt 0) {
         $manifest = [ordered]@{
+            BackupType = "PrivateFirefoxProfile"
             CreatedAt = (Get-Date).ToString("o")
             PrivateBrowserRoot = $Root
             Profiles = @($ProfileDirs | ForEach-Object { Split-Path $_ -Leaf })
             Note = "完整 profile 备份，包含书签、历史、登录、Cookie 和站点数据。"
         }
         $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
+        @(
+            "OMM 日报系统个人清理备份"
+            "类型：私人 Firefox profile 备份"
+            "来源：$Root"
+            "内容：完整 Firefox profile，可能包含书签、历史、Cookie、登录态、保存登录和站点数据"
+            "用途：清理私人浏览器前保留可手动恢复的完整 profile。"
+        ) | Set-Content -Path (Join-Path $backupRoot "README.txt") -Encoding utf8
         Write-Host "        私人浏览器备份目录: $backupRoot" -ForegroundColor Green
     }
 

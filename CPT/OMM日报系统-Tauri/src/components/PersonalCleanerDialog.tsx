@@ -1,5 +1,16 @@
 import * as React from "react";
-import { AlertTriangle, ClipboardList, ExternalLink, EyeOff, MonitorCog, ShieldAlert, Trash2, Wifi } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  ExternalLink,
+  EyeOff,
+  Info,
+  MonitorCog,
+  ShieldAlert,
+  Trash2,
+  Wifi,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +22,9 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerRunInfo } from "@/hooks/useSidecar";
 
+const PRIVATE_BROWSER_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil";
+const CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
+
 interface PersonalCleanerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,6 +32,9 @@ interface PersonalCleanerDialogProps {
 }
 
 type CleanerShift = "A" | "B";
+type CleanerGroup = "edge" | "private" | "windows" | "network" | "backup";
+type RiskLevel = "low" | "medium" | "high" | "critical";
+type ConfirmTone = "warning" | "danger";
 
 type BoolKey = keyof Pick<
   CleanerFormState,
@@ -58,6 +75,232 @@ interface CleanerFormState {
   keepWifiPrefixes: string;
   skipBackup: boolean;
 }
+
+interface CleanerRuntime {
+  screenshotWindowLabel: string;
+  wifiPrefixes: string[];
+}
+
+interface CleanerAction {
+  id: string;
+  group: CleanerGroup;
+  title: string;
+  summary: string;
+  risk: RiskLevel;
+  formKey?: BoolKey;
+  settingsOnly?: boolean;
+  confirmRequired?: boolean;
+  clears: string[];
+  keeps: string[];
+  impacts: string[];
+  backup: string;
+}
+
+const GROUPS: { id: CleanerGroup; title: string; subtitle: string; icon: React.ReactNode }[] = [
+  { id: "edge", title: "Edge 浏览器", subtitle: "历史、缓存、书签、账户", icon: <MonitorCog className="h-4 w-4" /> },
+  { id: "private", title: "私人 Firefox", subtitle: "AcroUtil profile", icon: <EyeOff className="h-4 w-4" /> },
+  { id: "windows", title: "Windows 痕迹", subtitle: "截图、剪贴板、通知", icon: <ClipboardList className="h-4 w-4" /> },
+  { id: "network", title: "WiFi / 工具", subtitle: "网络记录和快捷方式", icon: <Wifi className="h-4 w-4" /> },
+  { id: "backup", title: "备份策略", subtitle: "位置和保护规则", icon: <ShieldAlert className="h-4 w-4" /> },
+];
+
+const CLEANER_ACTIONS: CleanerAction[] = [
+  {
+    id: "edgeStandard",
+    group: "edge",
+    formKey: "cleanEdge",
+    title: "Edge 标准深度清理",
+    summary: "清理 Edge 常见浏览痕迹和底层缓存，密码与自动填充默认保留。",
+    risk: "medium",
+    clears: [
+      "历史记录、下载记录、访问痕迹",
+      "Cookie、站点本地存储、IndexedDB、Service Worker",
+      "缓存、GPU/代码缓存、会话恢复、缩略图、诊断日志",
+    ],
+    keeps: [
+      "默认保留保存的密码和自动填充",
+      "默认保留书签、扩展本体和微软账户，除非单独勾选危险项",
+    ],
+    impacts: [
+      "部分网站可能需要重新登录",
+      "网页加载缓存会重新生成，首次打开可能稍慢",
+    ],
+    backup: "默认先备份 Edge 书签、Preferences、Secure Preferences 和 Extensions。",
+  },
+  {
+    id: "edgeSitePrefs",
+    group: "edge",
+    formKey: "clearSitePreferences",
+    title: "清站点权限",
+    summary: "清理通知、定位、摄像头等站点权限记录。",
+    risk: "medium",
+    clears: ["站点权限、部分网站内容偏好"],
+    keeps: ["不会重置整个 Edge 界面设置", "不会删除书签或扩展本体"],
+    impacts: ["网站再次请求摄像头、定位、通知等权限时，需要重新允许。"],
+    backup: "跟随 Edge 关键数据备份策略。",
+  },
+  {
+    id: "edgeReset",
+    group: "edge",
+    formKey: "resetEdge",
+    title: "ResetEdge",
+    summary: "把 Edge 清到接近初始状态。",
+    risk: "critical",
+    confirmRequired: true,
+    clears: ["书签、设置、站点权限、扩展数据、微软账户/同步状态等多数 Edge 数据"],
+    keeps: ["系统级 Edge 程序本体不会卸载"],
+    impacts: ["Edge 会接近新装状态，后续需要重新登录、重新配置和重新安装需要的内容。"],
+    backup: "执行前建议保留 Edge 关键数据备份；跳过备份会显著增加恢复难度。",
+  },
+  {
+    id: "edgeBookmarks",
+    group: "edge",
+    formKey: "clearBookmarks",
+    title: "清书签",
+    summary: "删除 Edge 书签和书签排序数据。",
+    risk: "critical",
+    confirmRequired: true,
+    clears: ["Bookmarks、Bookmarks.bak 以及书签排序相关数据"],
+    keeps: ["不会删除浏览器程序本体"],
+    impacts: ["收藏夹会消失，误删后只能从备份手动恢复。"],
+    backup: "默认 Edge 关键数据备份会包含 Bookmarks。",
+  },
+  {
+    id: "edgeExtensions",
+    group: "edge",
+    formKey: "clearExtensions",
+    title: "清扩展本体",
+    summary: "删除已安装 Edge 扩展。",
+    risk: "high",
+    confirmRequired: true,
+    clears: ["Extensions 目录和扩展本体文件"],
+    keeps: ["不会卸载 Edge"],
+    impacts: ["扩展会消失，下次使用需要重新安装；部分扩展数据可能无法自动恢复。"],
+    backup: "默认 Edge 关键数据备份会包含 Extensions。",
+  },
+  {
+    id: "edgeAccount",
+    group: "edge",
+    formKey: "clearMicrosoftAccount",
+    title: "清微软账户/同步",
+    summary: "清理 Edge 登录与同步状态。",
+    risk: "high",
+    confirmRequired: true,
+    clears: ["微软账户登录状态、同步状态和相关本地数据"],
+    keeps: ["不会删除微软账号本身"],
+    impacts: ["Edge 会退出账号登录，浏览器同步需要重新登录。"],
+    backup: "跟随 Edge 关键数据备份策略。",
+  },
+  {
+    id: "privateHistory",
+    group: "private",
+    formKey: "clearPrivateBrowserHistory",
+    title: "Firefox 浏览记录",
+    summary: "单独处理 AcroUtil 下 Firefox profile 的浏览历史相关数据库。",
+    risk: "high",
+    confirmRequired: true,
+    clears: ["places.sqlite* 浏览历史数据库", "favicons.sqlite* 网站图标缓存"],
+    keeps: ["不会执行完整 profile 清理", "Cookie、缓存、会话和登录数据不在这个单项中清理"],
+    impacts: [
+      "地址栏历史补全和最近访问记录会消失",
+      "Firefox 的 places.sqlite 同时承载历史和书签；当前实现默认先备份完整 profile，后续应升级为更精准的 SQLite 清理。",
+    ],
+    backup: "默认先备份完整 Firefox profile 到统一备份目录。",
+  },
+  {
+    id: "privateFull",
+    group: "private",
+    formKey: "cleanPrivateBrowser",
+    title: "完整 Firefox profile 清理",
+    summary: "清理私人 Firefox profile 中的大部分使用痕迹。",
+    risk: "critical",
+    confirmRequired: true,
+    clears: [
+      "历史、Cookie、缓存、会话恢复、网站存储",
+      "表单输入、保存登录、诊断临时数据",
+      "扩展运行数据和 profile 内临时痕迹",
+    ],
+    keeps: ["Firefox 程序目录不会删除"],
+    impacts: [
+      "网站会退出登录，打开的标签页/会话恢复会丢失",
+      "保存登录和站点本地数据可能消失，必须确认备份可用后再真实执行。",
+    ],
+    backup: "默认先备份完整 Firefox profile；关闭备份属于高风险操作。",
+  },
+  {
+    id: "windowsNotifications",
+    group: "windows",
+    formKey: "clearWindowsNotifications",
+    title: "Windows 通知历史",
+    summary: "清理通知中心历史和计数。",
+    risk: "low",
+    clears: ["通知中心历史记录、通知计数"],
+    keeps: ["不会关闭各应用通知权限"],
+    impacts: ["真实执行时会重启 Explorer/任务栏，以刷新操作中心。"],
+    backup: "不创建备份；通知历史通常不可恢复。",
+  },
+  {
+    id: "screenshots",
+    group: "windows",
+    formKey: "clearScreenshots",
+    title: "当班截图",
+    summary: "按白班/夜班时间窗口删除截图文件夹内的截图。",
+    risk: "high",
+    confirmRequired: true,
+    clears: ["用户 Pictures\\Screenshots 中指定时间窗口内的截图文件"],
+    keeps: ["不在时间窗口内的截图不会处理", "不会扫描其他日期文件夹或测试数据目录"],
+    impacts: ["被删除的截图不会自动恢复；执行前请确认日期和班次。"],
+    backup: "当前截图清理不创建自动备份。",
+  },
+  {
+    id: "clipboard",
+    group: "windows",
+    formKey: "clearClipboardHistory",
+    title: "剪贴板历史",
+    summary: "清理 Windows 剪贴板历史。",
+    risk: "low",
+    clears: ["Win+V 剪贴板历史记录"],
+    keeps: ["固定项会保留", "不会关闭 Win+V 功能"],
+    impacts: ["之前复制过的文本/图片历史不再显示。"],
+    backup: "不创建备份；剪贴板历史通常不可恢复。",
+  },
+  {
+    id: "opencodeShortcuts",
+    group: "network",
+    formKey: "clearOpencodeShortcuts",
+    title: "opencode 快捷方式",
+    summary: "清理开始菜单中的 opencode/OpenCode 快捷方式。",
+    risk: "low",
+    clears: ["开始菜单 Programs 中名称包含 opencode/OpenCode 的快捷方式"],
+    keeps: ["不会删除 opencode 程序文件或项目文件"],
+    impacts: ["开始菜单入口会消失，需要时可重新创建快捷方式。"],
+    backup: "不创建备份；快捷方式可重新生成。",
+  },
+  {
+    id: "wifiProfiles",
+    group: "network",
+    title: "WiFi 配置管理",
+    summary: "保留指定前缀的 WiFi，忘记其他已保存 WiFi 配置。",
+    risk: "critical",
+    confirmRequired: true,
+    clears: ["不匹配保留前缀的已保存 WiFi 配置文件"],
+    keeps: ["匹配输入前缀的 WiFi 会保留", "输入框为空时不处理 WiFi"],
+    impacts: ["被忘记的 WiFi 后续需要重新输入密码连接。"],
+    backup: "当前 WiFi 配置管理不创建自动备份。",
+  },
+  {
+    id: "backupPolicy",
+    group: "backup",
+    title: "备份策略和位置",
+    summary: "查看备份根目录，以及 Edge/Firefox 清理前保护规则。",
+    risk: "low",
+    settingsOnly: true,
+    clears: [],
+    keeps: [],
+    impacts: ["这里只调整备份策略，不会单独触发清理。"],
+    backup: `统一备份根目录：${CLEANER_BACKUP_ROOT}`,
+  },
+];
 
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
@@ -114,24 +357,24 @@ function formatWindowLabel(shift: CleanerShift, dateValue: string): string {
 
 function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
   return {
-  cleanEdge: false,
-  keepPasswordsAutofill: true,
-  clearSitePreferences: false,
-  resetEdge: false,
-  clearBookmarks: false,
-  clearExtensions: false,
-  clearMicrosoftAccount: false,
-  clearWindowsNotifications: false,
-  clearScreenshots: false,
-  screenshotShift: defaultShift,
-  screenshotDate: defaultScreenshotDate(defaultShift),
-  clearClipboardHistory: false,
-  clearOpencodeShortcuts: false,
-  clearPrivateBrowserHistory: false,
-  cleanPrivateBrowser: false,
-  backupPrivateBrowser: true,
-  keepWifiPrefixes: "",
-  skipBackup: false,
+    cleanEdge: false,
+    keepPasswordsAutofill: true,
+    clearSitePreferences: false,
+    resetEdge: false,
+    clearBookmarks: false,
+    clearExtensions: false,
+    clearMicrosoftAccount: false,
+    clearWindowsNotifications: false,
+    clearScreenshots: false,
+    screenshotShift: defaultShift,
+    screenshotDate: defaultScreenshotDate(defaultShift),
+    clearClipboardHistory: false,
+    clearOpencodeShortcuts: false,
+    clearPrivateBrowserHistory: false,
+    cleanPrivateBrowser: false,
+    backupPrivateBrowser: true,
+    keepWifiPrefixes: "",
+    skipBackup: false,
   };
 }
 
@@ -142,39 +385,97 @@ function parsePrefixes(value: string): string[] {
     .filter(Boolean);
 }
 
-function hasPersonalAction(form: CleanerFormState): boolean {
-  return (
-    form.cleanEdge ||
-    form.clearSitePreferences ||
-    form.resetEdge ||
-    form.clearBookmarks ||
-    form.clearExtensions ||
-    form.clearMicrosoftAccount ||
-    form.clearWindowsNotifications ||
-    form.clearScreenshots ||
-    form.clearClipboardHistory ||
-    form.clearOpencodeShortcuts ||
-    form.clearPrivateBrowserHistory ||
-    form.cleanPrivateBrowser ||
-    parsePrefixes(form.keepWifiPrefixes).length > 0
-  );
+function riskLabel(risk: RiskLevel): string {
+  switch (risk) {
+    case "low": return "低风险";
+    case "medium": return "中风险";
+    case "high": return "高风险";
+    case "critical": return "极高风险";
+  }
 }
 
-function buildDangerList(form: CleanerFormState): string[] {
-  const dangers: string[] = [];
-  if (form.resetEdge) dangers.push("ResetEdge 会重置 Edge 到接近初始状态");
-  if (form.clearBookmarks) dangers.push("清书签会删除 Edge 书签");
-  if (form.clearExtensions) dangers.push("清扩展本体会删除已安装扩展");
-  if (form.clearMicrosoftAccount) dangers.push("清微软账户会退出 Edge 登录/同步状态");
-  if (form.clearScreenshots) dangers.push(`截图清理会删除 ${formatWindowLabel(form.screenshotShift, form.screenshotDate)} 的截图`);
-  if (form.clearPrivateBrowserHistory) dangers.push("火狐浏览记录清理会删除私人浏览器历史数据库，默认先备份 profile");
-  if (form.cleanPrivateBrowser) dangers.push("完整私人浏览器清理会删除历史、Cookie、缓存、会话、表单和保存登录等 profile 数据");
-  if (form.cleanPrivateBrowser && !form.backupPrivateBrowser) dangers.push("私人浏览器清理未启用备份");
-  if (parsePrefixes(form.keepWifiPrefixes).length > 0) dangers.push("WiFi 管理会忘记不匹配保留前缀的 WiFi");
-  return dangers;
+function riskClass(risk: RiskLevel): string {
+  switch (risk) {
+    case "low": return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "medium": return "border-amber-200 bg-amber-50 text-amber-700";
+    case "high": return "border-orange-200 bg-orange-50 text-orange-700";
+    case "critical": return "border-red-200 bg-red-50 text-red-700";
+  }
 }
 
-function ToggleRow({
+function getActionById(actionId: string): CleanerAction {
+  return CLEANER_ACTIONS.find((action) => action.id === actionId) || CLEANER_ACTIONS[0];
+}
+
+function isActionSelected(action: CleanerAction, form: CleanerFormState, runtime: CleanerRuntime): boolean {
+  if (action.settingsOnly) return false;
+  if (action.id === "wifiProfiles") return runtime.wifiPrefixes.length > 0;
+  return action.formKey ? Boolean(form[action.formKey]) : false;
+}
+
+function getSelectedActions(form: CleanerFormState, runtime: CleanerRuntime): CleanerAction[] {
+  return CLEANER_ACTIONS.filter((action) => isActionSelected(action, form, runtime));
+}
+
+function hasPersonalAction(form: CleanerFormState, runtime: CleanerRuntime): boolean {
+  return getSelectedActions(form, runtime).length > 0;
+}
+
+function actionDetails(action: CleanerAction, form: CleanerFormState, runtime: CleanerRuntime) {
+  const clears = [...action.clears];
+  const keeps = [...action.keeps];
+  const impacts = [...action.impacts];
+  let backup = action.backup;
+
+  if (action.id === "edgeStandard") {
+    if (form.keepPasswordsAutofill) {
+      keeps.push("保存密码、支付信息和表单自动填充会保留。");
+    } else {
+      clears.push("保存密码和自动填充数据。");
+      impacts.push("已保存的网站账号、支付/表单自动填充可能消失。");
+    }
+    if (form.skipBackup) {
+      backup = "已选择跳过 Edge 关键数据备份。";
+      impacts.push("跳过备份后，Edge 书签/设置类误删恢复难度会明显提高。");
+    }
+  }
+
+  if (action.id === "screenshots") {
+    clears.push(`${runtime.screenshotWindowLabel} 的截图。`);
+  }
+
+  if (action.id === "wifiProfiles") {
+    const prefixText = runtime.wifiPrefixes.length > 0 ? runtime.wifiPrefixes.join("、") : "未填写";
+    keeps.push(`保留前缀：${prefixText}`);
+  }
+
+  if ((action.id === "privateHistory" || action.id === "privateFull") && !form.backupPrivateBrowser) {
+    backup = "已关闭 Firefox profile 备份。";
+    impacts.push("关闭备份后，Firefox profile 误删或误清理将很难恢复。");
+  }
+
+  return { clears, keeps, impacts, backup };
+}
+
+function buildRunConfirmItems(form: CleanerFormState, runtime: CleanerRuntime): string[] {
+  return getSelectedActions(form, runtime).map((action) => {
+    const details = actionDetails(action, form, runtime);
+    const clearText = details.clears[0] || action.summary;
+    const impactText = details.impacts[0] || "影响较小。";
+    return `${action.title}：${clearText} 可能影响：${impactText} 备份：${details.backup}`;
+  });
+}
+
+function buildRiskItems(form: CleanerFormState, runtime: CleanerRuntime): string[] {
+  return getSelectedActions(form, runtime)
+    .filter((action) => action.confirmRequired || action.risk === "high" || action.risk === "critical")
+    .map((action) => {
+      const details = actionDetails(action, form, runtime);
+      return `${action.title}：${details.impacts[0] || action.summary}`;
+    });
+}
+
+function ToggleLine({
   checked,
   onChange,
   title,
@@ -188,14 +489,14 @@ function ToggleRow({
   danger?: boolean;
 }) {
   return (
-    <label className={`flex gap-3 rounded-xl border p-3 transition ${danger ? "border-red-200 bg-red-50/90" : "border-slate-200/80 bg-white/70 hover:bg-white"}`}>
+    <label className={`flex gap-3 rounded-xl border px-3 py-2.5 transition ${danger ? "border-red-200 bg-red-50/90" : "border-slate-200/80 bg-white/80 hover:bg-white"}`}>
       <input
         type="checkbox"
         className="mt-1 h-4 w-4"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />
-      <span className="space-y-1">
+      <span className="min-w-0 space-y-1">
         <span className={`block text-sm font-medium ${danger ? "text-red-800" : "text-slate-800"}`}>{title}</span>
         <span className={`block text-xs leading-5 ${danger ? "text-red-700" : "text-slate-500"}`}>{description}</span>
       </span>
@@ -203,35 +504,38 @@ function ToggleRow({
   );
 }
 
-function Section({
-  icon,
-  title,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-}) {
+function DetailBlock({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
   return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-        {icon}
-        <span>{title}</span>
-      </div>
-      <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-2">{children}</div>
-    </section>
+    <div>
+      <div className="text-xs font-semibold text-slate-500">{title}</div>
+      <ul className="mt-1 space-y-1 text-xs leading-5 text-slate-700">
+        {items.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-slate-300" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: PersonalCleanerDialogProps) {
   const [form, setForm] = React.useState<CleanerFormState>(() => createDefaultForm(defaultShift));
+  const [activeGroup, setActiveGroup] = React.useState<CleanerGroup>("edge");
+  const [activeActionId, setActiveActionId] = React.useState("edgeStandard");
   const [runInfo, setRunInfo] = React.useState<PersonalCleanerRunInfo | null>(null);
   const [log, setLog] = React.useState("");
   const [done, setDone] = React.useState(false);
   const [running, setRunning] = React.useState(false);
   const [error, setError] = React.useState("");
   const [runStartedAt, setRunStartedAt] = React.useState<number | null>(null);
-  const [dangerConfirm, setDangerConfirm] = React.useState<{ items: string[]; resolve: (confirmed: boolean) => void } | null>(null);
+  const [runConfirm, setRunConfirm] = React.useState<{
+    items: string[];
+    tone: ConfirmTone;
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
   const { runPersonalCleaner, readPersonalCleanerLog } = usePersonalCleaner();
 
   const setBool = (key: BoolKey, value: boolean) => {
@@ -240,6 +544,15 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
   const screenshotWindow = buildScreenshotWindow(form.screenshotShift, form.screenshotDate);
   const screenshotWindowLabel = formatWindowLabel(form.screenshotShift, form.screenshotDate);
+  const runtime = React.useMemo<CleanerRuntime>(() => ({
+    screenshotWindowLabel,
+    wifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
+  }), [form.keepWifiPrefixes, screenshotWindowLabel]);
+  const selectedActions = React.useMemo(() => getSelectedActions(form, runtime), [form, runtime]);
+  const riskItems = React.useMemo(() => buildRiskItems(form, runtime), [form, runtime]);
+  const activeAction = getActionById(activeActionId);
+  const activeDetails = actionDetails(activeAction, form, runtime);
+  const visibleActions = CLEANER_ACTIONS.filter((action) => action.group === activeGroup);
 
   React.useEffect(() => {
     if (!open) return;
@@ -272,7 +585,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     clearPrivateBrowserHistory: form.clearPrivateBrowserHistory,
     cleanPrivateBrowser: form.cleanPrivateBrowser,
     backupPrivateBrowser: form.backupPrivateBrowser,
-    keepWifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
+    keepWifiPrefixes: runtime.wifiPrefixes,
     skipBackup: form.skipBackup,
   });
 
@@ -305,27 +618,28 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     return () => window.clearInterval(timer);
   }, [runInfo, done, running, pollLog]);
 
-  const requestDangerConfirm = (items: string[]): Promise<boolean> => {
-    return new Promise((resolve) => setDangerConfirm({ items, resolve }));
+  const requestRunConfirm = (items: string[], tone: ConfirmTone): Promise<boolean> => {
+    return new Promise((resolve) => setRunConfirm({ items, tone, resolve }));
   };
 
-  const resolveDangerConfirm = (confirmed: boolean) => {
-    if (!dangerConfirm) return;
-    const { resolve } = dangerConfirm;
-    setDangerConfirm(null);
+  const resolveRunConfirm = (confirmed: boolean) => {
+    if (!runConfirm) return;
+    const { resolve } = runConfirm;
+    setRunConfirm(null);
     resolve(confirmed);
   };
 
   const startRun = async (dryRun: boolean) => {
     setError("");
-    if (!hasPersonalAction(form)) {
-      setError("请至少选择一个清理模块。");
+    if (!hasPersonalAction(form, runtime)) {
+      setError("请至少选择一个清理项目。");
       return;
     }
 
-    const dangerList = buildDangerList(form);
-    if (!dryRun && dangerList.length > 0) {
-      const ok = await requestDangerConfirm(dangerList);
+    if (!dryRun) {
+      const reviewItems = buildRunConfirmItems(form, runtime);
+      const tone: ConfirmTone = riskItems.length > 0 ? "danger" : "warning";
+      const ok = await requestRunConfirm(reviewItems, tone);
       if (!ok) return;
     }
 
@@ -344,245 +658,336 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     }
   };
 
-  const dangers = buildDangerList(form);
+  const openGroup = (group: CleanerGroup) => {
+    setActiveGroup(group);
+    const firstAction = CLEANER_ACTIONS.find((action) => action.group === group);
+    if (firstAction) setActiveActionId(firstAction.id);
+  };
+
+  const toggleAction = (action: CleanerAction, checked: boolean) => {
+    setActiveActionId(action.id);
+    if (action.formKey) setBool(action.formKey, checked);
+  };
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
-        <DialogTitle>个人清理工具（本机维护）</DialogTitle>
-        <div className="mt-1 text-sm text-slate-500">
-          面向当前维护电脑的高级工具。执行会调用内置 EdgeCleaner 脚本，需要管理员权限；建议先模拟运行，再确认执行。
-        </div>
-      </DialogHeader>
-      <DialogContent className="space-y-5">
-        <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-800">
-          <div className="flex items-start gap-2">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              每个项目都可以单独勾选清理。涉及截图、火狐浏览记录、ResetEdge、书签、扩展、微软账户和 WiFi 的真实执行会二次确认；浏览器类项目默认先备份。
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogHeader>
+          <DialogTitle>个人清理中心</DialogTitle>
+          <div className="mt-1 text-sm text-slate-500">
+            管理员专用的本机清理工具。先选项目，再看右侧说明；真实执行前会汇总清理内容、影响和备份策略。
+          </div>
+        </DialogHeader>
+
+        <DialogContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.2fr]">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                  <ShieldAlert className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-slate-900">执行前会说明后果</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-600">
+                    每个项目都列出会清理什么、保留什么、可能影响和备份规则。建议先模拟运行，再真实执行。
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-white/75 p-4">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-lg font-semibold text-slate-950">{selectedActions.length}</div>
+                  <div className="text-xs text-slate-500">已选项目</div>
+                </div>
+                <div>
+                  <div className={`text-lg font-semibold ${riskItems.length > 0 ? "text-red-700" : "text-emerald-700"}`}>{riskItems.length}</div>
+                  <div className="text-xs text-slate-500">需重点确认</div>
+                </div>
+                <div>
+                  <div className="text-lg font-semibold text-blue-700">{form.backupPrivateBrowser && !form.skipBackup ? "开" : "按项"}</div>
+                  <div className="text-xs text-slate-500">备份保护</div>
+                </div>
+              </div>
+              <div className="mt-3 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" title={CLEANER_BACKUP_ROOT}>
+                备份根目录：{CLEANER_BACKUP_ROOT}
+              </div>
             </div>
           </div>
-        </div>
 
-        <Section icon={<MonitorCog className="h-4 w-4" />} title="Edge 清理">
-          <ToggleRow
-            checked={form.cleanEdge}
-            onChange={(checked) => setBool("cleanEdge", checked)}
-            title="Edge 标准深度清理"
-            description="清理历史、Cookie、网站本地存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留。"
-          />
-          <ToggleRow
-            checked={form.keepPasswordsAutofill}
-            onChange={(checked) => setBool("keepPasswordsAutofill", checked)}
-            title="保留密码和自动填充"
-            description="标准深度清理时保留已保存密码、支付/表单自动填充数据。"
-          />
-          <ToggleRow
-            checked={form.clearSitePreferences}
-            onChange={(checked) => setBool("clearSitePreferences", checked)}
-            title="清站点权限"
-            description="清理通知、定位、摄像头等站点权限记录；不会重置整个 Edge 界面设置。"
-          />
-          <ToggleRow
-            checked={form.skipBackup}
-            onChange={(checked) => setBool("skipBackup", checked)}
-            title="跳过 Edge 关键数据备份"
-            description="默认会备份 Bookmarks、Preferences、Secure Preferences 和 Extensions；自动化或空间紧张时才建议跳过。"
-            danger
-          />
-        </Section>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[210px_1fr_280px]">
+            <nav className="space-y-2">
+              {GROUPS.map((group) => {
+                const count = CLEANER_ACTIONS.filter((action) => action.group === group.id && isActionSelected(action, form, runtime)).length;
+                const active = activeGroup === group.id;
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={() => openGroup(group.id)}
+                    className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active ? "border-blue-200 bg-blue-50 text-blue-800 shadow-sm" : "border-slate-200/80 bg-white/70 text-slate-700 hover:bg-white"}`}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      {group.icon}
+                      <span className="min-w-0 flex-1 truncate">{group.title}</span>
+                      {count > 0 && <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{count}</span>}
+                    </span>
+                    <span className={`mt-1 block truncate text-xs ${active ? "text-blue-600" : "text-slate-500"}`}>{group.subtitle}</span>
+                  </button>
+                );
+              })}
+            </nav>
 
-        <Section icon={<AlertTriangle className="h-4 w-4 text-red-600" />} title="危险 Edge 操作">
-          <ToggleRow
-            checked={form.resetEdge}
-            onChange={(checked) => setBool("resetEdge", checked)}
-            title="ResetEdge"
-            description="清理到接近初始状态，会强制清理书签、设置、站点权限、微软账户等多数数据。"
-            danger
-          />
-          <ToggleRow
-            checked={form.clearBookmarks}
-            onChange={(checked) => setBool("clearBookmarks", checked)}
-            title="清书签"
-            description="删除 Edge 书签和书签排序数据，误删后只能从备份手动恢复。"
-            danger
-          />
-          <ToggleRow
-            checked={form.clearExtensions}
-            onChange={(checked) => setBool("clearExtensions", checked)}
-            title="清扩展本体"
-            description="删除已安装扩展，下次使用需要重新安装。"
-            danger
-          />
-          <ToggleRow
-            checked={form.clearMicrosoftAccount}
-            onChange={(checked) => setBool("clearMicrosoftAccount", checked)}
-            title="清微软账户/同步"
-            description="删除账户与同步数据，会导致 Edge 退出微软账号登录状态。"
-            danger
-          />
-        </Section>
+            <section className="space-y-2">
+              {visibleActions.map((action) => {
+                const selected = isActionSelected(action, form, runtime);
+                const active = activeAction.id === action.id;
+                return (
+                  <div
+                    key={action.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setActiveActionId(action.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setActiveActionId(action.id);
+                    }}
+                    className={`rounded-2xl border p-3 transition ${active ? "border-blue-200 bg-blue-50/70 shadow-sm" : selected ? "border-blue-100 bg-white" : "border-slate-200/80 bg-white/70 hover:bg-white"}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {action.formKey ? (
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={selected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => toggleAction(action, event.target.checked)}
+                        />
+                      ) : action.id === "wifiProfiles" ? (
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-blue-300 bg-blue-100 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
+                          <Wifi className="h-3.5 w-3.5" />
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500">
+                          <Info className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold text-slate-900">{action.title}</div>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(action.risk)}`}>{riskLabel(action.risk)}</span>
+                          {selected && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                              <CheckCircle2 className="h-3 w-3" />
+                              已选
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{action.summary}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
 
-        <Section icon={<ClipboardList className="h-4 w-4" />} title="Windows / 个人专项">
-          <ToggleRow
-            checked={form.clearWindowsNotifications}
-            onChange={(checked) => setBool("clearWindowsNotifications", checked)}
-            title="清 Windows 通知历史"
-            description="清理通知中心数据库和通知计数，真实执行时会重启 Explorer/任务栏以刷新操作中心。"
-          />
-          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3">
-            <ToggleRow
-              checked={form.clearScreenshots}
-              onChange={(checked) => setBool("clearScreenshots", checked)}
-              title="按当班时间清截图"
-              description="只清理用户图片目录 Screenshots 中指定班次时间窗口内的截图。"
-              danger={form.clearScreenshots}
-            />
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr]">
-              <label className="space-y-1 text-xs text-slate-500">
-                <span className="font-medium text-slate-700">班次</span>
-                <select
-                  className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-                  value={form.screenshotShift}
-                  onChange={(event) => {
-                    const nextShift = event.target.value as CleanerShift;
-                    setForm((prev) => ({
-                      ...prev,
-                      screenshotShift: nextShift,
-                      screenshotDate: defaultScreenshotDate(nextShift),
-                    }));
-                  }}
-                >
-                  <option value="A">白班 A（08:00-20:00）</option>
-                  <option value="B">夜班 B（20:00-次日 08:00）</option>
-                </select>
-              </label>
-              <label className="space-y-1 text-xs text-slate-500">
-                <span className="font-medium text-slate-700">班次日期</span>
-                <input
-                  type="date"
-                  className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-                  value={form.screenshotDate}
-                  onChange={(event) => setForm((prev) => ({ ...prev, screenshotDate: event.target.value || defaultScreenshotDate(prev.screenshotShift) }))}
-                />
-              </label>
-            </div>
-            <div className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-5 ${form.clearScreenshots ? "border-amber-200 bg-amber-50/90 text-amber-800" : "border-slate-200/80 bg-slate-50 text-slate-500"}`}>
-              将清理：{screenshotWindowLabel} 的截图。
-            </div>
-          </div>
-          <ToggleRow
-            checked={form.clearClipboardHistory}
-            onChange={(checked) => setBool("clearClipboardHistory", checked)}
-            title="清剪贴板历史"
-            description="清理 Windows 剪贴板历史记录，保留固定项，不关闭 Win+V 功能。"
-          />
-          <ToggleRow
-            checked={form.clearOpencodeShortcuts}
-            onChange={(checked) => setBool("clearOpencodeShortcuts", checked)}
-            title="清 opencode 开始菜单快捷方式"
-            description="删除开始菜单中名称包含 opencode/OpenCode 的快捷方式。"
-          />
-          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3">
-            <div className="flex items-start gap-2">
-              <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
-              <div className="flex-1 space-y-2">
-                <ToggleRow
-                  checked={form.clearPrivateBrowserHistory}
-                  onChange={(checked) => setBool("clearPrivateBrowserHistory", checked)}
-                  title="仅清火狐浏览记录"
-                  description="清理 C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil 下 Firefox profile 的历史数据库；默认先备份完整 profile。"
-                  danger={form.clearPrivateBrowserHistory}
-                />
-                <ToggleRow
-                  checked={form.cleanPrivateBrowser}
-                  onChange={(checked) => setBool("cleanPrivateBrowser", checked)}
-                  title="完整清理私人浏览器 profile"
-                  description="清理本机私人浏览器 profile 中的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。"
-                  danger={form.cleanPrivateBrowser}
-                />
-                <ToggleRow
+            <aside className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/75 p-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-950">{activeAction.title}</h3>
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(activeAction.risk)}`}>{riskLabel(activeAction.risk)}</span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{activeAction.summary}</p>
+              </div>
+
+              <DetailBlock title="会清理" items={activeDetails.clears} />
+              <DetailBlock title="会保留" items={activeDetails.keeps} />
+              <DetailBlock title="可能影响" items={activeDetails.impacts} />
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                <span className="font-semibold text-slate-700">备份：</span>{activeDetails.backup}
+              </div>
+
+              {activeAction.id === "edgeStandard" && (
+                <div className="space-y-2">
+                  <ToggleLine
+                    checked={form.keepPasswordsAutofill}
+                    onChange={(checked) => setBool("keepPasswordsAutofill", checked)}
+                    title="保留密码和自动填充"
+                    description="关闭后会把保存密码和表单自动填充也纳入清理。"
+                    danger={!form.keepPasswordsAutofill}
+                  />
+                  <ToggleLine
+                    checked={form.skipBackup}
+                    onChange={(checked) => setBool("skipBackup", checked)}
+                    title="跳过 Edge 关键备份"
+                    description="空间极紧或仅模拟运行时才建议跳过。"
+                    danger={form.skipBackup}
+                  />
+                </div>
+              )}
+
+              {activeAction.id === "screenshots" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className="space-y-1 text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">班次</span>
+                      <select
+                        className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                        value={form.screenshotShift}
+                        onChange={(event) => {
+                          const nextShift = event.target.value as CleanerShift;
+                          setForm((prev) => ({
+                            ...prev,
+                            screenshotShift: nextShift,
+                            screenshotDate: defaultScreenshotDate(nextShift),
+                          }));
+                        }}
+                      >
+                        <option value="A">白班 A（08:00-20:00）</option>
+                        <option value="B">夜班 B（20:00-次日 08:00）</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">班次日期</span>
+                      <input
+                        type="date"
+                        className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                        value={form.screenshotDate}
+                        onChange={(event) => setForm((prev) => ({ ...prev, screenshotDate: event.target.value || defaultScreenshotDate(prev.screenshotShift) }))}
+                      />
+                    </label>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs leading-5 text-amber-800">
+                    将清理：{screenshotWindowLabel} 的截图。
+                  </div>
+                </div>
+              )}
+
+              {(activeAction.id === "privateHistory" || activeAction.id === "privateFull" || activeAction.id === "backupPolicy") && (
+                <ToggleLine
                   checked={form.backupPrivateBrowser}
                   onChange={(checked) => setBool("backupPrivateBrowser", checked)}
-                  title="清理前备份私人浏览器 profile"
-                  description="真实执行前备份完整 profile，误删后可手动恢复；不勾选会直接清理。"
-                  danger={!form.backupPrivateBrowser && form.cleanPrivateBrowser}
+                  title="清理前备份 Firefox profile"
+                  description={`默认备份 ${PRIVATE_BROWSER_ROOT} 下的完整 profile。`}
+                  danger={!form.backupPrivateBrowser && (form.clearPrivateBrowserHistory || form.cleanPrivateBrowser)}
                 />
+              )}
+
+              {activeAction.id === "wifiProfiles" && (
+                <label className="block space-y-2 text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">保留 WiFi 前缀</span>
+                  <input
+                    className="h-9 w-full rounded-lg border border-red-200 bg-white/90 px-2 text-sm focus-visible:border-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
+                    placeholder="例如：cpt3，多个前缀用逗号分隔"
+                    value={form.keepWifiPrefixes}
+                    onChange={(event) => setForm((prev) => ({ ...prev, keepWifiPrefixes: event.target.value }))}
+                  />
+                  <span className="block leading-5 text-red-700">留空表示不处理 WiFi；填写后会保留匹配前缀，忘记其他 WiFi。</span>
+                </label>
+              )}
+
+              {activeAction.id === "backupPolicy" && (
+                <div className="space-y-2">
+                  <ToggleLine
+                    checked={!form.skipBackup}
+                    onChange={(checked) => setBool("skipBackup", !checked)}
+                    title="Edge 清理前备份"
+                    description="备份 Bookmarks、Preferences、Secure Preferences 和 Extensions。"
+                    danger={form.skipBackup}
+                  />
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                    每次真实备份都会进入单独小文件夹，并写入 manifest.json 标注备份类型、来源和内容。
+                  </div>
+                </div>
+              )}
+            </aside>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/75 p-4">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <ClipboardList className="h-4 w-4 text-blue-600" />
+                本次执行清单
               </div>
+              {selectedActions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                  尚未选择清理项目。
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedActions.map((action) => (
+                    <div key={action.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-slate-800">{action.title}</span>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(action.risk)}`}>{riskLabel(action.risk)}</span>
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">{actionDetails(action, form, runtime).impacts[0] || action.summary}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.18)]">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-medium">运行日志</span>
+                {runInfo && (
+                  <span className="truncate text-slate-400">
+                    {done ? "已完成" : running ? "运行中" : "等待中"} · {runInfo.logPath}
+                  </span>
+                )}
+              </div>
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap leading-5">{log || "尚未运行。"}</pre>
             </div>
           </div>
-          <div className="rounded-xl border border-red-200 bg-red-50/90 p-3">
-            <div className="flex items-start gap-2">
-              <Wifi className="mt-0.5 h-4 w-4 shrink-0 text-red-700" />
-              <div className="flex-1">
-                <label className="text-sm font-medium text-red-800">WiFi 配置管理</label>
-                <p className="mt-1 text-xs leading-5 text-red-700">
-                  填写要保留的 WiFi 前缀，例如 cpt3。真实执行会忘记其他已保存 WiFi 配置；留空则不处理 WiFi。
-                </p>
-                <input
-                  className="mt-2 h-8 w-full rounded-lg border border-red-200 bg-white/90 px-2 text-sm focus-visible:border-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
-                  placeholder="例如：cpt3，多个前缀用逗号分隔"
-                  value={form.keepWifiPrefixes}
-                  onChange={(event) => setForm((prev) => ({ ...prev, keepWifiPrefixes: event.target.value }))}
-                />
+
+          {riskItems.length > 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-800">
+              <div className="mb-1 flex items-center gap-2 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                已选择需要重点确认的项目
+              </div>
+              <div className="space-y-1 text-xs leading-5">
+                {riskItems.map((item) => (
+                  <div key={item}>- {item}</div>
+                ))}
               </div>
             </div>
-          </div>
-        </Section>
+          )}
 
-        {dangers.length > 0 && (
-          <div className="rounded-lg border border-red-200 bg-red-50/90 p-3 text-sm text-red-800">
-            <div className="mb-1 font-medium">已选择危险项：</div>
-            {dangers.map((item) => (
-              <div key={item}>- {item}</div>
-            ))}
-          </div>
-        )}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
+          )}
+        </DialogContent>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.18)]">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-medium">运行日志</span>
-            {runInfo && (
-              <span className="truncate text-slate-400">
-                {done ? "已完成" : running ? "运行中" : "等待中"} · {runInfo.logPath}
-              </span>
-            )}
+        <DialogFooter className="items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span>真实执行会请求管理员权限；UAC 取消或 PowerShell 被阻止时约 60 秒后提示。</span>
           </div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap leading-5">{log || "尚未运行。"}</pre>
-        </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => startRun(true)} disabled={running}>
+              模拟运行
+            </Button>
+            <Button variant="destructive" onClick={() => startRun(false)} disabled={running}>
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              真实执行
+            </Button>
+          </div>
+        </DialogFooter>
+      </Dialog>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
-        )}
-      </DialogContent>
-      <DialogFooter className="items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <ExternalLink className="h-3.5 w-3.5" />
-          <span>管理员权限窗口可能会在系统层弹出，请确认 UAC 后查看日志。</span>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => startRun(true)} disabled={running}>
-            模拟运行
-          </Button>
-          <Button variant="destructive" onClick={() => startRun(false)} disabled={running}>
-            <Trash2 className="mr-1.5 h-4 w-4" />
-            确认执行
-          </Button>
-        </div>
-      </DialogFooter>
-    </Dialog>
-    <ConfirmDialog
-      open={Boolean(dangerConfirm)}
-      title="确认真实执行危险清理"
-      description="以下项目属于危险操作。建议先模拟运行；确认后会请求管理员权限并真实执行。"
-      details={dangerConfirm?.items || []}
-      confirmLabel="真实执行"
-      cancelLabel="先不执行"
-      tone="danger"
-      onConfirm={() => resolveDangerConfirm(true)}
-      onCancel={() => resolveDangerConfirm(false)}
-    />
+      <ConfirmDialog
+        open={Boolean(runConfirm)}
+        title={runConfirm?.tone === "danger" ? "确认真实执行高风险清理" : "确认真实执行清理"}
+        description="请再次核对本次会清理什么、可能影响和备份策略。确认后会请求管理员权限并真实执行。"
+        details={runConfirm?.items || []}
+        confirmLabel="真实执行"
+        cancelLabel="先不执行"
+        tone={runConfirm?.tone || "warning"}
+        onConfirm={() => resolveRunConfirm(true)}
+        onCancel={() => resolveRunConfirm(false)}
+      />
     </>
   );
 }

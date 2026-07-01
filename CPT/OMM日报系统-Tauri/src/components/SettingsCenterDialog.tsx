@@ -77,7 +77,8 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.4.5";
+const APP_VERSION = "5.5.0";
+const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -751,7 +752,7 @@ export function SettingsCenterDialog({
         </div>
       </Section>
 
-      <Section icon={<Package className="h-4 w-4" />} title="本地数据管理" description="账号、配置、日志、备份和 manifest 统一收纳在本地 data 目录。">
+      <Section icon={<Package className="h-4 w-4" />} title="本地数据管理" description="账号、配置、日志和 manifest 收纳在本地 data 目录；个人清理备份统一放到外部备份根目录。">
         {dataStoreInfo ? (
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -768,10 +769,11 @@ export function SettingsCenterDialog({
                 <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.profilesDir}</div>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
-                <div className="text-xs text-slate-500">日志 / 备份 / manifest</div>
+                <div className="text-xs text-slate-500">日志 / manifest / 备份</div>
                 <div className="mt-1 text-xs leading-5 text-slate-700">
                   <div className="break-all">日志：{dataStoreInfo.logsDir}</div>
-                  <div className="break-all">备份：{dataStoreInfo.backupsDir}</div>
+                  <div className="break-all">数据备份：{dataStoreInfo.backupsDir}</div>
+                  <div className="break-all">个人清理备份：{PERSONAL_CLEANER_BACKUP_ROOT}</div>
                   <div className="break-all">manifest：{dataStoreInfo.manifestsDir}</div>
                 </div>
               </div>

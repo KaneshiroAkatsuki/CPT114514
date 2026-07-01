@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.4.5
+- 应用版本：5.5.0
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -17,7 +17,7 @@
 - 设置中心已新增：默认规则/路径/模板/工具入口集中管理，改动先进入草稿，关闭时会提示保存/放弃/继续编辑。
 - 设置中心已新增“关于软件”：显示版本、当前账户、配置文件、识别补充和模板来源。
 - 主界面已隐藏日志展示；诊断日志收纳到设置中心“关于软件”中按需查看。
-- 本地数据层已新增：账号/session 写入 `data/omm.db`，账户配置迁入 `data/profiles/`，个人清理日志/备份迁入 `data/logs` 和 `data/backups`，便携版 manifest 打包写入 `data/manifests/`。
+- 本地数据层已新增：账号/session 写入 `data/omm.db`，账户配置迁入 `data/profiles/`，个人清理日志写入 `data/logs`，个人清理备份统一写入 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`，便携版 manifest 打包写入 `data/manifests/`。
 - Apple-inspired UI 收尾阶段已实施：登录页、帮助中心、业务弹窗、表格、设置内部卡片和剩余小窗口继续统一到 Apple-inspired 风格。
 - 预览页已简化结论区：默认只显示是否可生成、有效计入、最低要求、差额和必要建议，休息/缓冲/来源拆分收纳到“查看计算细项”。
 - 登录页已简化：标题下方改为 Kaneshiro/禹欣水印，移除“已有账户”列表，账户管理入口保留在设置中心。
@@ -26,6 +26,8 @@
 - 个人清理启动等待超时调整为 60 秒；取消 UAC 或 PowerShell 被阻止时更快停止轮询并提示。
 - 个人清理截图功能已改为按班次时间窗口清理：白班 08:00-20:00，夜班 20:00-次日 08:00，执行前显示具体日期范围。
 - 个人清理新增火狐浏览记录单项清理，目标为 `C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil` 下 Firefox profile，默认先备份完整 profile。
+- 个人清理中心已重构为分类导航 + 项目详情 + 执行清单确认，清理前会说明会清理什么、保留什么、可能影响和备份策略。
+- 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
 - 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.4.5 发布物。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
@@ -33,7 +35,7 @@
 
 ## 最新便携版
 
-> 最新源码版本和便携包版本均为 5.4.5。
+> 最新源码版本为 5.5.0；本轮未打包，最新便携包版本仍为 5.4.5。
 
 - packaged_at：2026-07-01T23:37:54
 - app：8fb55679a21ac28ed9007b1785d37017ad2a2d874a5b5252fa93dfd2e3771c98
@@ -54,7 +56,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.5
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.5.0
 ```
 
 ## 重要约束
