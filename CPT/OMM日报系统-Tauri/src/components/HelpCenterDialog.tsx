@@ -7,7 +7,6 @@ import {
   FileSpreadsheet,
   FolderOpen,
   HelpCircle,
-  Keyboard,
   Search,
   Settings2,
   Sparkles,
@@ -77,7 +76,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>添加日期文件夹：</strong>从下拉框添加单个日期，也可以全选添加所有识别到的日期。</li>
           <li><strong>预览或生成：</strong>先用预览检查排程，确认无误后生成 Excel 报表。</li>
         </ol>
-        <div className={text.note}>第一次使用建议先打开“设置中心”，确认姓名、班次、每件时间、输出目录和模板来源，再保存设置。</div>
+        <div className={text.note}>主界面左栏会先显示“当前设置”摘要，再显示“工作目录”。第一次使用建议先核对摘要，再打开“设置中心”确认姓名、班次、每件时间、输出目录和模板来源。</div>
       </div>
     ),
   },
@@ -330,11 +329,11 @@ const TOPICS: HelpTopic[] = [
     categoryId: "config",
     title: "设置中心怎么用",
     summary: "集中管理默认规则、输出、配置文件、模板和个人清理入口。",
-    keywords: ["设置中心", "设置", "保存设置", "未保存", "退出确认", "配置草稿", "个人清理入口", "诊断日志"],
+    keywords: ["设置中心", "设置", "保存设置", "未保存", "退出确认", "配置草稿", "当前设置", "工作目录", "个人清理入口", "诊断日志"],
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>主界面只保留摘要：</strong>日常生成所需的工作目录、队列、预览和生成仍在主界面，默认规则集中放入设置中心。</li>
+          <li><strong>主界面只保留摘要：</strong>左栏先显示当前设置摘要，工作目录选择放在摘要下方；队列、预览和生成仍在主界面，默认规则集中放入设置中心。</li>
           <li><strong>先改草稿再保存：</strong>在设置中心修改内容不会立刻写入 config.json，点击“保存设置”后才会生效。</li>
           <li><strong>退出二次确认：</strong>有未保存改动时关闭设置中心，会提示“保存并退出 / 放弃更改 / 继续编辑”，并列出变更摘要。</li>
           <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
@@ -367,7 +366,7 @@ const TOPICS: HelpTopic[] = [
     categoryId: "cleaner",
     title: "个人清理工具清什么",
     summary: "本机维护工具，和日报生成互相独立。",
-    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "备份"],
+    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "备份", "管理员", "UAC", "60秒"],
     body: (
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。危险项会在执行前二次确认。</div>
@@ -376,7 +375,9 @@ const TOPICS: HelpTopic[] = [
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
           <li><strong>Windows 专项：</strong>通知历史、截图文件夹、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
           <li><strong>私人浏览器：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据；默认可先备份完整 profile。</li>
-          <li><strong>权限和日志：</strong>入口、执行和日志读取都限制为管理员账户；日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
+          <li><strong>权限和日志：</strong>入口、执行和日志读取都限制为管理员账户；访客账户无入口，后端也会拒绝调用。</li>
+          <li><strong>启动等待：</strong>真实执行会弹出系统 UAC 管理员确认；如果取消 UAC 或 PowerShell 被阻止，约 60 秒后会停止等待并提示。</li>
+          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
         </ul>
       </div>
     ),
@@ -409,14 +410,14 @@ const TOPICS: HelpTopic[] = [
     categoryId: "about",
     title: "版本、关于软件和快捷键",
     summary: "当前版本、关于软件栏目、配置路径和常用操作。",
-    keywords: ["关于", "关于软件", "版本", "快捷键", "Ctrl+V", "Delete", "右键", "打包", "dev"],
+    keywords: ["关于", "关于软件", "版本", "快捷键", "Ctrl+V", "Delete", "右键", "打包", "dev", "便携版", "发布物", "清理"],
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.4.3。</li>
-          <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段，并简化预览页结论与时间说明，详细计算默认收纳到细项中。</li>
+          <li><strong>版本：</strong>5.4.4（源码）。最新已打包便携版仍以当前状态文件记录为准。</li>
+          <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
-          <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
+          <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。项目内旧便携包、旧安装包和旧测试解压目录会定期清理，只保留最新发布物。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
           <li><strong>Delete：</strong>删除队列中选中的项目。</li>
           <li><strong>右键队列项：</strong>设置单日方案、下班策略、手量补录等。</li>
@@ -451,6 +452,10 @@ function topicSearchText(topic: HelpTopic) {
 
 function getCategory(id: string) {
   return CATEGORIES.find((category) => category.id === id) || CATEGORIES[0];
+}
+
+function getTopicsByCategory(categoryId: string) {
+  return TOPICS.filter((topic) => topic.categoryId === categoryId);
 }
 
 function getInitialTopicId(initialSection: string) {
@@ -518,11 +523,11 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
         </CardHeader>
 
         <CardContent className="flex min-h-0 flex-1 overflow-hidden p-0">
-          <aside className="w-64 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-[#f5f5f7] p-3">
+          <aside className="w-60 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-[#f5f5f7] p-3">
             <nav className="space-y-1">
               {CATEGORIES.map((category) => {
                 const active = activeCategoryId === category.id && !normalizedQuery;
-                const firstTopic = TOPICS.find((topic) => topic.categoryId === category.id);
+                const firstTopic = getTopicsByCategory(category.id)[0];
                 return (
                   <button
                     key={category.id}
@@ -539,7 +544,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                     <span className={`mt-0.5 ${active ? "text-blue-600" : "text-slate-400"}`}>{category.icon}</span>
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{category.title}</span>
-                      <span className="block truncate text-xs text-slate-400">{category.description}</span>
+                      <span className="block truncate text-xs text-slate-400" title={category.description}>{category.description}</span>
                     </span>
                   </button>
                 );
@@ -547,66 +552,79 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
             </nav>
           </aside>
 
-          <main className="flex min-w-0 flex-1 overflow-hidden bg-white/80">
-            <div className="w-64 shrink-0 overflow-y-auto border-r border-slate-200/70 p-3">
+          <main className="min-w-0 flex-1 overflow-y-auto bg-white/85">
+            <div className="mx-auto max-w-3xl space-y-5 p-6">
               {normalizedQuery ? (
                 <div className="space-y-2">
-                  <div className="px-1 text-xs font-medium text-slate-500">搜索结果 {searchResults.length}</div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-blue-700">搜索</div>
+                    <h2 className="text-lg font-semibold text-slate-950">搜索结果</h2>
+                    <p className="text-sm leading-6 text-slate-500">匹配标题、摘要和关键词，共 {searchResults.length} 条。</p>
+                  </div>
                   {searchResults.length > 0 ? (
-                    searchResults.map((topic) => (
-                      <button
-                        key={topic.id}
-                        onClick={() => setActiveTopicId(topic.id)}
-                        className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
-                          activeTopicId === topic.id
-                            ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
-                            : "border-transparent bg-white/70 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
-                        }`}
-                      >
-                        <span className="block font-medium">{topic.title}</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-500">{topic.summary}</span>
-                      </button>
-                    ))
+                    <>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {searchResults.map((topic) => (
+                          <button
+                            key={topic.id}
+                            onClick={() => setActiveTopicId(topic.id)}
+                            className={`min-h-[86px] rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
+                              activeTopicId === topic.id
+                                ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
+                                : "border-slate-200/70 bg-white/75 text-slate-700 hover:border-slate-300 hover:bg-white hover:shadow-sm"
+                            }`}
+                          >
+                            <span className="block font-medium">{topic.title}</span>
+                            <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500">{topic.summary}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="border-t border-slate-200/70 pt-5">
+                        <TopicContent topic={activeTopic} />
+                      </div>
+                    </>
                   ) : (
-                    <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm leading-6 text-slate-500">
-                      没有找到匹配内容。可以试试“手量”“模板”“配置”“warning”“私人浏览器”。
+                    <div className="rounded-xl border border-slate-200/80 bg-white/70 p-5 text-sm leading-6 text-slate-500">
+                      没有找到匹配内容。可以试试“手量”“模板”“配置”“warning”“私人浏览器”“管理员”。
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="px-1 text-xs font-medium text-slate-500">{getCategory(activeCategoryId).title}</div>
-                  {TOPICS.filter((topic) => topic.categoryId === activeCategoryId).map((topic) => (
-                    <button
-                      key={topic.id}
-                      onClick={() => setActiveTopicId(topic.id)}
-                      className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
-                        activeTopicId === topic.id
-                          ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
-                          : "border-transparent bg-white/70 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
-                      }`}
-                    >
-                      <span className="block font-medium">{topic.title}</span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-500">{topic.summary}</span>
-                    </button>
-                  ))}
+                <div className="space-y-5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-medium text-blue-700">
+                      <span>{getCategory(activeCategoryId).icon}</span>
+                      <span>{getCategory(activeCategoryId).title}</span>
+                    </div>
+                    <h2 className="text-lg font-semibold text-slate-950">{getCategory(activeCategoryId).title}</h2>
+                    <p className="text-sm leading-6 text-slate-500">{getCategory(activeCategoryId).description}</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {getTopicsByCategory(activeCategoryId).map((topic) => (
+                      <button
+                        key={topic.id}
+                        onClick={() => setActiveTopicId(topic.id)}
+                        className={`min-h-[86px] rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
+                          activeTopicId === topic.id
+                            ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
+                            : "border-slate-200/70 bg-white/75 text-slate-700 hover:border-slate-300 hover:bg-white hover:shadow-sm"
+                        }`}
+                      >
+                        <span className="block font-medium">{topic.title}</span>
+                        <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500">{topic.summary}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-slate-200/70 pt-5">
+                    <TopicContent topic={activeTopic} />
+                  </div>
                 </div>
               )}
-            </div>
-
-            <div className="min-w-0 flex-1 overflow-y-auto p-6">
-              <div className="max-w-2xl">
-                <TopicContent topic={activeTopic} />
-              </div>
             </div>
           </main>
         </CardContent>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-200/70 bg-white/70 px-5 py-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Keyboard className="h-3.5 w-3.5" />
-            <span>搜索会匹配标题、摘要和关键词。</span>
-          </div>
+        <div className="flex shrink-0 justify-end border-t border-slate-200/70 bg-white/70 px-5 py-3">
           <Button onClick={onClose}>关闭</Button>
         </div>
       </Card>

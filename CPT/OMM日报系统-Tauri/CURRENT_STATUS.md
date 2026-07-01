@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.4.3
+- 应用版本：5.4.4
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -13,7 +13,7 @@
 - 文件名疑似错误/需确认 warning 已实现。
 - 个人电脑清理功能已集成到单独页面。
 - 个人清理已支持本机私人浏览器 profile 清理和可选备份。
-- 帮助中心已按任务分类重构，并新增关键词搜索。
+- 帮助中心已按任务分类重构，并新增关键词搜索；当前布局改为两栏 Apple Settings 风格，减少三栏拥挤。
 - 设置中心已新增：默认规则/路径/模板/工具入口集中管理，改动先进入草稿，关闭时会提示保存/放弃/继续编辑。
 - 设置中心已新增“关于软件”：显示版本、当前账户、配置文件、识别补充和模板来源。
 - 主界面已隐藏日志展示；诊断日志收纳到设置中心“关于软件”中按需查看。
@@ -31,7 +31,7 @@
 
 ## 最新便携版
 
-> 最新源码版本和便携包版本均为 5.4.3。
+> 最新源码版本为 5.4.4；本轮未打包，最新便携包仍为 5.4.3。
 
 - packaged_at：2026-07-01T23:07:03
 - app：d870f733ff51f26b333c71df48d43f23c7d9da15c2c22d0a64bee21c290c9d11
@@ -52,7 +52,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.3
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.4
 ```
 
 ## 重要约束
