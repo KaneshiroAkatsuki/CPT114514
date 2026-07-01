@@ -76,6 +76,10 @@ param(
     # 管理已知 WiFi：保留指定前缀的 WiFi，删除/忘记其他
     [string[]]$KeepWifiPrefixes,
 
+    # 清理完成后连接公司 WiFi，并设置为自动连接
+    [switch]$ConnectCompanyWifi,
+    [string]$CompanyWifiSsid = "cpt3-mobile",
+
     # 跳过清理前关键 Edge 数据备份（默认会备份 Bookmarks / Preferences / Extensions）
     [switch]$SkipBackup,
 
@@ -1479,6 +1483,67 @@ function Clear-WifiProfiles {
     return $count
 }
 
+function Connect-CompanyWifi {
+    param(
+        [string]$Ssid,
+        [switch]$IsDryRun
+    )
+
+    $targetSsid = $Ssid.Trim()
+    if ([string]::IsNullOrWhiteSpace($targetSsid)) {
+        Write-Host "        公司 WiFi 名称为空，跳过连接" -ForegroundColor Yellow
+        return 0
+    }
+
+    try {
+        $profilesOutput = netsh wlan show profiles 2>$null
+        $profileNames = @($profilesOutput | Select-String '^\s*所有用户配置文件\s*:\s*(.+)$|^\s*All User Profile\s*:\s*(.+)$' | ForEach-Object {
+            if ($_.Matches[0].Groups[1].Success) { $_.Matches[0].Groups[1].Value.Trim() }
+            else { $_.Matches[0].Groups[2].Value.Trim() }
+        })
+        if ($profileNames -notcontains $targetSsid) {
+            Write-Host "        未找到已保存的公司 WiFi 配置: $targetSsid；请先手动连接一次并保存密码" -ForegroundColor Yellow
+            return 0
+        }
+    } catch {
+        Write-Host "        无法读取 WiFi 配置文件列表: $($_.Exception.Message)" -ForegroundColor Yellow
+        return 0
+    }
+
+    if ($IsDryRun) {
+        Write-Host "        [模拟设置] 将把 WiFi '$targetSsid' 设置为自动连接" -ForegroundColor DarkCyan
+        Write-Host "        [模拟连接] 将尝试连接 WiFi '$targetSsid'；真实执行时网络可能短暂断开" -ForegroundColor DarkCyan
+        return 1
+    }
+
+    $count = 0
+    try {
+        $setResult = netsh wlan set profileparameter name="$targetSsid" connectionmode=auto 2>&1
+        if ($LASTEXITCODE -eq 0 -or $setResult -match '成功|successfully') {
+            Write-Host "        已设置自动连接: $targetSsid" -ForegroundColor DarkGreen
+            $count++
+        } else {
+            Write-Host "        设置自动连接失败: $targetSsid - $setResult" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "        设置自动连接失败: $targetSsid - $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    try {
+        $connectResult = netsh wlan connect name="$targetSsid" ssid="$targetSsid" 2>&1
+        if ($LASTEXITCODE -eq 0 -or $connectResult -match '已成功|successfully') {
+            Write-Host "        已发起连接公司 WiFi: $targetSsid" -ForegroundColor DarkGreen
+            $count++
+        } else {
+            Write-Host "        连接公司 WiFi 失败: $targetSsid - $connectResult" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "        连接公司 WiFi 失败: $targetSsid - $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    return $count
+}
+
 # ====================== 主流程 ======================
 
 Clear-Host
@@ -1596,6 +1661,7 @@ $results = [ordered]@{
     "私人浏览器备份" = 0
     "私人浏览器数据" = 0
     "WiFi 配置文件" = 0
+    "公司 WiFi 连接" = 0
     "全局数据" = 0
     "其他临时数据" = 0
 }
@@ -1617,6 +1683,7 @@ $deepItems = @{
     "私人浏览器备份" = $true
     "私人浏览器数据" = $true
     "WiFi 配置文件" = $true
+    "公司 WiFi 连接" = $true
     "全局数据" = $true
 }
 
@@ -1648,6 +1715,7 @@ $choices = [ordered]@{
     "私人浏览器清理" = [bool]$CleanPrivateBrowser
     "私人浏览器备份" = (($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) -and -not $SkipPrivateBrowserBackup)
     "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
+    "公司 WiFi 连接" = [bool]$ConnectCompanyWifi
 }
 
 if ($CloseAdobiProcesses) {
@@ -2055,6 +2123,15 @@ if ($KeepWifiPrefixes.Count -gt 0) {
     Write-Success "WiFi 配置文件管理完成"
 } else {
     Write-Warn "保留所有 WiFi 配置文件（默认）"
+}
+
+if ($ConnectCompanyWifi) {
+    Write-Step "正在切换到公司 WiFi..."
+    Write-Deep "清理完成后设置目标 WiFi 为自动连接，并尝试连接；真实执行时网络可能短暂断开"
+    $results["公司 WiFi 连接"] += Connect-CompanyWifi -Ssid $CompanyWifiSsid -IsDryRun:$DryRun
+    Write-Success "公司 WiFi 连接步骤完成"
+} else {
+    Write-Warn "不切换公司 WiFi（默认）"
 }
 
 if ($script:CleanEdgeModule -and $script:CleanGlobalEdgeData) {

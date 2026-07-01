@@ -58,6 +58,7 @@ type BoolKey = keyof Pick<
   | "clearPrivateBrowserHistory"
   | "cleanPrivateBrowser"
   | "backupPrivateBrowser"
+  | "connectCompanyWifi"
   | "skipBackup"
 >;
 
@@ -80,12 +81,15 @@ interface CleanerFormState {
   cleanPrivateBrowser: boolean;
   backupPrivateBrowser: boolean;
   keepWifiPrefixes: string;
+  connectCompanyWifi: boolean;
+  companyWifiSsid: string;
   skipBackup: boolean;
 }
 
 interface CleanerRuntime {
   screenshotWindowLabel: string;
   wifiPrefixes: string[];
+  companyWifiSsid: string;
 }
 
 interface CleanerAction {
@@ -344,6 +348,19 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     backup: "当前 WiFi 配置管理不创建自动备份。",
   },
   {
+    id: "companyWifi",
+    group: "network",
+    formKey: "connectCompanyWifi",
+    title: "切换公司 WiFi",
+    summary: "清理完成后连接公司 WiFi，并设置为自动连接。",
+    risk: "medium",
+    confirmRequired: true,
+    clears: ["不会清理数据；会把目标 WiFi 设置为自动连接，并尝试连接"],
+    keeps: ["不会忘记其他 WiFi，除非同时使用 WiFi 配置管理", "不会清理 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 自身代理配置"],
+    impacts: ["真实执行时网络可能短暂断开；如果未保存该 WiFi 密码，需要先手动连接一次。"],
+    backup: "不创建备份；这是网络连接切换操作。",
+  },
+  {
     id: "backupPolicy",
     group: "backup",
     title: "备份策略和位置",
@@ -430,6 +447,8 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
     cleanPrivateBrowser: false,
     backupPrivateBrowser: true,
     keepWifiPrefixes: "",
+    connectCompanyWifi: false,
+    companyWifiSsid: "cpt3-mobile",
     skipBackup: false,
   };
 }
@@ -509,6 +528,7 @@ function getActionById(actionId: string): CleanerAction {
 function isActionSelected(action: CleanerAction, form: CleanerFormState, runtime: CleanerRuntime): boolean {
   if (action.settingsOnly) return false;
   if (action.id === "wifiProfiles") return runtime.wifiPrefixes.length > 0;
+  if (action.id === "companyWifi") return form.connectCompanyWifi && runtime.companyWifiSsid.length > 0;
   return action.formKey ? Boolean(form[action.formKey]) : false;
 }
 
@@ -546,6 +566,10 @@ function actionDetails(action: CleanerAction, form: CleanerFormState, runtime: C
   if (action.id === "wifiProfiles") {
     const prefixText = runtime.wifiPrefixes.length > 0 ? runtime.wifiPrefixes.join("、") : "未填写";
     keeps.push(`保留前缀：${prefixText}`);
+  }
+
+  if (action.id === "companyWifi") {
+    clears.push(`目标 WiFi：${runtime.companyWifiSsid || "未填写"}`);
   }
 
   if ((action.id === "privateHistory" || action.id === "privateFull") && !form.backupPrivateBrowser) {
@@ -705,7 +729,8 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
   const runtime = React.useMemo<CleanerRuntime>(() => ({
     screenshotWindowLabel,
     wifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
-  }), [form.keepWifiPrefixes, screenshotWindowLabel]);
+    companyWifiSsid: form.companyWifiSsid.trim(),
+  }), [form.companyWifiSsid, form.keepWifiPrefixes, screenshotWindowLabel]);
   const selectedActions = React.useMemo(() => getSelectedActions(form, runtime), [form, runtime]);
   const riskItems = React.useMemo(() => buildRiskItems(form, runtime), [form, runtime]);
   const activeAction = getActionById(activeActionId);
@@ -755,6 +780,8 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     cleanPrivateBrowser: form.cleanPrivateBrowser,
     backupPrivateBrowser: form.backupPrivateBrowser,
     keepWifiPrefixes: runtime.wifiPrefixes,
+    connectCompanyWifi: form.connectCompanyWifi,
+    companyWifiSsid: runtime.companyWifiSsid,
     skipBackup: form.skipBackup,
   });
 
@@ -1171,6 +1198,21 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
                     onChange={(event) => setForm((prev) => ({ ...prev, keepWifiPrefixes: event.target.value }))}
                   />
                   <span className="block leading-5 text-red-700">留空表示不处理 WiFi；填写后会保留匹配前缀，忘记其他 WiFi。</span>
+                </label>
+              )}
+
+              {activeAction.id === "companyWifi" && (
+                <label className="mt-3 block space-y-2 text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">公司 WiFi 名称</span>
+                  <input
+                    className="h-9 w-full rounded-lg border border-amber-200 bg-white/90 px-2 text-sm focus-visible:border-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
+                    placeholder="cpt3-mobile"
+                    value={form.companyWifiSsid}
+                    onChange={(event) => setForm((prev) => ({ ...prev, companyWifiSsid: event.target.value }))}
+                  />
+                  <span className="block leading-5 text-amber-700">
+                    真实执行会把该 WiFi 设为自动连接并尝试连接；请确认电脑已保存过这个 WiFi 的密码。
+                  </span>
                 </label>
               )}
 

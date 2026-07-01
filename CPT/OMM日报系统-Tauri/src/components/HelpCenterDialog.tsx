@@ -378,7 +378,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>运行进程：</strong>可关闭 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi</code> 目录下正在运行的软件进程，并额外包含 Edge 和 Codex 前后台进程；只结束进程，不删除文件。当前 Adobi 根目录包含 AcrobatHelper/OpenCode、AcroUtil/Firefox、Kimi、lmclient 和 PortableGit 等目录，真实执行前会先弹出检测到的进程名、PID 和路径。执行后会清空当前用户系统代理和 WinHTTP 代理，避免代理软件退出后残留代理地址；不会清理 <code className={text.code}>HTTP_PROXY</code> / <code className={text.code}>HTTPS_PROXY</code> 环境变量或 Codex 自身代理配置。</li>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
-          <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、私人入口快捷方式、WiFi 配置。快捷方式清理会处理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号入口；通知历史会优先打开通知中心并调用“全部清除”，如果系统不暴露该按钮，会暂停通知服务并清空通知数据库兜底，不再重启 Explorer/任务栏。</li>
+          <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、私人入口快捷方式、WiFi 配置。快捷方式清理会处理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号入口；WiFi 可选择保留指定前缀并忘记其他配置，也可在清理完成后连接公司 WiFi（默认 <code className={text.code}>cpt3-mobile</code>）并设置自动连接；通知历史会优先打开通知中心并调用“全部清除”，如果系统不暴露该按钮，会暂停通知服务并清空通知数据库兜底，不再重启 Explorer/任务栏。</li>
           <li><strong>截图清理：</strong>按班次时间窗口清理。白班为当日 08:00-20:00，夜班为当日 20:00-次日 08:00；执行前会显示具体是哪一天的时间段。</li>
           <li><strong>火狐浏览记录：</strong>可单独清理 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil</code> 下 Firefox profile 的浏览记录数据库和图标缓存，默认先备份完整 profile；当前实现会处理 <code className={text.code}>places.sqlite*</code>，该库也承载书签，真实执行前请确认备份。</li>
           <li><strong>完整私人浏览器清理：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。</li>

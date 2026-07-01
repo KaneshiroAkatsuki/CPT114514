@@ -22,6 +22,8 @@ export interface PersonalCleanerOptions {
   cleanPrivateBrowser: boolean;
   backupPrivateBrowser: boolean;
   keepWifiPrefixes: string[];
+  connectCompanyWifi: boolean;
+  companyWifiSsid: string;
   skipBackup: boolean;
 }
 

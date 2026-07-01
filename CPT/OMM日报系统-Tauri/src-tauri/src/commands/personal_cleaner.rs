@@ -31,6 +31,10 @@ pub struct PersonalCleanerOptions {
     pub backup_private_browser: bool,
     #[serde(default)]
     pub keep_wifi_prefixes: Vec<String>,
+    #[serde(default)]
+    pub connect_company_wifi: bool,
+    #[serde(default)]
+    pub company_wifi_ssid: String,
     pub skip_backup: bool,
 }
 
@@ -286,6 +290,12 @@ fn build_script_args(
     if !prefixes.is_empty() {
         args.push("-KeepWifiPrefixes".to_string());
         args.push(prefixes.join(","));
+    }
+    let company_wifi_ssid = options.company_wifi_ssid.trim();
+    if options.connect_company_wifi && !company_wifi_ssid.is_empty() {
+        args.push("-ConnectCompanyWifi".to_string());
+        args.push("-CompanyWifiSsid".to_string());
+        args.push(company_wifi_ssid.to_string());
     }
 
     args
