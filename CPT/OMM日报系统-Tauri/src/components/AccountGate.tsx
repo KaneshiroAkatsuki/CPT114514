@@ -9,7 +9,7 @@ import { MainWindow } from "@/components/MainWindow";
 
 type GateMode = "login" | "register" | "forgot";
 
-const APP_VERSION = "5.5.3";
+const APP_VERSION = "5.5.4";
 
 const loginNotes = [
   {

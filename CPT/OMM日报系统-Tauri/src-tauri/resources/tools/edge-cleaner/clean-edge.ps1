@@ -814,7 +814,7 @@ function Show-Menu {
     Write-Host "  2. Windows 通知中心/操作中心通知卡片" -ForegroundColor White
     Write-Host "  3. 截图文件夹" -ForegroundColor White
     Write-Host "  4. Windows 剪贴板历史" -ForegroundColor White
-    Write-Host "  5. opencode 开始菜单快捷方式" -ForegroundColor White
+    Write-Host "  5. 私人入口开始菜单快捷方式" -ForegroundColor White
     Write-Host "  6. WiFi 配置文件" -ForegroundColor White
     Write-Host "  7. Adobi / Edge / Codex 运行进程" -ForegroundColor White
     Write-Host "  D. 模拟运行（不会真删）" -ForegroundColor Gray
@@ -1297,7 +1297,14 @@ function Clear-OpencodeShortcuts {
         return 0
     }
 
-    $patterns = @("*opencode*", "*OpenCode*")
+    $patterns = @(
+        "*opencode*",
+        "*OpenCode*",
+        "Firefox 隐私浏览.lnk",
+        "Firefox*隐私浏览*.lnk",
+        "“”.lnk",
+        '""*.lnk'
+    )
     $processed = @()
 
     foreach ($pattern in $patterns) {
@@ -1493,7 +1500,7 @@ $results = [ordered]@{
     "Windows 通知历史" = 0
     "截图文件" = 0
     "剪贴板历史" = 0
-    "opencode 快捷方式" = 0
+    "私人入口快捷方式" = 0
     "私人浏览器备份" = 0
     "私人浏览器数据" = 0
     "WiFi 配置文件" = 0
@@ -1513,7 +1520,7 @@ $deepItems = @{
     "Windows 通知历史" = $true
     "截图文件" = $true
     "剪贴板历史" = $true
-    "opencode 快捷方式" = $true
+    "私人入口快捷方式" = $true
     "私人浏览器备份" = $true
     "私人浏览器数据" = $true
     "WiFi 配置文件" = $true
@@ -1543,7 +1550,7 @@ $choices = [ordered]@{
     "Windows 通知历史" = [bool]$ClearWindowsNotifications
     "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
     "剪贴板历史" = [bool]$ClearClipboardHistory
-    "opencode 快捷方式" = [bool]$ClearOpencodeShortcuts
+    "私人入口快捷方式" = [bool]$ClearOpencodeShortcuts
     "私人浏览器浏览记录" = [bool]$ClearPrivateBrowserHistory
     "私人浏览器清理" = [bool]$CleanPrivateBrowser
     "私人浏览器备份" = (($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) -and -not $SkipPrivateBrowserBackup)
@@ -1907,14 +1914,14 @@ if ($ClearClipboardHistory) {
     Write-Warn "保留 Windows 剪贴板历史（默认）"
 }
 
-# 清理 opencode 在开始菜单生成的快捷方式
+# 清理私人入口在开始菜单生成的快捷方式
 if ($ClearOpencodeShortcuts) {
-    Write-Step "正在清理 opencode 开始菜单快捷方式..."
+    Write-Step "正在清理私人入口开始菜单快捷方式..."
     Write-Deep "路径: $env:APPDATA\Microsoft\Windows\Start Menu\Programs"
-    $results["opencode 快捷方式"] += Clear-OpencodeShortcuts -IsDryRun:$DryRun
-    Write-Success "opencode 快捷方式清理完成"
+    $results["私人入口快捷方式"] += Clear-OpencodeShortcuts -IsDryRun:$DryRun
+    Write-Success "私人入口快捷方式清理完成"
 } else {
-    Write-Warn "保留 opencode 开始菜单快捷方式（默认）"
+    Write-Warn "保留私人入口开始菜单快捷方式（默认）"
 }
 
 # 清理私人浏览器 profile / 浏览记录
