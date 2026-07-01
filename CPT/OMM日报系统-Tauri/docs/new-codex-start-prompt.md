@@ -1,0 +1,67 @@
+# 新 Codex 窗口启动提示词
+
+下面这段可以直接复制到新的 Codex 窗口作为第一条消息。
+
+```text
+你是 Codex，接力开发/审查当前项目。请先不要改代码，先读取并理解交接文档，然后向我简短确认当前状态、风险点和下一步建议。
+
+项目目录：
+D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
+
+Git 根目录：
+D:\KSoftware\KMAA
+
+绿色版 Git：
+C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe
+
+请优先读取这些文档：
+1. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\handoff-v5.6.0-to-next-codex.md
+2. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\codex-working-memory.md
+3. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\next-development-plan.md
+4. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\new-codex-start-prompt.md
+5. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\CURRENT_STATUS.md
+
+当前重要状态：
+- 最新便携包是 5.6.0，但源码在该包之后已经新增“回收站保护清理”功能。
+- 下一次打包分发前应升到 5.6.1。
+- 后续主要方向是把软件升级为“玉衡山科学院管理厅”，登录后进入主页。
+- 主页有两个模块：“信息统计局”（现 OMM 日报系统）和“数据管理局”（现个人清理/OMM 机台清理）。
+- “数据管理局”只允许管理员进入，访客点击时显示统一 Apple 风格权限提示。
+- 设置中心后续应重组为四个栏目：账户设置、日报设置、数据管理局设置或清理设置、关于软件。
+
+重要约束：
+- 不要 git add .，只精确 add 修改过的文件。
+- 不要移动、删除、重命名 C:\Users\Administrator\Desktop\勿动\日期文件。
+- 不要写回原始测试数据目录，测试输出只能放到项目 test-output。
+- sidecar exe 只从 stdin 读取 JSONL，不支持 --input / --output。
+- PowerShell 不要用 < file。
+- 不要触碰 sidecar 排程核心、CNC、整形 CNC、特殊大件、缺口诊断算法，除非我明确要求。
+- 日期文件夹如有更新，需要随代码一起提交上传。
+- 一般只需要便携包，不需要专门交付安装包。
+
+协作习惯：
+- 小 bug 和普通代码你可以直接改。
+- 大量重复实现可以提醒我交给 op/Kimi。
+- 复杂但范围不大的代码，先提醒我切到“高”，再设计和执行。
+- 关键架构、核心模块、安全边界、清理模块大改，先提醒我切到“超高”，先方案后执行。
+- UI 要保持 Apple-inspired 风格，页面不要拥挤，帮助文档要同步更新。
+- 有实际成果后尽量 commit 并 push。
+
+现在请先读取上述文档和 git 状态，不要改代码，然后告诉我：
+1. 你理解的当前项目状态。
+2. 目前最应该优先做什么。
+3. 如果继续做“玉衡山科学院管理厅”外壳，你建议使用高还是超高。
+```
+
+## 如果要直接开始实现
+
+如果用户已经明确说“可以开始”，新窗口可以把最后一段改成：
+
+```text
+现在我已经确认方向，可以开始实现。请按交接文档中的建议顺序推进：
+1. 先搭“玉衡山科学院管理厅”主页和模块状态。
+2. 把当前 OMM 日报系统挂到“信息统计局”。
+3. 把当前个人清理/OMM 机台清理挂到“数据管理局”，并保持管理员权限限制。
+4. 同步设置中心、帮助中心和关于软件。
+5. 先用 dev 验证，暂时不要打包，除非我再明确要求。
+```
