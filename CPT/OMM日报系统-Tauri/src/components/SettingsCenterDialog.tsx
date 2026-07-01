@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.4.0";
+const APP_VERSION = "5.4.1";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -664,7 +664,7 @@ export function SettingsCenterDialog({
 
   const renderTools = () => (
     <div className="space-y-5">
-      <Section icon={<Wrench className="h-4 w-4" />} title="本机工具" description="管理员账户可使用本机维护工具，访客账户隐藏危险操作。">
+      <Section icon={<Wrench className="h-4 w-4" />} title="本机工具" description="个人清理仅管理员账户可使用，访客账户无入口且后端会拒绝调用。">
         {canUsePersonalCleaner ? (
           <button
             type="button"
@@ -676,7 +676,7 @@ export function SettingsCenterDialog({
               个人清理工具
             </div>
             <div className="mt-1 text-xs leading-5 text-amber-800">
-              Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。执行前仍会按危险项二次确认。
+              Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。仅管理员账户可执行，危险项会二次确认。
             </div>
           </button>
         ) : (

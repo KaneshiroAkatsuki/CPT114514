@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.4.0
+- 应用版本：5.4.1
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -22,10 +22,13 @@
 - 预览页已简化结论区：默认只显示是否可生成、有效计入、最低要求、差额和必要建议，休息/缓冲/来源拆分收纳到“查看计算细项”。
 - 登录页已简化：标题下方改为 Kaneshiro/禹欣水印，移除“已有账户”列表，账户管理入口保留在设置中心。
 - 应用图标已重绘：使用蓝色圆角底和白色报表/表格符号，并重新生成多尺寸 ico，提升资源管理器和任务栏清晰度。
+- 个人清理安全性已加固：执行和日志读取均增加后端管理员账户校验，标准清理默认保留密码和自动填充。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
+
+> 最新源码版本为 5.4.1；本轮安全加固未重新打包，最新便携包仍为 5.4.0。
 
 - packaged_at：2026-07-01T22:24:51
 - app：69655e756f192dd14093d851bea9f06924a15659fbf92efe101aba366d3acbaa
@@ -45,7 +48,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.0
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.1
 ```
 
 ## 重要约束

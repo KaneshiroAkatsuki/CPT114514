@@ -53,7 +53,7 @@ interface CleanerFormState {
 
 const DEFAULT_FORM: CleanerFormState = {
   cleanEdge: true,
-  keepPasswordsAutofill: false,
+  keepPasswordsAutofill: true,
   clearSitePreferences: false,
   resetEdge: false,
   clearBookmarks: false,
@@ -156,6 +156,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
   const [done, setDone] = React.useState(false);
   const [running, setRunning] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [runStartedAt, setRunStartedAt] = React.useState<number | null>(null);
   const [dangerConfirm, setDangerConfirm] = React.useState<{ items: string[]; resolve: (confirmed: boolean) => void } | null>(null);
   const { runPersonalCleaner, readPersonalCleanerLog } = usePersonalCleaner();
 
@@ -187,18 +188,29 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
       const next = await readPersonalCleanerLog(info.logPath, info.summaryPath);
       setLog(next.log);
       setDone(next.done);
-      if (next.done) setRunning(false);
+      if (next.done) {
+        setRunning(false);
+        setRunStartedAt(null);
+      } else if (
+        runStartedAt &&
+        Date.now() - runStartedAt > 120_000 &&
+        next.log.includes("等待管理员权限确认")
+      ) {
+        setRunning(false);
+        setRunStartedAt(null);
+        setError("未检测到个人清理脚本启动。可能是管理员权限确认被取消，或系统阻止了 PowerShell 启动。");
+      }
     } catch (e) {
       setError(`读取日志失败: ${e}`);
     }
-  }, [readPersonalCleanerLog]);
+  }, [readPersonalCleanerLog, runStartedAt]);
 
   React.useEffect(() => {
-    if (!runInfo || done) return;
+    if (!runInfo || done || !running) return;
     pollLog(runInfo);
     const timer = window.setInterval(() => pollLog(runInfo), 1500);
     return () => window.clearInterval(timer);
-  }, [runInfo, done, pollLog]);
+  }, [runInfo, done, running, pollLog]);
 
   const requestDangerConfirm = (items: string[]): Promise<boolean> => {
     return new Promise((resolve) => setDangerConfirm({ items, resolve }));
@@ -226,6 +238,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
 
     setRunning(true);
     setDone(false);
+    setRunStartedAt(Date.now());
     setLog("正在请求管理员权限并启动脚本...");
     try {
       const info = await runPersonalCleaner(buildOptions(dryRun));
@@ -233,6 +246,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
       setLog(`已启动：${info.runId}\n日志：${info.logPath}\n\n等待管理员权限确认或脚本输出...`);
     } catch (e) {
       setRunning(false);
+      setRunStartedAt(null);
       setError(`启动失败: ${e}`);
     }
   };
@@ -253,7 +267,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              默认会备份 Edge 关键数据。ResetEdge、书签、扩展、微软账户、截图和 WiFi 属于高风险项目，真实执行前会二次确认。
+              默认会备份 Edge 关键数据，并保留密码和自动填充。ResetEdge、书签、扩展、微软账户、截图和 WiFi 属于高风险项目，真实执行前会二次确认。
             </div>
           </div>
         </div>
@@ -263,7 +277,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
             checked={form.cleanEdge}
             onChange={(checked) => setBool("cleanEdge", checked)}
             title="Edge 标准深度清理"
-            description="清理历史、Cookie、网站本地存储、缓存、会话、密码、自动填充、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据。"
+            description="清理历史、Cookie、网站本地存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留。"
           />
           <ToggleRow
             checked={form.keepPasswordsAutofill}

@@ -372,11 +372,11 @@ const TOPICS: HelpTopic[] = [
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。危险项会在执行前二次确认。</div>
         <ul className={text.ul}>
-          <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、密码、自动填充、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据。</li>
+          <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
           <li><strong>Windows 专项：</strong>通知历史、截图文件夹、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
           <li><strong>私人浏览器：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据；默认可先备份完整 profile。</li>
-          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
+          <li><strong>权限和日志：</strong>入口、执行和日志读取都限制为管理员账户；日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
         </ul>
       </div>
     ),
@@ -413,7 +413,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.4.0。</li>
+          <li><strong>版本：</strong>5.4.1。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段，并简化预览页结论与时间说明，详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>

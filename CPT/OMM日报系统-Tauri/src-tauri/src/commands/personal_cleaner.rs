@@ -1,5 +1,5 @@
+use super::{accounts, data_store};
 use crate::AppState;
-use super::data_store;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -136,6 +136,15 @@ fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
     data_store::personal_cleaner_backup_dir()
 }
 
+fn require_admin_account() -> Result<(), String> {
+    let account = accounts::current_account_record()?
+        .ok_or_else(|| "请先登录管理员账户后再使用个人清理工具。".to_string())?;
+    if !matches!(account.role, accounts::AccountRole::Admin) {
+        return Err("个人清理工具仅允许管理员账户使用。".to_string());
+    }
+    Ok(())
+}
+
 fn push_switch(args: &mut Vec<String>, enabled: bool, name: &str) {
     if enabled {
         args.push(name.to_string());
@@ -254,6 +263,8 @@ pub async fn run_personal_cleaner(
     state: State<'_, AppState>,
     options: PersonalCleanerOptions,
 ) -> Result<PersonalCleanerRunInfo, String> {
+    require_admin_account()?;
+
     let script_path = resolve_cleaner_script(&app).ok_or_else(|| {
         "未找到内置个人清理脚本 resources/tools/edge-cleaner/clean-edge.ps1".to_string()
     })?;
@@ -300,6 +311,8 @@ pub async fn read_personal_cleaner_log(
     log_path: String,
     summary_path: String,
 ) -> Result<PersonalCleanerLogInfo, String> {
+    require_admin_account()?;
+
     let log_dir = effective_log_dir(&state)?;
     for path in [&log_path, &summary_path] {
         let parent = Path::new(path)
