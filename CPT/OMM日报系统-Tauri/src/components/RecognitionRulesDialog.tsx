@@ -53,7 +53,7 @@ export function RecognitionRulesDialog({
   onReload,
 }: RecognitionRulesDialogProps) {
   const [draft, setDraft] = useState<RecognitionRules>(() => normalizeRules(rules));
-  const [testInput, setTestInput] = useState("565-开发-MO-T0模具测试-安容克送测-96PCS-CMM-郑安午-手量-禹欣");
+  const [testInput, setTestInput] = useState("565-开发-MO-T0模具测试-安容克送测-96PCS-CMM-测量员-手量-复测");
 
   useEffect(() => {
     if (open) setDraft(normalizeRules(rules));

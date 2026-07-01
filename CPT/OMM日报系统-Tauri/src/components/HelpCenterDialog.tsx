@@ -309,17 +309,17 @@ const TOPICS: HelpTopic[] = [
     categoryId: "config",
     title: "账户登录和个人配置",
     summary: "本地账户、管理员/访客权限、PIN 重置和账户 profile。",
-    keywords: ["账户", "登录", "注册", "PIN", "密码", "管理员", "访客", "Kaneshiro", "114514", "切换账户"],
+    keywords: ["账户", "登录", "注册", "PIN", "密码", "管理员", "访客", "初始账户", "切换账户"],
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>默认管理员：</strong><code className={text.code}>Kaneshiro</code> / <code className={text.code}>禹欣</code>，初始 PIN 为 <code className={text.code}>114514</code>。</li>
+          <li><strong>默认管理员：</strong>首次使用会内置一个管理员账户，初始 PIN 由部署者保管。</li>
           <li><strong>新员工注册：</strong>输入昵称、真实姓名和 4-6 位数字 PIN，注册后默认为访客账户。</li>
           <li><strong>登录方式：</strong>可以用昵称或真实姓名登录；PIN 只保存加盐哈希，不保存明文。</li>
           <li><strong>忘记 PIN：</strong>访客可输入管理员 PIN 重置；管理员 PIN 忘记时不会提供普通重置入口。</li>
           <li><strong>账户数据：</strong>账号、PIN 哈希和当前登录状态保存在本地 <code className={text.code}>data/omm.db</code>，旧 <code className={text.code}>.omm</code> 文件只作为首次导入来源保留。</li>
           <li><strong>账户配置：</strong>每个账户使用独立 profile，默认规则、工作目录、输出目录和识别补充规则收纳在 <code className={text.code}>data/profiles</code>。</li>
-          <li><strong>页头显示：</strong>设置中心可切换欢迎语显示昵称或真实姓名，例如“欢迎您，Dr. Kaneshiro”。</li>
+          <li><strong>页头显示：</strong>设置中心可切换欢迎语显示昵称或真实姓名。</li>
         </ul>
       </div>
     ),

@@ -72,10 +72,7 @@ export function AccountGate() {
       const firstGuest = info.accounts.find((account) => account.role !== "admin") || info.accounts[0];
       setTargetAccountId(firstGuest.id);
     }
-    if (!login && info.accounts.length > 0) {
-      setLogin(info.accounts[0].nickname);
-    }
-  }, [loadAccounts, login, targetAccountId]);
+  }, [loadAccounts, targetAccountId]);
 
   React.useEffect(() => {
     refreshAccounts()
@@ -214,7 +211,7 @@ export function AccountGate() {
           <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
             <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-              Kaneshiro · 禹欣
+              玉衡山科学院
             </p>
           </div>
         </header>
@@ -245,7 +242,7 @@ export function AccountGate() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="field-label">昵称或真实姓名</label>
-                    <Input value={login} onChange={(event) => setLogin(event.target.value)} placeholder="Kaneshiro 或 禹欣" />
+                    <Input value={login} onChange={(event) => setLogin(event.target.value)} placeholder="输入昵称或真实姓名" />
                   </div>
                   <div className="space-y-2">
                     <label className="field-label">PIN</label>
@@ -273,11 +270,11 @@ export function AccountGate() {
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label className="field-label">昵称</label>
-                      <Input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="例如 Kaneshiro" />
+                      <Input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="输入昵称" />
                     </div>
                     <div className="space-y-2">
                       <label className="field-label">真实姓名</label>
-                      <Input value={realName} onChange={(event) => setRealName(event.target.value)} placeholder="例如 禹欣" />
+                      <Input value={realName} onChange={(event) => setRealName(event.target.value)} placeholder="输入真实姓名" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -357,7 +354,7 @@ export function AccountGate() {
 
           <footer className="space-y-1 pb-1 text-center">
             <div className="text-xs font-medium uppercase tracking-[0.24em] text-slate-300">
-              Kaneshiro · 禹欣
+              玉衡山科学院
             </div>
             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
               OMM Daily Report · Local Workspace

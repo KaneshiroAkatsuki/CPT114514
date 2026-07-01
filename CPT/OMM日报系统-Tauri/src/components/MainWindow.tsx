@@ -59,7 +59,7 @@ interface MainWindowProps {
 
 export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }: MainWindowProps) {
   const [workDir, setWorkDir] = useState("");
-  const [operatorName, setOperatorName] = useState(currentAccount.real_name || "禹欣");
+  const [operatorName, setOperatorName] = useState(currentAccount.real_name || currentAccount.nickname || "");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selectedQueueItems, setSelectedQueueItems] = useState<Set<number>>(new Set());
   const [logs, setLogs] = useState<string[]>([]);

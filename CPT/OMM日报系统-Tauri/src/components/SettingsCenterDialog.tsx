@@ -398,7 +398,7 @@ export function SettingsCenterDialog({
   const renderBasic = () => (
     <div className="space-y-5">
       <Section icon={<UserRound className="h-4 w-4" />} title="使用者" description="影响 OMM 测量员匹配、手量默认测量员和报表归属。">
-        <FieldRow label="使用者姓名" hint="例如：禹欣">
+        <FieldRow label="使用者姓名" hint="用于测量员匹配和报表归属。">
           <Input
             value={draft.operatorName}
             onChange={(event) => updateDraft({ operatorName: event.target.value })}
