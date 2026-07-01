@@ -52,6 +52,15 @@ pub struct PersonalCleanerLogInfo {
     pub summary: Option<serde_json::Value>,
 }
 
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCleanerProcessCandidate {
+    pub pid: u32,
+    pub name: String,
+    pub path: String,
+    pub kind: String,
+}
+
 fn now_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -296,6 +305,107 @@ fn quote_for_windows_command_line(arg: &str) -> String {
 
 fn ps_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
+}
+
+fn parse_process_candidates(json: &str) -> Result<Vec<PersonalCleanerProcessCandidate>, String> {
+    let trimmed = json.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let value = serde_json::from_str::<serde_json::Value>(trimmed)
+        .map_err(|e| format!("无法解析进程预览结果: {}", e))?;
+    let values = match value {
+        serde_json::Value::Array(items) => items,
+        serde_json::Value::Null => Vec::new(),
+        other => vec![other],
+    };
+
+    let mut candidates = Vec::new();
+    for item in values {
+        let pid = item
+            .get("pid")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            .min(u32::MAX as u64) as u32;
+        let name = item
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let path = item
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let kind = item
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Process")
+            .to_string();
+
+        if pid > 0 && !name.is_empty() {
+            candidates.push(PersonalCleanerProcessCandidate {
+                pid,
+                name,
+                path,
+                kind,
+            });
+        }
+    }
+
+    candidates.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.name.cmp(&b.name)).then(a.pid.cmp(&b.pid)));
+    Ok(candidates)
+}
+
+#[command]
+pub async fn preview_personal_cleaner_processes() -> Result<Vec<PersonalCleanerProcessCandidate>, String> {
+    require_admin_account()?;
+
+    let adobi_root = r"C:\Program Files\Adobe\Acrobat DC\Adobi";
+    let script = format!(
+        r#"
+$adobiRoot = {adobi_root}
+$items = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {{
+    $path = [string]$_.ExecutablePath
+    $name = [string]$_.Name
+    $isAdobi = -not [string]::IsNullOrWhiteSpace($path) -and $path.StartsWith($adobiRoot, [System.StringComparison]::OrdinalIgnoreCase)
+    $isEdge = $name -ieq 'msedge.exe'
+    $isCodex = ($name -match '(?i)codex') -or ((-not [string]::IsNullOrWhiteSpace($path)) -and (($path -match '(?i)(\\|/|^)codex(\\|/|\.|_|-|$| )') -or ($path -match '(?i)OpenAI\.Codex')))
+    if ($isAdobi -or $isEdge -or $isCodex) {{
+        $kind = if ($isCodex) {{ 'Codex' }} elseif ($isEdge) {{ 'Edge' }} else {{ 'Adobi' }}
+        [ordered]@{{
+            pid = [int]$_.ProcessId
+            name = $name
+            path = $path
+            kind = $kind
+        }}
+    }}
+}})
+ConvertTo-Json -InputObject $items -Compress -Depth 4
+"#,
+        adobi_root = ps_single_quote(adobi_root)
+    );
+
+    let output = Command::new("powershell.exe")
+        .arg("-NoProfile")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-Command")
+        .arg(script)
+        .output()
+        .map_err(|e| format!("无法预览将关闭的进程: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "预览将关闭的进程失败。".to_string()
+        } else {
+            format!("预览将关闭的进程失败: {}", stderr)
+        });
+    }
+
+    parse_process_candidates(&String::from_utf8_lossy(&output.stdout))
 }
 
 #[command]

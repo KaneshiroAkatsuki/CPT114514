@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerRunInfo } from "@/hooks/useSidecar";
+import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerProcessCandidate, type PersonalCleanerRunInfo } from "@/hooks/useSidecar";
 
 const PRIVATE_BROWSER_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil";
 const CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
@@ -129,15 +129,16 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     id: "adobiProcesses",
     group: "process",
     formKey: "closeAdobiProcesses",
-    title: "关闭 Adobi / Edge 进程",
-    summary: "关闭 Adobi 目录下正在运行的软件，并包含 Edge 前后台进程。",
+    title: "关闭 Adobi / Edge / Codex 进程",
+    summary: "关闭 Adobi 目录下正在运行的软件，并包含 Edge 和 Codex 前后台进程。",
     risk: "high",
     confirmRequired: true,
     clears: [
       "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi 下运行中的软件进程",
       "Microsoft Edge 前台窗口和后台 msedge 进程",
+      "Codex 前台窗口和后台进程",
     ],
-    keeps: ["不会删除任何文件、配置、账号或浏览数据", "不会处理 Adobi 目录外的普通软件进程，Edge 除外"],
+    keeps: ["不会删除任何文件、配置、账号或浏览数据", "不会处理 Adobi 目录外的普通软件进程，Edge 和 Codex 除外"],
     impacts: [
       "正在打开的浏览器、下载、网页编辑或后台任务会被关闭。",
       "未保存内容可能丢失；建议先保存正在编辑的内容，再真实执行。",
@@ -506,6 +507,12 @@ function buildRunConfirmItems(form: CleanerFormState, runtime: CleanerRuntime): 
   });
 }
 
+function formatProcessCandidate(process: PersonalCleanerProcessCandidate): string {
+  const kind = process.kind || "进程";
+  const path = process.path ? ` - ${process.path}` : "";
+  return `[${kind}] ${process.name} (PID ${process.pid})${path}`;
+}
+
 function buildRiskItems(form: CleanerFormState, runtime: CleanerRuntime): string[] {
   return getSelectedActions(form, runtime)
     .filter((action) => action.confirmRequired || action.risk === "high" || action.risk === "critical")
@@ -626,7 +633,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
   const [resultDialog, setResultDialog] = React.useState<CleanerResultDialog | null>(null);
   const handledSummaryPathRef = React.useRef<string | null>(null);
   const currentRunDryRunRef = React.useRef(false);
-  const { runPersonalCleaner, readPersonalCleanerLog } = usePersonalCleaner();
+  const { runPersonalCleaner, readPersonalCleanerLog, previewPersonalCleanerProcesses } = usePersonalCleaner();
 
   const setBool = (key: BoolKey, value: boolean) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -744,6 +751,25 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
     if (!dryRun) {
       const reviewItems = buildRunConfirmItems(form, runtime);
+      if (form.closeAdobiProcesses) {
+        try {
+          const processes = await previewPersonalCleanerProcesses();
+          if (processes.length > 0) {
+            reviewItems.push("将关闭以下运行进程：");
+            processes.slice(0, 30).forEach((process) => {
+              reviewItems.push(formatProcessCandidate(process));
+            });
+            if (processes.length > 30) {
+              reviewItems.push(`还有 ${processes.length - 30} 个进程未显示，请先模拟运行查看完整列表。`);
+            }
+          } else {
+            reviewItems.push("当前未检测到 Adobi / Edge / Codex 候选进程。");
+          }
+        } catch (e) {
+          setError(`无法预览将关闭的进程，已取消真实执行: ${e}`);
+          return;
+        }
+      }
       const tone: ConfirmTone = riskItems.length > 0 ? "danger" : "warning";
       const ok = await requestRunConfirm(reviewItems, tone);
       if (!ok) return;

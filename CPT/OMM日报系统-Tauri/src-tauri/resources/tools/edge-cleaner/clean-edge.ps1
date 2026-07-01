@@ -40,7 +40,7 @@ param(
     # 清理 Windows 通知历史记录（不影响通知权限设置）
     [switch]$ClearWindowsNotifications,
 
-    # 关闭 Adobi 根目录下运行的软件进程，并包含 Edge 前后台进程
+    # 关闭 Adobi 根目录下运行的软件进程，并包含 Edge / Codex 前后台进程
     [switch]$CloseAdobiProcesses,
 
     # Adobi 根目录
@@ -332,7 +332,25 @@ function Stop-PrivateBrowserProcesses {
     Write-Host "        私人浏览器已关闭" -ForegroundColor DarkGreen
 }
 
-function Stop-AdobiAndEdgeProcesses {
+function Test-CodexProcess {
+    param(
+        [string]$Name,
+        [string]$Path
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Name) -and $Name -match '(?i)codex') {
+        return $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Path) -and $Path -match '(?i)(\\|/|^)codex(\\|/|\.|_|-|$| )') {
+        return $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Path) -and $Path -match '(?i)OpenAI\.Codex') {
+        return $true
+    }
+    return $false
+}
+
+function Stop-AdobiEdgeAndCodexProcesses {
     param(
         [string]$Root,
         [switch]$IsDryRun
@@ -360,9 +378,22 @@ function Stop-AdobiAndEdgeProcesses {
         $targets[[int]$_.Id] = $_
     }
 
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $path = $_.Path
+            if (Test-CodexProcess -Name $_.ProcessName -Path $path) {
+                $targets[[int]$_.Id] = $_
+            }
+        } catch {
+            if (Test-CodexProcess -Name $_.ProcessName -Path "") {
+                $targets[[int]$_.Id] = $_
+            }
+        }
+    }
+
     $processes = @($targets.Values | Sort-Object ProcessName, Id)
     if ($processes.Count -eq 0) {
-        Write-Host "        未发现 Adobi 目录进程或 Edge 进程" -ForegroundColor Gray
+        Write-Host "        未发现 Adobi 目录进程、Edge 进程或 Codex 进程" -ForegroundColor Gray
         return 0
     }
 
@@ -785,7 +816,7 @@ function Show-Menu {
     Write-Host "  4. Windows 剪贴板历史" -ForegroundColor White
     Write-Host "  5. opencode 开始菜单快捷方式" -ForegroundColor White
     Write-Host "  6. WiFi 配置文件" -ForegroundColor White
-    Write-Host "  7. Adobi / Edge 运行进程" -ForegroundColor White
+    Write-Host "  7. Adobi / Edge / Codex 运行进程" -ForegroundColor White
     Write-Host "  D. 模拟运行（不会真删）" -ForegroundColor Gray
     Write-Host "  R. ResetEdge 激进模式" -ForegroundColor Yellow
 
@@ -1419,7 +1450,7 @@ $choices = [ordered]@{
     "缩略图与站点元数据" = $script:CleanMetadata
     "安全与隐私数据" = $script:CleanSecurityData
     "诊断日志与崩溃报告" = $script:CleanDiagnostics
-    "Adobi / Edge 运行进程" = [bool]$CloseAdobiProcesses
+    "Adobi / Edge / Codex 运行进程" = [bool]$CloseAdobiProcesses
     "Windows 通知历史" = [bool]$ClearWindowsNotifications
     "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
     "剪贴板历史" = [bool]$ClearClipboardHistory
@@ -1431,10 +1462,10 @@ $choices = [ordered]@{
 }
 
 if ($CloseAdobiProcesses) {
-    Write-Step "正在关闭 Adobi / Edge 运行进程..."
-    Write-Deep "只处理可执行路径位于 Adobi 根目录下的进程，并额外包含 Edge 前后台进程；不删除任何文件"
-    $results["运行进程"] += Stop-AdobiAndEdgeProcesses -Root $AdobiRoot -IsDryRun:$DryRun
-    Write-Success "Adobi / Edge 运行进程处理完成"
+    Write-Step "正在关闭 Adobi / Edge / Codex 运行进程..."
+    Write-Deep "只处理可执行路径位于 Adobi 根目录下的进程，并额外包含 Edge 和 Codex 前后台进程；不删除任何文件"
+    $results["运行进程"] += Stop-AdobiEdgeAndCodexProcesses -Root $AdobiRoot -IsDryRun:$DryRun
+    Write-Success "Adobi / Edge / Codex 运行进程处理完成"
 }
 
 $historyPatterns = @(

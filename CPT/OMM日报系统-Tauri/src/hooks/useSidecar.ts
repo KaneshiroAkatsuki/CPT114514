@@ -39,6 +39,13 @@ export interface PersonalCleanerLogInfo {
   summary?: unknown;
 }
 
+export interface PersonalCleanerProcessCandidate {
+  pid: number;
+  name: string;
+  path: string;
+  kind: string;
+}
+
 export function useSidecar() {
   const parseFolders = async (baseDir: string, operatorName: string): Promise<ParseFoldersResponse> => {
     return await invoke<ParseFoldersResponse>("sidecar_parse_folders", {
@@ -193,5 +200,9 @@ export function usePersonalCleaner() {
     return await invoke<PersonalCleanerLogInfo>("read_personal_cleaner_log", { logPath, summaryPath });
   };
 
-  return { runPersonalCleaner, readPersonalCleanerLog };
+  const previewPersonalCleanerProcesses = async (): Promise<PersonalCleanerProcessCandidate[]> => {
+    return await invoke<PersonalCleanerProcessCandidate[]>("preview_personal_cleaner_processes");
+  };
+
+  return { runPersonalCleaner, readPersonalCleanerLog, previewPersonalCleanerProcesses };
 }

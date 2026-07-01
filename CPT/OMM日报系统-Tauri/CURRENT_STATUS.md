@@ -30,7 +30,7 @@
 - 个人清理新增火狐浏览记录单项清理，目标为 `C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil` 下 Firefox profile，默认先备份完整 profile。
 - 个人清理中心已收敛为顶部分类 + 左侧项目选择 + 右侧影响/执行清单确认；运行日志仅在执行后显示，减少页面拥挤感。
 - 个人清理 Windows 通知历史已改为优先调用通知中心“全部清除”按钮，不再重启 Explorer/任务栏；清理完成后会弹出结果摘要并清空真实执行清单。
-- 个人清理新增“运行进程”栏目，可关闭 `C:\Program Files\Adobe\Acrobat DC\Adobi` 目录下运行的软件进程，并包含 Edge 前后台进程；该项只结束进程，不删除文件。
+- 个人清理新增“运行进程”栏目，可关闭 `C:\Program Files\Adobe\Acrobat DC\Adobi` 目录下运行的软件进程，并包含 Edge/Codex 前后台进程；真实执行前会先弹出候选进程名、PID 和路径，该项只结束进程，不删除文件。
 - 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
 - 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
