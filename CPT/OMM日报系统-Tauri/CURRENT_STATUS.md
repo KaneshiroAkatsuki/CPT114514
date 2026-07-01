@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.5.4
+- 应用版本：5.5.5
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -39,22 +39,22 @@
 - 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
 - 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
-- UI 收尾审查已补齐：通用弹窗外壳改为不滚动，滚动交给内容区；启动页和浏览器标题同步到 5.5.4 与当前 Apple-inspired 配色。
-- 项目内已生成最新 5.5.4 便携包。
+- UI 收尾审查已补齐：通用弹窗外壳改为不滚动，滚动交给内容区；启动页和浏览器标题同步到 5.5.5 与当前 Apple-inspired 配色。
+- 项目内已生成最新 5.5.5 便携包。
 - 本地账户登录已新增：默认管理员、访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-> 最新源码版本和最新便携包版本均为 5.5.4。
+> 最新源码版本和最新便携包版本均为 5.5.5。
 
-- packaged_at：2026-07-02T03:17:00
-- app：4364e1bac053b8cfc69777d691ecb1155e9c525191673afd94b5c8b3568fcc2f
+- packaged_at：2026-07-02T03:49:51
+- app：4231ef8e14a07bfbf0aeefdce14f4e4f6a6aac090211212eb15b8e84bd48fa9f
 - sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
-- personal_cleaner_script：e605158c7b5e143dfd81161e3c6a512f35cf8e16f7a49b71fb1811e880f88e96
+- personal_cleaner_script：1bea9a640659ec46d5b30be35194b7e7a494155d87a2a9d823d2e630f2c7252a
 - personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.5.4.zip`
+- 便携包：`releases/OMM日报系统_便携版_5.5.5.zip`
 - 安装包：本轮交付便携包；安装包仅按需使用。
 - 移动性检查：临时解压验证已通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`，验证目录已清理。
 
@@ -67,7 +67,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.5.4
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.5.5
 ```
 
 ## 重要约束
