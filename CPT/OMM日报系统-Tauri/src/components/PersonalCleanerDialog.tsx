@@ -680,43 +680,40 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
         </DialogHeader>
 
         <DialogContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-5">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.2fr]">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-[140px] flex-1 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
                   <ShieldAlert className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900">执行前会说明后果</div>
-                  <div className="mt-1 text-xs leading-5 text-slate-600">
-                    每个项目都列出会清理什么、保留什么、可能影响和备份规则。建议先模拟运行，再真实执行。
-                  </div>
+                  <div className="text-sm font-semibold text-slate-950">先模拟，再执行</div>
+                  <div className="text-xs leading-5 text-slate-500">选择清理项后，右侧会汇总本次影响和备份策略。</div>
+                </div>
+              </div>
+              <div className="grid min-w-[280px] flex-1 grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="text-lg font-semibold text-slate-950">{selectedActions.length}</div>
+                  <div className="text-xs text-slate-500">已选</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className={`text-lg font-semibold ${riskItems.length > 0 ? "text-red-700" : "text-emerald-700"}`}>{riskItems.length}</div>
+                  <div className="text-xs text-slate-500">高风险</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="text-lg font-semibold text-blue-700">{form.backupPrivateBrowser && !form.skipBackup ? "开启" : "按项"}</div>
+                  <div className="text-xs text-slate-500">备份</div>
                 </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200/80 bg-white/75 p-4">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-lg font-semibold text-slate-950">{selectedActions.length}</div>
-                  <div className="text-xs text-slate-500">已选项目</div>
-                </div>
-                <div>
-                  <div className={`text-lg font-semibold ${riskItems.length > 0 ? "text-red-700" : "text-emerald-700"}`}>{riskItems.length}</div>
-                  <div className="text-xs text-slate-500">需重点确认</div>
-                </div>
-                <div>
-                  <div className="text-lg font-semibold text-blue-700">{form.backupPrivateBrowser && !form.skipBackup ? "开" : "按项"}</div>
-                  <div className="text-xs text-slate-500">备份保护</div>
-                </div>
-              </div>
-              <div className="mt-3 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" title={CLEANER_BACKUP_ROOT}>
-                备份根目录：{CLEANER_BACKUP_ROOT}
-              </div>
+            <div className="mt-3 truncate rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" title={CLEANER_BACKUP_ROOT}>
+              备份统一保存到：{CLEANER_BACKUP_ROOT}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[210px_1fr_280px]">
-            <nav className="space-y-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-3">
+              <nav className="flex flex-wrap gap-2">
               {GROUPS.map((group) => {
                 const count = CLEANER_ACTIONS.filter((action) => action.group === group.id && isActionSelected(action, form, runtime)).length;
                 const active = activeGroup === group.id;
@@ -725,20 +722,19 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
                     key={group.id}
                     type="button"
                     onClick={() => openGroup(group.id)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left transition ${active ? "border-blue-200 bg-blue-50 text-blue-800 shadow-sm" : "border-slate-200/80 bg-white/70 text-slate-700 hover:bg-white"}`}
+                    className={`rounded-full border px-3 py-2 text-left transition ${active ? "border-blue-200 bg-blue-50 text-blue-800 shadow-sm" : "border-slate-200/80 bg-white/70 text-slate-700 hover:bg-white"}`}
                   >
                     <span className="flex items-center gap-2 text-sm font-semibold">
                       {group.icon}
-                      <span className="min-w-0 flex-1 truncate">{group.title}</span>
+                      <span>{group.title}</span>
                       {count > 0 && <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">{count}</span>}
                     </span>
-                    <span className={`mt-1 block truncate text-xs ${active ? "text-blue-600" : "text-slate-500"}`}>{group.subtitle}</span>
                   </button>
                 );
               })}
-            </nav>
+              </nav>
 
-            <section className="space-y-2">
+              <section className="space-y-2">
               {visibleActions.map((action) => {
                 const selected = isActionSelected(action, form, runtime);
                 const active = activeAction.id === action.id;
@@ -788,27 +784,31 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
                   </div>
                 );
               })}
-            </section>
+              </section>
+            </div>
 
-            <aside className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/75 p-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-slate-950">{activeAction.title}</h3>
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(activeAction.risk)}`}>{riskLabel(activeAction.risk)}</span>
+            <aside className="space-y-3">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-slate-950">{activeAction.title}</h3>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(activeAction.risk)}`}>{riskLabel(activeAction.risk)}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{activeAction.summary}</p>
                 </div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{activeAction.summary}</p>
-              </div>
 
-              <DetailBlock title="会清理" items={activeDetails.clears} />
-              <DetailBlock title="会保留" items={activeDetails.keeps} />
-              <DetailBlock title="可能影响" items={activeDetails.impacts} />
+                <div className="mt-3 space-y-3">
+                  <DetailBlock title="会清理" items={activeDetails.clears} />
+                  <DetailBlock title="会保留" items={activeDetails.keeps} />
+                  <DetailBlock title="可能影响" items={activeDetails.impacts} />
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                <span className="font-semibold text-slate-700">备份：</span>{activeDetails.backup}
-              </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                    <span className="font-semibold text-slate-700">备份：</span>{activeDetails.backup}
+                  </div>
+                </div>
 
               {activeAction.id === "edgeStandard" && (
-                <div className="space-y-2">
+                <div className="mt-3 space-y-2">
                   <ToggleLine
                     checked={form.keepPasswordsAutofill}
                     onChange={(checked) => setBool("keepPasswordsAutofill", checked)}
@@ -827,7 +827,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
               )}
 
               {activeAction.id === "screenshots" && (
-                <div className="space-y-3">
+                <div className="mt-3 space-y-3">
                   <div className="grid grid-cols-1 gap-2">
                     <label className="space-y-1 text-xs text-slate-500">
                       <span className="font-medium text-slate-700">班次</span>
@@ -864,17 +864,19 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
               )}
 
               {(activeAction.id === "privateHistory" || activeAction.id === "privateFull" || activeAction.id === "backupPolicy") && (
-                <ToggleLine
-                  checked={form.backupPrivateBrowser}
-                  onChange={(checked) => setBool("backupPrivateBrowser", checked)}
-                  title="清理前备份 Firefox profile"
-                  description={`默认备份 ${PRIVATE_BROWSER_ROOT} 下的完整 profile。`}
-                  danger={!form.backupPrivateBrowser && (form.clearPrivateBrowserHistory || form.cleanPrivateBrowser)}
-                />
+                <div className="mt-3">
+                  <ToggleLine
+                    checked={form.backupPrivateBrowser}
+                    onChange={(checked) => setBool("backupPrivateBrowser", checked)}
+                    title="清理前备份 Firefox profile"
+                    description={`默认备份 ${PRIVATE_BROWSER_ROOT} 下的完整 profile。`}
+                    danger={!form.backupPrivateBrowser && (form.clearPrivateBrowserHistory || form.cleanPrivateBrowser)}
+                  />
+                </div>
               )}
 
               {activeAction.id === "wifiProfiles" && (
-                <label className="block space-y-2 text-xs text-slate-500">
+                <label className="mt-3 block space-y-2 text-xs text-slate-500">
                   <span className="font-medium text-slate-700">保留 WiFi 前缀</span>
                   <input
                     className="h-9 w-full rounded-lg border border-red-200 bg-white/90 px-2 text-sm focus-visible:border-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
@@ -887,7 +889,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
               )}
 
               {activeAction.id === "backupPolicy" && (
-                <div className="space-y-2">
+                <div className="mt-3 space-y-2">
                   <ToggleLine
                     checked={!form.skipBackup}
                     onChange={(checked) => setBool("skipBackup", !checked)}
@@ -900,34 +902,35 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
                   </div>
                 </div>
               )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <ClipboardList className="h-4 w-4 text-blue-600" />
+                  本次执行清单
+                </div>
+                {selectedActions.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                    尚未选择清理项目。
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedActions.map((action) => (
+                      <div key={action.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-slate-800">{action.title}</span>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(action.risk)}`}>{riskLabel(action.risk)}</span>
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">{actionDetails(action, form, runtime).impacts[0] || action.summary}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </aside>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
-            <div className="rounded-2xl border border-slate-200/80 bg-white/75 p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <ClipboardList className="h-4 w-4 text-blue-600" />
-                本次执行清单
-              </div>
-              {selectedActions.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                  尚未选择清理项目。
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {selectedActions.map((action) => (
-                    <div key={action.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-slate-800">{action.title}</span>
-                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskClass(action.risk)}`}>{riskLabel(action.risk)}</span>
-                      </div>
-                      <div className="mt-1 text-xs leading-5 text-slate-500">{actionDetails(action, form, runtime).impacts[0] || action.summary}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
+          {(log || runInfo) && (
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-100 shadow-[0_10px_30px_rgba(15,23,42,0.18)]">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="font-medium">运行日志</span>
@@ -939,7 +942,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
               </div>
               <pre className="max-h-56 overflow-auto whitespace-pre-wrap leading-5">{log || "尚未运行。"}</pre>
             </div>
-          </div>
+          )}
 
           {riskItems.length > 0 && (
             <div className="rounded-xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-800">

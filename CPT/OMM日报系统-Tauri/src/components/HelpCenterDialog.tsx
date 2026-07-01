@@ -373,7 +373,7 @@ const TOPICS: HelpTopic[] = [
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。真实执行前会汇总每个项目会清什么、可能影响和备份策略。</div>
         <ul className={text.ul}>
-          <li><strong>界面结构：</strong>左侧按 Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；中间选择清理项，右侧显示“会清理 / 会保留 / 可能影响 / 备份”。</li>
+          <li><strong>界面结构：</strong>顶部按 Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；左侧选择清理项，右侧汇总当前项的“会清理 / 会保留 / 可能影响 / 备份”和本次执行清单。</li>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
           <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
