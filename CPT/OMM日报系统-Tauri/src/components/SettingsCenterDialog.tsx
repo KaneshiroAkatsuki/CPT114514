@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.5.5";
+const APP_VERSION = "5.6.0";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "account" | "about";
