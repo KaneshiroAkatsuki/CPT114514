@@ -329,8 +329,8 @@ const TOPICS: HelpTopic[] = [
     id: "settings-center",
     categoryId: "config",
     title: "设置中心怎么用",
-    summary: "集中管理默认规则、输出、账户、配置文件、模板和其他功能。",
-    keywords: ["设置中心", "设置", "保存设置", "未保存", "退出确认", "配置草稿", "当前设置", "工作目录", "账户", "其他功能", "诊断日志"],
+    summary: "按账户和模块分区管理设置；业务执行入口保留在对应模块。",
+    keywords: ["设置中心", "设置", "保存设置", "未保存", "退出确认", "配置草稿", "当前设置", "工作目录", "账户", "模块设置", "诊断日志"],
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
@@ -338,10 +338,11 @@ const TOPICS: HelpTopic[] = [
           <li><strong>先改草稿再保存：</strong>在设置中心修改内容不会立刻写入 config.json，点击“保存设置”后才会生效。</li>
           <li><strong>退出二次确认：</strong>有未保存改动时关闭设置中心，会提示“保存并退出 / 放弃更改 / 继续编辑”，并列出变更摘要。</li>
           <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
-          <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置、账户、其他功能和关于软件都可以从设置中心进入。</li>
+          <li><strong>四个分区：</strong>账户登录、信息统计局设置、数据管理局设置和关于软件。以后新增模块时，会继续按“模块名 + 设置”的方式扩展。</li>
+          <li><strong>模块归属：</strong>信息统计局设置管理日报识别、排程、输出、模板和补充规则；数据管理局设置只说明本机治理边界、备份和日志位置。</li>
           <li><strong>诊断日志：</strong>主界面不显示日志；排查问题时在“关于软件”的“诊断”区域查看。</li>
-          <li><strong>账户管理：</strong>管理当前账户、欢迎语显示方式和切换账户；该栏目位于“关于软件”上方。</li>
-          <li><strong>数据管理：</strong>管理员账户可从这里进入数据管理局相关维护工具；访客账户会看到权限提示。</li>
+          <li><strong>账户登录：</strong>管理当前账户、欢迎语显示方式和切换账户。</li>
+          <li><strong>数据管理局：</strong>清理执行入口不在设置中心；请从主页进入数据管理局后执行模拟运行或真实清理。</li>
           <li><strong>关于软件：</strong>显示当前版本、帮助入口、配置文件、识别补充、模板来源和本地数据管理信息，便于验收和排查。</li>
         </ul>
       </div>
@@ -374,7 +375,7 @@ const TOPICS: HelpTopic[] = [
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。真实执行前会汇总每个项目会清什么、可能影响和备份策略。</div>
         <ul className={text.ul}>
-          <li><strong>入口权限：</strong>数据管理局只允许管理员进入；访客点击入口时会显示权限提示，后端命令也会继续校验管理员身份。</li>
+          <li><strong>入口权限：</strong>数据管理局从主页进入，只允许管理员使用；访客点击入口时会显示权限提示，后端命令也会继续校验管理员身份。</li>
           <li><strong>界面结构：</strong>顶部按运行进程、Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；左侧选择清理项，右侧汇总当前项的“会清理 / 会保留 / 可能影响 / 备份”和本次执行清单。</li>
           <li><strong>清理方案：</strong>推荐清理会套用一组相对稳妥的常用项目，不包含 ResetEdge、清书签、清扩展、清微软账户、Firefox 浏览记录/完整清理或关闭进程等高风险项；自定义清理可以把当前勾选项保存为默认方案，并支持修改方案名称，下次打开数据维护中心会自动套用。</li>
           <li><strong>运行进程：</strong>可关闭 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi</code> 目录下正在运行的软件进程，并额外包含 Edge 和 Codex 前后台进程；只结束进程，不删除文件。当前 Adobi 根目录包含 AcrobatHelper/OpenCode、AcroUtil/Firefox、Kimi、lmclient 和 PortableGit 等目录，真实执行前会先弹出检测到的进程名、PID 和路径。执行后会清空当前用户系统代理和 WinHTTP 代理，避免代理软件退出后残留代理地址；不会清理 <code className={text.code}>HTTP_PROXY</code> / <code className={text.code}>HTTPS_PROXY</code> 环境变量或 Codex 自身代理配置。</li>
@@ -423,7 +424,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.6.0。</li>
+          <li><strong>版本：</strong>5.6.3。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、帮助入口、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常使用：</strong>以当前便携版程序为准；发布物会定期整理，只保留最新可用版本。</li>

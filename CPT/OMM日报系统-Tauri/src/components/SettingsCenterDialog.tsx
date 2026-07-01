@@ -55,7 +55,6 @@ interface SettingsCenterDialogProps {
   recognitionRulesExists: boolean;
   templateInfo: TemplateInfo | null;
   currentAccount: PublicAccount;
-  canUsePersonalCleaner: boolean;
   logCount: number;
   dataStoreInfo: DataStoreInfo | null;
   onOpenChange: (open: boolean) => void;
@@ -68,7 +67,6 @@ interface SettingsCenterDialogProps {
   onResetTemplate: () => void;
   onViewTemplatePaths: () => void;
   onRefreshTemplate: () => void;
-  onOpenPersonalCleaner: () => void;
   onSwitchAccount: () => void;
   onDisplayNameModeChange: (mode: DisplayNameMode) => Promise<void>;
   onOpenDetailedLogs: () => void;
@@ -77,19 +75,16 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.6.0";
+const APP_VERSION = "5.6.3";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
-type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "account" | "about";
+type SettingsTab = "account" | "daily" | "data" | "about";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string }[] = [
-  { id: "basic", label: "基础设置", icon: <UserRound className="h-4 w-4" />, description: "使用者、班次和审核模式" },
-  { id: "generation", label: "生成规则", icon: <SlidersHorizontal className="h-4 w-4" />, description: "下班策略、每件时间和补时长" },
-  { id: "paths", label: "路径配置", icon: <FolderOpen className="h-4 w-4" />, description: "工作目录、输出目录、配置文件" },
-  { id: "assets", label: "模板规则", icon: <FileSpreadsheet className="h-4 w-4" />, description: "报表模板、特殊大件、识别补充" },
-  { id: "tools", label: "其他功能", icon: <Wrench className="h-4 w-4" />, description: "个人清理等附加功能" },
-  { id: "account", label: "账户管理", icon: <UserRound className="h-4 w-4" />, description: "显示方式和切换账户" },
-  { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、配置和帮助" },
+  { id: "account", label: "账户登录", icon: <UserRound className="h-4 w-4" />, description: "当前账户、显示方式和切换登录" },
+  { id: "daily", label: "信息统计局设置", icon: <SlidersHorizontal className="h-4 w-4" />, description: "日报识别、排程、输出和模板" },
+  { id: "data", label: "数据管理局设置", icon: <Wrench className="h-4 w-4" />, description: "本机治理、备份和风险边界" },
+  { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、帮助和诊断" },
 ];
 
 function normalizeDraft(draft: SettingsCenterDraft): SettingsCenterDraft {
@@ -314,7 +309,6 @@ export function SettingsCenterDialog({
   recognitionRulesExists,
   templateInfo,
   currentAccount,
-  canUsePersonalCleaner,
   logCount,
   dataStoreInfo,
   onOpenChange,
@@ -327,7 +321,6 @@ export function SettingsCenterDialog({
   onResetTemplate,
   onViewTemplatePaths,
   onRefreshTemplate,
-  onOpenPersonalCleaner,
   onSwitchAccount,
   onDisplayNameModeChange,
   onOpenDetailedLogs,
@@ -335,7 +328,7 @@ export function SettingsCenterDialog({
   onOpenDataRoot,
   onOpenHelp,
 }: SettingsCenterDialogProps) {
-  const [activeTab, setActiveTab] = React.useState<SettingsTab>("basic");
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>("account");
   const [draft, setDraft] = React.useState<SettingsCenterDraft>(value);
   const [initialDraft, setInitialDraft] = React.useState<SettingsCenterDraft>(value);
   const [confirmExit, setConfirmExit] = React.useState(false);
@@ -347,7 +340,7 @@ export function SettingsCenterDialog({
     if (!open) return;
     setDraft(value);
     setInitialDraft(value);
-    setActiveTab("basic");
+    setActiveTab("account");
     setConfirmExit(false);
     setError("");
     setSaving(false);
@@ -635,30 +628,59 @@ export function SettingsCenterDialog({
     </div>
   );
 
-  const renderTools = () => (
+  const renderDaily = () => (
     <div className="space-y-5">
-      <Section icon={<Wrench className="h-4 w-4" />} title="本机工具" description="个人清理仅管理员账户可使用，访客账户无入口且后端会拒绝调用。">
-        {canUsePersonalCleaner ? (
-          <button
-            type="button"
-            onClick={onOpenPersonalCleaner}
-            className="rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-left transition hover:bg-amber-100/90"
-          >
-            <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
-              <AlertTriangle className="h-4 w-4" />
-              个人清理中心
+      {renderBasic()}
+      {renderGeneration()}
+      {renderPaths()}
+      {renderAssets()}
+    </div>
+  );
+
+  const renderData = () => (
+    <div className="space-y-5">
+      <Section icon={<Wrench className="h-4 w-4" />} title="治理边界" description="清理执行入口已独立到主页的数据管理局；设置中心只保留策略说明和数据位置。">
+        <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-sm leading-6 text-blue-800">
+          本机清理、进程处理、私人浏览器和 WiFi 维护统一从“数据管理局”进入。这里不再打开个人清理窗口，避免设置和业务模块重复。
+        </div>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {[
+            ["权限校验", "入口、执行和日志读取都需要管理员账户；后端命令会再次校验。"],
+            ["执行方式", "推荐先模拟运行，真实执行前会汇总项目影响和备份策略。"],
+            ["保护对象", "回收站清理保留 Excel、-OMM、送测和 inspec 相关项目。"],
+            ["代理边界", "可清系统代理和 WinHTTP 代理，不改 HTTP_PROXY / HTTPS_PROXY 环境变量。"],
+          ].map(([title, description]) => (
+            <div key={title} className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+              <div className="text-sm font-medium text-slate-800">{title}</div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">{description}</div>
             </div>
-            <div className="mt-1 text-xs leading-5 text-amber-800">
-              Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。仅管理员账户可执行，危险项会二次确认。
+          ))}
+        </div>
+      </Section>
+
+      <Section icon={<Package className="h-4 w-4" />} title="备份与日志" description="数据管理局产生的日志和备份路径集中展示，便于回溯。">
+        {dataStoreInfo ? (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+              <div className="text-xs text-slate-500">清理日志</div>
+              <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.logsDir}</div>
             </div>
-          </button>
+            <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+              <div className="text-xs text-slate-500">数据备份</div>
+              <div className="mt-1 break-all text-xs font-mono text-slate-700">{dataStoreInfo.backupsDir}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm md:col-span-2">
+              <div className="text-xs text-slate-500">清理备份根目录</div>
+              <div className="mt-1 break-all text-xs font-mono text-slate-700">{PERSONAL_CLEANER_BACKUP_ROOT}</div>
+            </div>
+          </div>
         ) : (
-          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm leading-6 text-slate-600">
-            访客账户不显示个人清理中心。
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm text-slate-600">
+            <span>尚未读取本地数据状态。</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
           </div>
         )}
       </Section>
-
     </div>
   );
 
@@ -833,13 +855,10 @@ export function SettingsCenterDialog({
 
   const renderActiveTab = () => {
     switch (activeTab) {
-      case "generation": return renderGeneration();
-      case "paths": return renderPaths();
-      case "assets": return renderAssets();
-      case "tools": return renderTools();
-      case "account": return renderAccount();
+      case "daily": return renderDaily();
+      case "data": return renderData();
       case "about": return renderAbout();
-      default: return renderBasic();
+      default: return renderAccount();
     }
   };
 

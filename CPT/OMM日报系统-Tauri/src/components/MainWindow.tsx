@@ -1983,7 +1983,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                   </div>
                   <div className="info-strip flex items-start gap-2">
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>默认规则、输出目录、配置文件、模板、特殊大件、识别补充和个人清理都集中到设置中心。修改设置会先进入草稿，保存后才写入配置文件。</span>
+                    <span>设置中心按账户登录、信息统计局设置、数据管理局设置和关于软件分区。清理执行入口已独立到数据管理局，修改设置会先进入草稿，保存后才写入配置文件。</span>
                   </div>
                 </CardContent>
               </Card>
@@ -2348,7 +2348,6 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         recognitionRulesExists={recognitionRulesExists}
         templateInfo={templateInfo}
         currentAccount={currentAccount}
-        canUsePersonalCleaner={isAdminAccount}
         logCount={logs.length}
         dataStoreInfo={dataStoreInfo}
         onOpenChange={setSettingsCenterOpen}
@@ -2361,9 +2360,6 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         onResetTemplate={handleResetTemplate}
         onViewTemplatePaths={handleViewTemplatePaths}
         onRefreshTemplate={handleRefreshTemplateInfo}
-        onOpenPersonalCleaner={() => {
-          if (isAdminAccount) setPersonalCleanerOpen(true);
-        }}
         onSwitchAccount={onSwitchAccount}
         onDisplayNameModeChange={handleDisplayNameModeChange}
         onOpenDetailedLogs={() => setLogDialogOpen(true)}

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "productName": "OMM日报系统",
-  "version": "5.6.2",
+  "version": "5.6.3",
   "identifier": "com.kaneshiro.omm-report-v5",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OMM日报系统 v5.6.2",
+        "title": "OMM日报系统 v5.6.3",
         "width": 700,
         "height": 800,
         "minWidth": 700,
