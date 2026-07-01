@@ -10,6 +10,7 @@ export interface PersonalCleanerOptions {
   clearBookmarks: boolean;
   clearExtensions: boolean;
   clearMicrosoftAccount: boolean;
+  closeAdobiProcesses: boolean;
   clearWindowsNotifications: boolean;
   clearScreenshots: boolean;
   screenshotWindowStart?: string | null;

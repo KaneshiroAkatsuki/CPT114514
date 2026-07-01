@@ -40,6 +40,12 @@ param(
     # 清理 Windows 通知历史记录（不影响通知权限设置）
     [switch]$ClearWindowsNotifications,
 
+    # 关闭 Adobi 根目录下运行的软件进程，并包含 Edge 前后台进程
+    [switch]$CloseAdobiProcesses,
+
+    # Adobi 根目录
+    [string]$AdobiRoot = "C:\Program Files\Adobe\Acrobat DC\Adobi",
+
     # 清理截图文件夹：按当班时间窗口清理；旧 Days 参数保留给交互菜单兼容
     [switch]$ClearScreenshots,
     [string]$ClearScreenshotsFrom,
@@ -324,6 +330,83 @@ function Stop-PrivateBrowserProcesses {
     $processes | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 800
     Write-Host "        私人浏览器已关闭" -ForegroundColor DarkGreen
+}
+
+function Stop-AdobiAndEdgeProcesses {
+    param(
+        [string]$Root,
+        [switch]$IsDryRun
+    )
+
+    $targets = @{}
+    $resolvedRoot = $null
+
+    if (-not [string]::IsNullOrWhiteSpace($Root) -and (Test-Path -LiteralPath $Root)) {
+        $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
+    } else {
+        Write-Host "        Adobi 根目录不存在或不可访问: $Root" -ForegroundColor Yellow
+    }
+
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $path = $_.Path
+            if ($resolvedRoot -and $path -and $path.StartsWith($resolvedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $targets[[int]$_.Id] = $_
+            }
+        } catch { }
+    }
+
+    Get-Process -Name "msedge" -ErrorAction SilentlyContinue | ForEach-Object {
+        $targets[[int]$_.Id] = $_
+    }
+
+    $processes = @($targets.Values | Sort-Object ProcessName, Id)
+    if ($processes.Count -eq 0) {
+        Write-Host "        未发现 Adobi 目录进程或 Edge 进程" -ForegroundColor Gray
+        return 0
+    }
+
+    foreach ($proc in $processes) {
+        $path = ""
+        try { $path = $proc.Path } catch { $path = "" }
+        $label = "$($proc.ProcessName) (PID $($proc.Id))"
+        if ($path) { $label = "$label - $path" }
+
+        if ($IsDryRun) {
+            Write-Host "        [模拟关闭] $label" -ForegroundColor DarkCyan
+        } else {
+            Write-Host "        准备关闭: $label" -ForegroundColor DarkYellow
+        }
+    }
+
+    if ($IsDryRun) {
+        return $processes.Count
+    }
+
+    foreach ($proc in $processes) {
+        try {
+            if ($proc.MainWindowHandle -ne 0) {
+                $proc.CloseMainWindow() | Out-Null
+            }
+        } catch { }
+    }
+
+    Start-Sleep -Milliseconds 900
+    $closed = 0
+    foreach ($proc in $processes) {
+        try {
+            $current = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+            if ($current) {
+                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+            }
+            $closed++
+        } catch {
+            Write-Host "        无法关闭 $($proc.ProcessName) (PID $($proc.Id)): $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "        已处理 $closed 个进程" -ForegroundColor DarkGreen
+    return $closed
 }
 
 function Backup-PrivateBrowserProfile {
@@ -702,10 +785,11 @@ function Show-Menu {
     Write-Host "  4. Windows 剪贴板历史" -ForegroundColor White
     Write-Host "  5. opencode 开始菜单快捷方式" -ForegroundColor White
     Write-Host "  6. WiFi 配置文件" -ForegroundColor White
+    Write-Host "  7. Adobi / Edge 运行进程" -ForegroundColor White
     Write-Host "  D. 模拟运行（不会真删）" -ForegroundColor Gray
     Write-Host "  R. ResetEdge 激进模式" -ForegroundColor Yellow
 
-    $modules = Read-MultiSelect -Prompt "输入大类编号" -Allowed @('1','2','3','4','5','6','d','r') -Default @('1')
+    $modules = Read-MultiSelect -Prompt "输入大类编号" -Allowed @('1','2','3','4','5','6','7','d','r') -Default @('1')
 
     if ($modules -contains 'd') { $script:DryRun = $true }
     if ($modules -contains 'r') {
@@ -721,6 +805,7 @@ function Show-Menu {
     }
 
     $script:ClearWindowsNotifications = ($modules -contains '2')
+    $script:CloseAdobiProcesses = ($modules -contains '7')
     if ($modules -contains '3') {
         do {
             $daysInput = Read-Host "删除截图文件夹中最近 N 天的截图（0 = 不清理，1 = 今天，2 = 今天+昨天）"
@@ -1284,6 +1369,7 @@ $results = [ordered]@{
     "缩略图与站点元数据" = 0
     "安全与隐私数据" = 0
     "诊断日志与崩溃报告" = 0
+    "运行进程" = 0
     "Windows 通知历史" = 0
     "截图文件" = 0
     "剪贴板历史" = 0
@@ -1303,6 +1389,7 @@ $deepItems = @{
     "浏览器界面设置" = $true
     "安全与隐私数据" = $true
     "诊断日志与崩溃报告" = $true
+    "运行进程" = $true
     "Windows 通知历史" = $true
     "截图文件" = $true
     "剪贴板历史" = $true
@@ -1332,6 +1419,7 @@ $choices = [ordered]@{
     "缩略图与站点元数据" = $script:CleanMetadata
     "安全与隐私数据" = $script:CleanSecurityData
     "诊断日志与崩溃报告" = $script:CleanDiagnostics
+    "Adobi / Edge 运行进程" = [bool]$CloseAdobiProcesses
     "Windows 通知历史" = [bool]$ClearWindowsNotifications
     "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
     "剪贴板历史" = [bool]$ClearClipboardHistory
@@ -1340,6 +1428,13 @@ $choices = [ordered]@{
     "私人浏览器清理" = [bool]$CleanPrivateBrowser
     "私人浏览器备份" = (($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) -and -not $SkipPrivateBrowserBackup)
     "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
+}
+
+if ($CloseAdobiProcesses) {
+    Write-Step "正在关闭 Adobi / Edge 运行进程..."
+    Write-Deep "只处理可执行路径位于 Adobi 根目录下的进程，并额外包含 Edge 前后台进程；不删除任何文件"
+    $results["运行进程"] += Stop-AdobiAndEdgeProcesses -Root $AdobiRoot -IsDryRun:$DryRun
+    Write-Success "Adobi / Edge 运行进程处理完成"
 }
 
 $historyPatterns = @(

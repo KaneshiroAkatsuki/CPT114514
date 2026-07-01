@@ -368,12 +368,13 @@ const TOPICS: HelpTopic[] = [
     categoryId: "cleaner",
     title: "个人清理中心清什么",
     summary: "本机维护工具，清理前会说明内容、影响和备份位置。",
-    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "火狐", "备份", "管理员", "UAC", "60秒", "白班", "夜班"],
+    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "火狐", "Adobi", "进程", "后台", "备份", "管理员", "UAC", "60秒", "白班", "夜班"],
     body: (
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。真实执行前会汇总每个项目会清什么、可能影响和备份策略。</div>
         <ul className={text.ul}>
-          <li><strong>界面结构：</strong>顶部按 Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；左侧选择清理项，右侧汇总当前项的“会清理 / 会保留 / 可能影响 / 备份”和本次执行清单。</li>
+          <li><strong>界面结构：</strong>顶部按运行进程、Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；左侧选择清理项，右侧汇总当前项的“会清理 / 会保留 / 可能影响 / 备份”和本次执行清单。</li>
+          <li><strong>运行进程：</strong>可关闭 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi</code> 目录下正在运行的软件进程，并额外包含 Edge 前台窗口和后台进程；只结束进程，不删除文件。</li>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
           <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、opencode 快捷方式、WiFi 配置。通知历史会优先打开通知中心并调用“全部清除”，不再重启 Explorer/任务栏。</li>

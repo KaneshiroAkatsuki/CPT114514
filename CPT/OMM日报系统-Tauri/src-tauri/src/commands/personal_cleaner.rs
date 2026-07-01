@@ -18,6 +18,7 @@ pub struct PersonalCleanerOptions {
     pub clear_bookmarks: bool,
     pub clear_extensions: bool,
     pub clear_microsoft_account: bool,
+    pub close_adobi_processes: bool,
     pub clear_windows_notifications: bool,
     pub clear_screenshots: bool,
     pub screenshot_window_start: Option<String>,
@@ -210,6 +211,11 @@ fn build_script_args(
         &mut args,
         options.clear_microsoft_account,
         "-ClearMicrosoftAccount",
+    );
+    push_switch(
+        &mut args,
+        options.close_adobi_processes,
+        "-CloseAdobiProcesses",
     );
     push_switch(
         &mut args,

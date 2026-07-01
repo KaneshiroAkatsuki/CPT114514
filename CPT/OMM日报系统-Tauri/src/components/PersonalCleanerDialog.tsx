@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
@@ -32,7 +33,7 @@ interface PersonalCleanerDialogProps {
 }
 
 type CleanerShift = "A" | "B";
-type CleanerGroup = "edge" | "private" | "windows" | "network" | "backup";
+type CleanerGroup = "process" | "edge" | "private" | "windows" | "network" | "backup";
 type RiskLevel = "low" | "medium" | "high" | "critical";
 type ConfirmTone = "warning" | "danger";
 type ResultTone = "info" | "warning" | "danger";
@@ -46,6 +47,7 @@ type BoolKey = keyof Pick<
   | "clearBookmarks"
   | "clearExtensions"
   | "clearMicrosoftAccount"
+  | "closeAdobiProcesses"
   | "clearWindowsNotifications"
   | "clearScreenshots"
   | "clearClipboardHistory"
@@ -64,6 +66,7 @@ interface CleanerFormState {
   clearBookmarks: boolean;
   clearExtensions: boolean;
   clearMicrosoftAccount: boolean;
+  closeAdobiProcesses: boolean;
   clearWindowsNotifications: boolean;
   clearScreenshots: boolean;
   screenshotShift: CleanerShift;
@@ -113,6 +116,7 @@ interface CleanerResultDialog {
 }
 
 const GROUPS: { id: CleanerGroup; title: string; subtitle: string; icon: React.ReactNode }[] = [
+  { id: "process", title: "运行进程", subtitle: "Adobi / Edge", icon: <Activity className="h-4 w-4" /> },
   { id: "edge", title: "Edge 浏览器", subtitle: "历史、缓存、书签、账户", icon: <MonitorCog className="h-4 w-4" /> },
   { id: "private", title: "私人 Firefox", subtitle: "AcroUtil profile", icon: <EyeOff className="h-4 w-4" /> },
   { id: "windows", title: "Windows 痕迹", subtitle: "截图、剪贴板、通知", icon: <ClipboardList className="h-4 w-4" /> },
@@ -121,6 +125,25 @@ const GROUPS: { id: CleanerGroup; title: string; subtitle: string; icon: React.R
 ];
 
 const CLEANER_ACTIONS: CleanerAction[] = [
+  {
+    id: "adobiProcesses",
+    group: "process",
+    formKey: "closeAdobiProcesses",
+    title: "关闭 Adobi / Edge 进程",
+    summary: "关闭 Adobi 目录下正在运行的软件，并包含 Edge 前后台进程。",
+    risk: "high",
+    confirmRequired: true,
+    clears: [
+      "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi 下运行中的软件进程",
+      "Microsoft Edge 前台窗口和后台 msedge 进程",
+    ],
+    keeps: ["不会删除任何文件、配置、账号或浏览数据", "不会处理 Adobi 目录外的普通软件进程，Edge 除外"],
+    impacts: [
+      "正在打开的浏览器、下载、网页编辑或后台任务会被关闭。",
+      "未保存内容可能丢失；建议先保存正在编辑的内容，再真实执行。",
+    ],
+    backup: "不创建备份；这是进程关闭功能，不涉及文件删除。",
+  },
   {
     id: "edgeStandard",
     group: "edge",
@@ -380,6 +403,7 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
     clearBookmarks: false,
     clearExtensions: false,
     clearMicrosoftAccount: false,
+    closeAdobiProcesses: false,
     clearWindowsNotifications: false,
     clearScreenshots: false,
     screenshotShift: defaultShift,
@@ -586,8 +610,8 @@ function DetailBlock({ title, items }: { title: string; items: string[] }) {
 
 export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: PersonalCleanerDialogProps) {
   const [form, setForm] = React.useState<CleanerFormState>(() => createDefaultForm(defaultShift));
-  const [activeGroup, setActiveGroup] = React.useState<CleanerGroup>("edge");
-  const [activeActionId, setActiveActionId] = React.useState("edgeStandard");
+  const [activeGroup, setActiveGroup] = React.useState<CleanerGroup>("process");
+  const [activeActionId, setActiveActionId] = React.useState("adobiProcesses");
   const [runInfo, setRunInfo] = React.useState<PersonalCleanerRunInfo | null>(null);
   const [log, setLog] = React.useState("");
   const [done, setDone] = React.useState(false);
@@ -641,6 +665,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     clearBookmarks: form.clearBookmarks,
     clearExtensions: form.clearExtensions,
     clearMicrosoftAccount: form.clearMicrosoftAccount,
+    closeAdobiProcesses: form.closeAdobiProcesses,
     clearWindowsNotifications: form.clearWindowsNotifications,
     clearScreenshots: form.clearScreenshots,
     screenshotWindowStart: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.start) : null,
