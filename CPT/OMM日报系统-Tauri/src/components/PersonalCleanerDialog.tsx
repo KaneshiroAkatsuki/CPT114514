@@ -4,10 +4,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  Pencil,
   ExternalLink,
   EyeOff,
   Info,
   MonitorCog,
+  Save,
   ShieldAlert,
   Trash2,
   Wifi,
@@ -25,6 +27,7 @@ import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerPr
 
 const PRIVATE_BROWSER_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil";
 const CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
+const CUSTOM_CLEANER_PROFILE_KEY = "omm.personalCleaner.customProfile.v1";
 
 interface PersonalCleanerDialogProps {
   open: boolean;
@@ -106,6 +109,12 @@ interface CleanerSummary {
   finished_at?: string;
   error?: string;
   results?: Record<string, number>;
+}
+
+interface CleanerProfile {
+  name: string;
+  savedAt: string;
+  form: CleanerFormState;
 }
 
 interface CleanerResultDialog {
@@ -425,6 +434,49 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
   };
 }
 
+function createRecommendedForm(defaultShift: CleanerShift): CleanerFormState {
+  const base = createDefaultForm(defaultShift);
+  return {
+    ...base,
+    cleanEdge: true,
+    clearWindowsNotifications: true,
+    clearScreenshots: true,
+    clearClipboardHistory: true,
+    clearOpencodeShortcuts: true,
+    backupPrivateBrowser: true,
+  };
+}
+
+function normalizeSavedForm(form: CleanerFormState, fallbackShift: CleanerShift): CleanerFormState {
+  const screenshotShift = form.screenshotShift || fallbackShift;
+  return {
+    ...createDefaultForm(fallbackShift),
+    ...form,
+    screenshotShift,
+    screenshotDate: defaultScreenshotDate(screenshotShift),
+  };
+}
+
+function readCustomCleanerProfile(fallbackShift: CleanerShift): CleanerProfile | null {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_CLEANER_PROFILE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CleanerProfile>;
+    if (!parsed || !parsed.form) return null;
+    return {
+      name: String(parsed.name || "我的清理方案").slice(0, 24),
+      savedAt: String(parsed.savedAt || ""),
+      form: normalizeSavedForm(parsed.form as CleanerFormState, fallbackShift),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCustomCleanerProfile(profile: CleanerProfile) {
+  window.localStorage.setItem(CUSTOM_CLEANER_PROFILE_KEY, JSON.stringify(profile));
+}
+
 function parsePrefixes(value: string): string[] {
   return value
     .split(/[,\s，、]+/)
@@ -623,6 +675,9 @@ function DetailBlock({ title, items }: { title: string; items: string[] }) {
 
 export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: PersonalCleanerDialogProps) {
   const [form, setForm] = React.useState<CleanerFormState>(() => createDefaultForm(defaultShift));
+  const [customProfile, setCustomProfile] = React.useState<CleanerProfile | null>(() => readCustomCleanerProfile(defaultShift));
+  const [profileNameDraft, setProfileNameDraft] = React.useState(() => customProfile?.name || "我的清理方案");
+  const [profileMode, setProfileMode] = React.useState<"blank" | "recommended" | "custom">(customProfile ? "custom" : "blank");
   const [activeGroup, setActiveGroup] = React.useState<CleanerGroup>("process");
   const [activeActionId, setActiveActionId] = React.useState("adobiProcesses");
   const [runInfo, setRunInfo] = React.useState<PersonalCleanerRunInfo | null>(null);
@@ -659,6 +714,16 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
   React.useEffect(() => {
     if (!open) return;
+    const savedProfile = readCustomCleanerProfile(defaultShift);
+    setCustomProfile(savedProfile);
+    if (savedProfile) {
+      setForm(savedProfile.form);
+      setProfileNameDraft(savedProfile.name);
+      setProfileMode("custom");
+      return;
+    }
+    setProfileMode("blank");
+    setProfileNameDraft("我的清理方案");
     setForm((prev) => {
       if (prev.clearScreenshots) return prev;
       return {
@@ -695,7 +760,41 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
   const clearSelectedActions = React.useCallback(() => {
     setForm((prev) => createDefaultForm(prev.screenshotShift));
+    setProfileMode("blank");
   }, []);
+
+  const applyRecommendedProfile = React.useCallback(() => {
+    setForm((prev) => createRecommendedForm(prev.screenshotShift));
+    setProfileMode("recommended");
+    setError("");
+  }, []);
+
+  const applyCustomProfile = React.useCallback(() => {
+    const savedProfile = readCustomCleanerProfile(defaultShift);
+    if (!savedProfile) {
+      setError("还没有保存自定义清理方案。");
+      return;
+    }
+    setCustomProfile(savedProfile);
+    setProfileNameDraft(savedProfile.name);
+    setForm(savedProfile.form);
+    setProfileMode("custom");
+    setError("");
+  }, [defaultShift]);
+
+  const saveCustomProfile = React.useCallback(() => {
+    const trimmedName = profileNameDraft.trim() || "我的清理方案";
+    const profile: CleanerProfile = {
+      name: trimmedName.slice(0, 24),
+      savedAt: new Date().toISOString(),
+      form: normalizeSavedForm(form, form.screenshotShift),
+    };
+    writeCustomCleanerProfile(profile);
+    setCustomProfile(profile);
+    setProfileNameDraft(profile.name);
+    setProfileMode("custom");
+    setError("");
+  }, [form, profileNameDraft]);
 
   const pollLog = React.useCallback(async (info: PersonalCleanerRunInfo) => {
     try {
@@ -848,6 +947,53 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
             </div>
             <div className="mt-3 truncate rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500" title={CLEANER_BACKUP_ROOT}>
               备份统一保存到：{CLEANER_BACKUP_ROOT}
+            </div>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">清理方案</div>
+                  <div className="text-xs leading-5 text-slate-500">
+                    {profileMode === "recommended"
+                      ? "当前使用推荐清理组合；不会覆盖你的自定义默认。"
+                      : profileMode === "custom"
+                        ? `当前使用自定义方案：${customProfile?.name || profileNameDraft}`
+                        : "未套用方案；当前为手动选择。"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant={profileMode === "recommended" ? "default" : "outline"} onClick={applyRecommendedProfile} disabled={running}>
+                    推荐清理
+                  </Button>
+                  <Button type="button" variant={profileMode === "custom" ? "default" : "outline"} onClick={applyCustomProfile} disabled={running || !customProfile}>
+                    自定义清理
+                  </Button>
+                  <Button type="button" variant="outline" onClick={clearSelectedActions} disabled={running}>
+                    清空选择
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[180px] flex-1">
+                  <Pencil className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                    value={profileNameDraft}
+                    onChange={(event) => setProfileNameDraft(event.target.value)}
+                    maxLength={24}
+                    disabled={running}
+                    aria-label="自定义清理方案名称"
+                  />
+                </div>
+                <Button type="button" variant="outline" onClick={saveCustomProfile} disabled={running}>
+                  <Save className="mr-1.5 h-4 w-4" />
+                  保存当前选项
+                </Button>
+                {customProfile && (
+                  <span className="text-xs text-slate-400">
+                    已保存：{customProfile.name}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
