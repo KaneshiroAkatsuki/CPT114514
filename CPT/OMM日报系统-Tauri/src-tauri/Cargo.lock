@@ -2127,7 +2127,7 @@ dependencies = [
 
 [[package]]
 name = "omm-daily-report-v5"
-version = "5.0.19"
+version = "5.3.4"
 dependencies = [
  "anyhow",
  "once_cell",
