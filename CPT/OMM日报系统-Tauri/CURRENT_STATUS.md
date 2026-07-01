@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.3.5
+- 应用版本：5.4.0
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -21,19 +21,20 @@
 - Apple-inspired UI 收尾阶段已实施：登录页、帮助中心、业务弹窗、表格、设置内部卡片和剩余小窗口继续统一到 Apple-inspired 风格。
 - 预览页已简化结论区：默认只显示是否可生成、有效计入、最低要求、差额和必要建议，休息/缓冲/来源拆分收纳到“查看计算细项”。
 - 登录页已简化：标题下方改为 Kaneshiro/禹欣水印，移除“已有账户”列表，账户管理入口保留在设置中心。
+- 应用图标已重绘：使用蓝色圆角底和白色报表/表格符号，并重新生成多尺寸 ico，提升资源管理器和任务栏清晰度。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-- packaged_at：2026-07-01T22:00:30
-- app：e125ee16b27627ddbccea431b5fa33e4f8b937a44191749cf151bfdebd28726e
-- sidecar：644537501142832825169603daabcbd61259752344584c3640ab95d05b85a776
+- packaged_at：2026-07-01T22:24:51
+- app：69655e756f192dd14093d851bea9f06924a15659fbf92efe101aba366d3acbaa
+- sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
 - personal_cleaner_script：2591299c99282220872747a3bc67f604e13dc89640698e4e46e7fa4a9ad3c5af
 - personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.3.4.zip`
-- 移动性检查：已解压到 `test-output/portable-move-check/`，manifest hash 通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`。
+- 便携包：`releases/OMM日报系统_便携版_5.4.0.zip`
+- 移动性检查：已解压到 `test-output/portable-icon-5.4.0/`，manifest hash 通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`。
 
 ## 常用验证
 
@@ -44,7 +45,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.3.5
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.0
 ```
 
 ## 重要约束
