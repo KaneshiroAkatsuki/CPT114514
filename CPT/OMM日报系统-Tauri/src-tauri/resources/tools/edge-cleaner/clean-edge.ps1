@@ -1009,6 +1009,7 @@ function Invoke-NotificationClearAllButton {
     if ($IsDryRun) {
         Write-Host "        [模拟点击] 打开通知中心并点击“全部清除”按钮" -ForegroundColor DarkCyan
         Write-Host "        [模拟开启] 点击“请勿打扰”按钮；如果已开启则保持开启" -ForegroundColor DarkCyan
+        Write-Host "        [模拟兜底] 如果通知中心没有暴露按钮，则写入当前用户 QuietHoursServiceState=1" -ForegroundColor DarkCyan
         return 1
     }
 
@@ -1079,6 +1080,7 @@ public static class CleanerKeyboard {
         }
 
         $dndCount = 0
+        $dndHandled = $false
         $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
         for ($i = 0; $i -lt $buttons.Count; $i++) {
             $button = $buttons.Item($i)
@@ -1096,6 +1098,7 @@ public static class CleanerKeyboard {
 
             if ($name -match '(关闭|Turn off|Disable|已开启|On)') {
                 Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                $dndHandled = $true
                 break
             }
 
@@ -1106,8 +1109,10 @@ public static class CleanerKeyboard {
                     Start-Sleep -Milliseconds 200
                     Write-Host "        已开启请勿打扰: $name" -ForegroundColor DarkGreen
                     $dndCount = 1
+                    $dndHandled = $true
                 } else {
                     Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                    $dndHandled = $true
                 }
             } catch {
                 try {
@@ -1116,6 +1121,7 @@ public static class CleanerKeyboard {
                     Start-Sleep -Milliseconds 200
                     Write-Host "        已点击请勿打扰按钮: $name" -ForegroundColor DarkGreen
                     $dndCount = 1
+                    $dndHandled = $true
                 } catch {
                     Write-Host "        找到请勿打扰按钮但无法点击: $name - $($_.Exception.Message)" -ForegroundColor Yellow
                 }
@@ -1124,6 +1130,9 @@ public static class CleanerKeyboard {
         }
 
         [CleanerKeyboard]::Escape()
+        if (-not $dndHandled) {
+            $dndCount += Enable-DoNotDisturbFallback -IsDryRun:$false
+        }
         if ($clickedClearAll) {
             return (1 + $dndCount)
         }
@@ -1133,6 +1142,30 @@ public static class CleanerKeyboard {
     } catch {
         try { [CleanerKeyboard]::Escape() } catch { }
         Write-Host "        无法通过通知中心按钮清理: $($_.Exception.Message)" -ForegroundColor Yellow
+        return (Enable-DoNotDisturbFallback -IsDryRun:$false)
+    }
+}
+
+function Enable-DoNotDisturbFallback {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $quietHoursPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\QuietHours"
+    if ($IsDryRun) {
+        Write-Host "        [模拟兜底] 写入 $quietHoursPath -> QuietHoursServiceState=1" -ForegroundColor DarkCyan
+        return 1
+    }
+
+    try {
+        if (-not (Test-Path -LiteralPath $quietHoursPath)) {
+            New-Item -Path $quietHoursPath -Force | Out-Null
+        }
+        Set-ItemProperty -LiteralPath $quietHoursPath -Name "QuietHoursServiceState" -Type DWord -Value 1 -ErrorAction Stop
+        Write-Host "        已通过注册表兜底开启请勿打扰: QuietHoursServiceState=1" -ForegroundColor DarkGreen
+        return 1
+    } catch {
+        Write-Host "        请勿打扰兜底失败: $($_.Exception.Message)" -ForegroundColor Yellow
         return 0
     }
 }
