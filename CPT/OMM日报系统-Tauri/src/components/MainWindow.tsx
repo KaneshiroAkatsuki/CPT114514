@@ -1732,7 +1732,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           </div>
           <div>
             <h1 className="text-base font-semibold leading-tight tracking-normal text-slate-950">OMM 日报自动生成</h1>
-            <p className="text-xs text-slate-500">
+            <p className="mt-0.5 text-[11px] font-medium tracking-[0.16em] text-slate-300">
+              玉衡山科学院
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
               欢迎您，Dr. {currentAccount.display_name}
               <span className="ml-1 text-slate-400">· {isAdminAccount ? "管理员" : "访客"}</span>
             </p>
