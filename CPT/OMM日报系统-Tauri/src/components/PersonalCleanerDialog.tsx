@@ -193,7 +193,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
         setRunStartedAt(null);
       } else if (
         runStartedAt &&
-        Date.now() - runStartedAt > 120_000 &&
+        Date.now() - runStartedAt > 60_000 &&
         next.log.includes("等待管理员权限确认")
       ) {
         setRunning(false);
