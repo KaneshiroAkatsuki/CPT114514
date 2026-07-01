@@ -211,7 +211,7 @@ export function AccountGate() {
           <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
             <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
-              玉衡山科学院
+              KANESHIRO·AKATSUKI
             </p>
           </div>
         </header>
@@ -354,7 +354,7 @@ export function AccountGate() {
 
           <footer className="space-y-1 pb-1 text-center">
             <div className="text-xs font-medium uppercase tracking-[0.24em] text-slate-300">
-              玉衡山科学院
+              KANESHIRO·AKATSUKI
             </div>
             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
               OMM Daily Report · Local Workspace
