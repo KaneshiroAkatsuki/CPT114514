@@ -19,9 +19,13 @@ pub struct PersonalCleanerOptions {
     pub clear_extensions: bool,
     pub clear_microsoft_account: bool,
     pub clear_windows_notifications: bool,
-    pub clear_screenshots_days: Option<i64>,
+    pub clear_screenshots: bool,
+    pub screenshot_window_start: Option<String>,
+    pub screenshot_window_end: Option<String>,
+    pub screenshot_window_label: Option<String>,
     pub clear_clipboard_history: bool,
     pub clear_opencode_shortcuts: bool,
+    pub clear_private_browser_history: bool,
     pub clean_private_browser: bool,
     pub backup_private_browser: bool,
     #[serde(default)]
@@ -158,6 +162,13 @@ fn build_script_args(
     backup_root: &Path,
     options: &PersonalCleanerOptions,
 ) -> Vec<String> {
+    let edge_module_enabled = options.clean_edge
+        || options.clear_site_preferences
+        || options.reset_edge
+        || options.clear_bookmarks
+        || options.clear_extensions
+        || options.clear_microsoft_account;
+
     let mut args = vec![
         "-NoProfile".to_string(),
         "-ExecutionPolicy".to_string(),
@@ -174,7 +185,12 @@ fn build_script_args(
     ];
 
     push_switch(&mut args, options.dry_run, "-DryRun");
-    push_switch(&mut args, !options.clean_edge, "-SkipEdgeCleaning");
+    push_switch(&mut args, !edge_module_enabled, "-SkipEdgeCleaning");
+    push_switch(
+        &mut args,
+        edge_module_enabled && !options.clean_edge && !options.reset_edge,
+        "-SkipStandardEdgeCleaning",
+    );
     push_switch(&mut args, options.skip_backup, "-SkipBackup");
     if options.keep_passwords_autofill {
         args.push("-KeepPasswords".to_string());
@@ -198,10 +214,22 @@ fn build_script_args(
         options.clear_windows_notifications,
         "-ClearWindowsNotifications",
     );
-    if let Some(days) = options.clear_screenshots_days {
-        if days > 0 {
-            args.push("-ClearScreenshotsDays".to_string());
-            args.push(days.min(365).to_string());
+    if options.clear_screenshots {
+        if let (Some(start), Some(end)) = (
+            options.screenshot_window_start.as_deref(),
+            options.screenshot_window_end.as_deref(),
+        ) {
+            args.push("-ClearScreenshots".to_string());
+            args.push("-ClearScreenshotsFrom".to_string());
+            args.push(start.trim().to_string());
+            args.push("-ClearScreenshotsTo".to_string());
+            args.push(end.trim().to_string());
+            if let Some(label) = options.screenshot_window_label.as_deref() {
+                if !label.trim().is_empty() {
+                    args.push("-ClearScreenshotsLabel".to_string());
+                    args.push(label.trim().to_string());
+                }
+            }
         }
     }
     push_switch(
@@ -213,6 +241,11 @@ fn build_script_args(
         &mut args,
         options.clear_opencode_shortcuts,
         "-ClearOpencodeShortcuts",
+    );
+    push_switch(
+        &mut args,
+        options.clear_private_browser_history,
+        "-ClearPrivateBrowserHistory",
     );
     push_switch(
         &mut args,

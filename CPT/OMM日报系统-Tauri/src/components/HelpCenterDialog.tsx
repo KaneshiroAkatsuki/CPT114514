@@ -365,16 +365,18 @@ const TOPICS: HelpTopic[] = [
     id: "personal-cleaner",
     categoryId: "cleaner",
     title: "个人清理工具清什么",
-    summary: "本机维护工具，和日报生成互相独立。",
-    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "备份", "管理员", "UAC", "60秒"],
+    summary: "本机维护工具，和日报生成互相独立，每个项目都可单独勾选。",
+    keywords: ["个人清理", "Edge", "截图", "剪贴板", "WiFi", "私人浏览器", "火狐", "备份", "管理员", "UAC", "60秒", "白班", "夜班"],
     body: (
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。危险项会在执行前二次确认。</div>
         <ul className={text.ul}>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
-          <li><strong>Windows 专项：</strong>通知历史、截图文件夹、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
-          <li><strong>私人浏览器：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据；默认可先备份完整 profile。</li>
+          <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、opencode 快捷方式、WiFi 配置。</li>
+          <li><strong>截图清理：</strong>按班次时间窗口清理。白班为当日 08:00-20:00，夜班为当日 20:00-次日 08:00；执行前会显示具体是哪一天的时间段。</li>
+          <li><strong>火狐浏览记录：</strong>可单独清理 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil</code> 下 Firefox profile 的浏览记录数据库，默认先备份完整 profile。</li>
+          <li><strong>完整私人浏览器清理：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。</li>
           <li><strong>权限和日志：</strong>入口、执行和日志读取都限制为管理员账户；访客账户无入口，后端也会拒绝调用。</li>
           <li><strong>启动等待：</strong>真实执行会弹出系统 UAC 管理员确认；如果取消 UAC 或 PowerShell 被阻止，约 60 秒后会停止等待并提示。</li>
           <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>，备份写入 <code className={text.code}>data/backups/personal-cleaner</code>。</li>
@@ -414,7 +416,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.4.4（源码）。最新已打包便携版仍以当前状态文件记录为准。</li>
+          <li><strong>版本：</strong>5.4.5。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。项目内旧便携包、旧安装包和旧测试解压目录会定期清理，只保留最新发布物。</li>

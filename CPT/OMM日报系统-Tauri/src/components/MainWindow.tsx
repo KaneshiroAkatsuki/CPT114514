@@ -2280,6 +2280,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         <PersonalCleanerDialog
           open={personalCleanerOpen}
           onOpenChange={setPersonalCleanerOpen}
+          defaultShift={shiftDefault}
         />
       )}
 

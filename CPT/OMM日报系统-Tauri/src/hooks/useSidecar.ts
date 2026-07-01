@@ -11,9 +11,13 @@ export interface PersonalCleanerOptions {
   clearExtensions: boolean;
   clearMicrosoftAccount: boolean;
   clearWindowsNotifications: boolean;
-  clearScreenshotsDays?: number | null;
+  clearScreenshots: boolean;
+  screenshotWindowStart?: string | null;
+  screenshotWindowEnd?: string | null;
+  screenshotWindowLabel?: string | null;
   clearClipboardHistory: boolean;
   clearOpencodeShortcuts: boolean;
+  clearPrivateBrowserHistory: boolean;
   cleanPrivateBrowser: boolean;
   backupPrivateBrowser: boolean;
   keepWifiPrefixes: string[];

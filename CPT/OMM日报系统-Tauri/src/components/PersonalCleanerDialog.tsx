@@ -14,7 +14,10 @@ import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerRu
 interface PersonalCleanerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultShift: "A" | "B";
 }
+
+type CleanerShift = "A" | "B";
 
 type BoolKey = keyof Pick<
   CleanerFormState,
@@ -26,8 +29,10 @@ type BoolKey = keyof Pick<
   | "clearExtensions"
   | "clearMicrosoftAccount"
   | "clearWindowsNotifications"
+  | "clearScreenshots"
   | "clearClipboardHistory"
   | "clearOpencodeShortcuts"
+  | "clearPrivateBrowserHistory"
   | "cleanPrivateBrowser"
   | "backupPrivateBrowser"
   | "skipBackup"
@@ -42,17 +47,74 @@ interface CleanerFormState {
   clearExtensions: boolean;
   clearMicrosoftAccount: boolean;
   clearWindowsNotifications: boolean;
-  clearScreenshotsDays: number;
+  clearScreenshots: boolean;
+  screenshotShift: CleanerShift;
+  screenshotDate: string;
   clearClipboardHistory: boolean;
   clearOpencodeShortcuts: boolean;
+  clearPrivateBrowserHistory: boolean;
   cleanPrivateBrowser: boolean;
   backupPrivateBrowser: boolean;
   keepWifiPrefixes: string;
   skipBackup: boolean;
 }
 
-const DEFAULT_FORM: CleanerFormState = {
-  cleanEdge: true,
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function toDateInput(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function fromDateInput(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function defaultScreenshotDate(shift: CleanerShift): string {
+  const now = new Date();
+  if (shift === "B" && now.getHours() < 8) {
+    return toDateInput(addDays(now, -1));
+  }
+  return toDateInput(now);
+}
+
+function buildScreenshotWindow(shift: CleanerShift, dateValue: string) {
+  const base = fromDateInput(dateValue);
+  const start = new Date(base);
+  const end = new Date(base);
+  if (shift === "A") {
+    start.setHours(8, 0, 0, 0);
+    end.setHours(20, 0, 0, 0);
+  } else {
+    start.setHours(20, 0, 0, 0);
+    end.setDate(end.getDate() + 1);
+    end.setHours(8, 0, 0, 0);
+  }
+  return { start, end };
+}
+
+function formatDateTimeLocal(date: Date): string {
+  return `${toDateInput(date)}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:00`;
+}
+
+function formatWindowLabel(shift: CleanerShift, dateValue: string): string {
+  const { start, end } = buildScreenshotWindow(shift, dateValue);
+  const shiftLabel = shift === "A" ? "白班" : "夜班";
+  return `${shiftLabel} ${start.getMonth() + 1}月${start.getDate()}日 ${pad2(start.getHours())}:00 至 ${end.getMonth() + 1}月${end.getDate()}日 ${pad2(end.getHours())}:00`;
+}
+
+function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
+  return {
+  cleanEdge: false,
   keepPasswordsAutofill: true,
   clearSitePreferences: false,
   resetEdge: false,
@@ -60,14 +122,18 @@ const DEFAULT_FORM: CleanerFormState = {
   clearExtensions: false,
   clearMicrosoftAccount: false,
   clearWindowsNotifications: false,
-  clearScreenshotsDays: 0,
+  clearScreenshots: false,
+  screenshotShift: defaultShift,
+  screenshotDate: defaultScreenshotDate(defaultShift),
   clearClipboardHistory: false,
   clearOpencodeShortcuts: false,
+  clearPrivateBrowserHistory: false,
   cleanPrivateBrowser: false,
   backupPrivateBrowser: true,
   keepWifiPrefixes: "",
   skipBackup: false,
-};
+  };
+}
 
 function parsePrefixes(value: string): string[] {
   return value
@@ -79,10 +145,16 @@ function parsePrefixes(value: string): string[] {
 function hasPersonalAction(form: CleanerFormState): boolean {
   return (
     form.cleanEdge ||
+    form.clearSitePreferences ||
+    form.resetEdge ||
+    form.clearBookmarks ||
+    form.clearExtensions ||
+    form.clearMicrosoftAccount ||
     form.clearWindowsNotifications ||
-    form.clearScreenshotsDays > 0 ||
+    form.clearScreenshots ||
     form.clearClipboardHistory ||
     form.clearOpencodeShortcuts ||
+    form.clearPrivateBrowserHistory ||
     form.cleanPrivateBrowser ||
     parsePrefixes(form.keepWifiPrefixes).length > 0
   );
@@ -94,7 +166,9 @@ function buildDangerList(form: CleanerFormState): string[] {
   if (form.clearBookmarks) dangers.push("清书签会删除 Edge 书签");
   if (form.clearExtensions) dangers.push("清扩展本体会删除已安装扩展");
   if (form.clearMicrosoftAccount) dangers.push("清微软账户会退出 Edge 登录/同步状态");
-  if (form.clearScreenshotsDays > 0) dangers.push(`截图清理会删除最近 ${form.clearScreenshotsDays} 天截图`);
+  if (form.clearScreenshots) dangers.push(`截图清理会删除 ${formatWindowLabel(form.screenshotShift, form.screenshotDate)} 的截图`);
+  if (form.clearPrivateBrowserHistory) dangers.push("火狐浏览记录清理会删除私人浏览器历史数据库，默认先备份 profile");
+  if (form.cleanPrivateBrowser) dangers.push("完整私人浏览器清理会删除历史、Cookie、缓存、会话、表单和保存登录等 profile 数据");
   if (form.cleanPrivateBrowser && !form.backupPrivateBrowser) dangers.push("私人浏览器清理未启用备份");
   if (parsePrefixes(form.keepWifiPrefixes).length > 0) dangers.push("WiFi 管理会忘记不匹配保留前缀的 WiFi");
   return dangers;
@@ -149,8 +223,8 @@ function Section({
   );
 }
 
-export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDialogProps) {
-  const [form, setForm] = React.useState<CleanerFormState>(DEFAULT_FORM);
+export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: PersonalCleanerDialogProps) {
+  const [form, setForm] = React.useState<CleanerFormState>(() => createDefaultForm(defaultShift));
   const [runInfo, setRunInfo] = React.useState<PersonalCleanerRunInfo | null>(null);
   const [log, setLog] = React.useState("");
   const [done, setDone] = React.useState(false);
@@ -164,6 +238,21 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const screenshotWindow = buildScreenshotWindow(form.screenshotShift, form.screenshotDate);
+  const screenshotWindowLabel = formatWindowLabel(form.screenshotShift, form.screenshotDate);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm((prev) => {
+      if (prev.clearScreenshots) return prev;
+      return {
+        ...prev,
+        screenshotShift: defaultShift,
+        screenshotDate: defaultScreenshotDate(defaultShift),
+      };
+    });
+  }, [defaultShift, open]);
+
   const buildOptions = (dryRun: boolean): PersonalCleanerOptions => ({
     dryRun,
     cleanEdge: form.cleanEdge,
@@ -174,9 +263,13 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
     clearExtensions: form.clearExtensions,
     clearMicrosoftAccount: form.clearMicrosoftAccount,
     clearWindowsNotifications: form.clearWindowsNotifications,
-    clearScreenshotsDays: form.clearScreenshotsDays > 0 ? form.clearScreenshotsDays : null,
+    clearScreenshots: form.clearScreenshots,
+    screenshotWindowStart: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.start) : null,
+    screenshotWindowEnd: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.end) : null,
+    screenshotWindowLabel: form.clearScreenshots ? screenshotWindowLabel : null,
     clearClipboardHistory: form.clearClipboardHistory,
     clearOpencodeShortcuts: form.clearOpencodeShortcuts,
+    clearPrivateBrowserHistory: form.clearPrivateBrowserHistory,
     cleanPrivateBrowser: form.cleanPrivateBrowser,
     backupPrivateBrowser: form.backupPrivateBrowser,
     keepWifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
@@ -267,7 +360,7 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
           <div className="flex items-start gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              默认会备份 Edge 关键数据，并保留密码和自动填充。ResetEdge、书签、扩展、微软账户、截图和 WiFi 属于高风险项目，真实执行前会二次确认。
+              每个项目都可以单独勾选清理。涉及截图、火狐浏览记录、ResetEdge、书签、扩展、微软账户和 WiFi 的真实执行会二次确认；浏览器类项目默认先备份。
             </div>
           </div>
         </div>
@@ -339,18 +432,45 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
             description="清理通知中心数据库和通知计数，真实执行时会重启 Explorer/任务栏以刷新操作中心。"
           />
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3">
-            <label className="text-sm font-medium text-slate-800">清截图文件夹</label>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              删除用户图片目录 Screenshots 中最近 N 天的截图。0 表示不清理。
-            </p>
-            <input
-              type="number"
-              min={0}
-              max={365}
-              className="mt-2 h-8 w-32 rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-              value={form.clearScreenshotsDays}
-              onChange={(event) => setForm((prev) => ({ ...prev, clearScreenshotsDays: Math.max(0, Number(event.target.value) || 0) }))}
+            <ToggleRow
+              checked={form.clearScreenshots}
+              onChange={(checked) => setBool("clearScreenshots", checked)}
+              title="按当班时间清截图"
+              description="只清理用户图片目录 Screenshots 中指定班次时间窗口内的截图。"
+              danger={form.clearScreenshots}
             />
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr]">
+              <label className="space-y-1 text-xs text-slate-500">
+                <span className="font-medium text-slate-700">班次</span>
+                <select
+                  className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                  value={form.screenshotShift}
+                  onChange={(event) => {
+                    const nextShift = event.target.value as CleanerShift;
+                    setForm((prev) => ({
+                      ...prev,
+                      screenshotShift: nextShift,
+                      screenshotDate: defaultScreenshotDate(nextShift),
+                    }));
+                  }}
+                >
+                  <option value="A">白班 A（08:00-20:00）</option>
+                  <option value="B">夜班 B（20:00-次日 08:00）</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs text-slate-500">
+                <span className="font-medium text-slate-700">班次日期</span>
+                <input
+                  type="date"
+                  className="h-8 w-full rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                  value={form.screenshotDate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, screenshotDate: event.target.value || defaultScreenshotDate(prev.screenshotShift) }))}
+                />
+              </label>
+            </div>
+            <div className={`mt-2 rounded-lg border px-3 py-2 text-xs leading-5 ${form.clearScreenshots ? "border-amber-200 bg-amber-50/90 text-amber-800" : "border-slate-200/80 bg-slate-50 text-slate-500"}`}>
+              将清理：{screenshotWindowLabel} 的截图。
+            </div>
           </div>
           <ToggleRow
             checked={form.clearClipboardHistory}
@@ -369,10 +489,18 @@ export function PersonalCleanerDialog({ open, onOpenChange }: PersonalCleanerDia
               <EyeOff className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
               <div className="flex-1 space-y-2">
                 <ToggleRow
+                  checked={form.clearPrivateBrowserHistory}
+                  onChange={(checked) => setBool("clearPrivateBrowserHistory", checked)}
+                  title="仅清火狐浏览记录"
+                  description="清理 C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil 下 Firefox profile 的历史数据库；默认先备份完整 profile。"
+                  danger={form.clearPrivateBrowserHistory}
+                />
+                <ToggleRow
                   checked={form.cleanPrivateBrowser}
                   onChange={(checked) => setBool("cleanPrivateBrowser", checked)}
-                  title="私人浏览器清理"
+                  title="完整清理私人浏览器 profile"
                   description="清理本机私人浏览器 profile 中的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。"
+                  danger={form.cleanPrivateBrowser}
                 />
                 <ToggleRow
                   checked={form.backupPrivateBrowser}

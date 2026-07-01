@@ -40,6 +40,12 @@ param(
     # 清理 Windows 通知历史记录（不影响通知权限设置）
     [switch]$ClearWindowsNotifications,
 
+    # 清理截图文件夹：按当班时间窗口清理；旧 Days 参数保留给交互菜单兼容
+    [switch]$ClearScreenshots,
+    [string]$ClearScreenshotsFrom,
+    [string]$ClearScreenshotsTo,
+    [string]$ClearScreenshotsLabel,
+
     # 清理截图文件夹：指定删除最近 N 天，0 表示不清理（默认）
     [int]$ClearScreenshotsDays = 0,
 
@@ -51,6 +57,9 @@ param(
 
     # 清理本机私人浏览器（Firefox 便携版）profile 数据
     [switch]$CleanPrivateBrowser,
+
+    # 仅清理本机私人浏览器（Firefox 便携版）浏览记录数据库
+    [switch]$ClearPrivateBrowserHistory,
 
     # 跳过私人浏览器 profile 备份
     [switch]$SkipPrivateBrowserBackup,
@@ -66,6 +75,9 @@ param(
 
     # 跳过 Edge 浏览器数据模块，仅执行 Windows/个人专项清理
     [switch]$SkipEdgeCleaning,
+
+    # 保留 Edge 模块但跳过标准隐私清理，仅执行显式勾选的 Edge 子项目
+    [switch]$SkipStandardEdgeCleaning,
 
     # 日志输出路径（由 Tauri 页面传入，用于界面轮询显示）
     [string]$LogPath,
@@ -423,6 +435,50 @@ function Clear-PrivateBrowserProfile {
                     $count++
                 } catch {
                     Write-Host "        无法删除私人浏览器数据: $($item.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+        }
+    }
+
+    return $count
+}
+
+function Clear-PrivateBrowserHistory {
+    param(
+        [string[]]$ProfileDirs,
+        [switch]$IsDryRun
+    )
+
+    $patterns = @(
+        "places.sqlite*",
+        "favicons.sqlite*"
+    )
+
+    $count = 0
+    foreach ($profileDir in $ProfileDirs) {
+        if (-not (Test-Path -LiteralPath $profileDir)) { continue }
+        $profileName = Split-Path $profileDir -Leaf
+        Write-SubStep "处理私人浏览器浏览记录: $profileName"
+        Write-Deep "Firefox 浏览历史和书签同在 places.sqlite 数据库中；清理前建议保留 profile 备份"
+
+        foreach ($pattern in $patterns) {
+            $searchPath = Join-Path $profileDir $pattern
+            $parent = Split-Path -Parent $searchPath
+            $filter = Split-Path -Leaf $searchPath
+            if (-not (Test-Path -LiteralPath $parent)) { continue }
+
+            $items = Get-ChildItem -Path $parent -Filter $filter -Force -ErrorAction SilentlyContinue
+            foreach ($item in $items) {
+                try {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟删除] 私人浏览器历史数据库: $($item.Name)" -ForegroundColor DarkCyan
+                    } else {
+                        Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+                        Write-Host "        已删除私人浏览器历史数据库: $($item.Name)" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                } catch {
+                    Write-Host "        无法删除私人浏览器历史数据库: $($item.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
                 }
             }
         }
@@ -884,7 +940,10 @@ function Clear-WindowsNotificationHistory {
 
 function Clear-Screenshots {
     param(
-        [int]$DaysToDelete,
+        [Nullable[datetime]]$StartTime = $null,
+        [Nullable[datetime]]$EndTime = $null,
+        [string]$WindowLabel = "",
+        [int]$DaysToDelete = 0,
         [switch]$IsDryRun,
         [switch]$RequireConfirm
     )
@@ -899,21 +958,37 @@ function Clear-Screenshots {
 
     if ($DaysToDelete -lt 0) { $DaysToDelete = 0 }
 
-    # 计算截止时间：删除最近 N 天（含当天）的文件
-    $cutoff = (Get-Date).Date.AddDays(-$DaysToDelete)
+    $hasWindow = $StartTime.HasValue -and $EndTime.HasValue
+    if ($hasWindow -and $EndTime.Value -le $StartTime.Value) {
+        Write-Host "        截图时间窗口无效，结束时间必须晚于开始时间" -ForegroundColor Yellow
+        return 0
+    }
 
-    $itemsToDelete = Get-ChildItem -Path $screenshotsDir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.LastWriteTime -ge $cutoff }
-
-    $totalSize = ($itemsToDelete | Measure-Object -Property Length -Sum).Sum
-    $sizeText = if ($totalSize -gt 1GB) { "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -gt 1MB) { "{0:N2} MB" -f ($totalSize / 1MB) } elseif ($totalSize -gt 1KB) { "{0:N2} KB" -f ($totalSize / 1KB) } else { "$totalSize B" }
-
-    if ($DaysToDelete -eq 0) {
+    if (-not $hasWindow -and $DaysToDelete -eq 0) {
         Write-Host "        不清理截图" -ForegroundColor Gray
         return 0
     }
 
-    Write-Host "        将删除 $($itemsToDelete.Count) 个文件（约 $sizeText），删除 $($cutoff.ToString('yyyy-MM-dd')) 之后的截图" -ForegroundColor Yellow
+    $allScreenshots = Get-ChildItem -Path $screenshotsDir -File -ErrorAction SilentlyContinue
+    if ($hasWindow) {
+        $itemsToDelete = $allScreenshots |
+            Where-Object { $_.LastWriteTime -ge $StartTime.Value -and $_.LastWriteTime -lt $EndTime.Value }
+        $windowText = if ([string]::IsNullOrWhiteSpace($WindowLabel)) {
+            "$($StartTime.Value.ToString('yyyy-MM-dd HH:mm')) 至 $($EndTime.Value.ToString('yyyy-MM-dd HH:mm'))"
+        } else {
+            $WindowLabel
+        }
+    } else {
+        # 兼容旧交互菜单：删除最近 N 天（含当天）的文件
+        $cutoff = (Get-Date).Date.AddDays(-$DaysToDelete)
+        $itemsToDelete = $allScreenshots | Where-Object { $_.LastWriteTime -ge $cutoff }
+        $windowText = "$($cutoff.ToString('yyyy-MM-dd')) 之后"
+    }
+
+    $totalSize = ($itemsToDelete | Measure-Object -Property Length -Sum).Sum
+    $sizeText = if ($totalSize -gt 1GB) { "{0:N2} GB" -f ($totalSize / 1GB) } elseif ($totalSize -gt 1MB) { "{0:N2} MB" -f ($totalSize / 1MB) } elseif ($totalSize -gt 1KB) { "{0:N2} KB" -f ($totalSize / 1KB) } else { "$totalSize B" }
+
+    Write-Host "        将删除 $($itemsToDelete.Count) 个文件（约 $sizeText），时间范围: $windowText" -ForegroundColor Yellow
 
     if ($RequireConfirm -and -not $IsDryRun) {
         $confirm = Read-Host "        确认删除这些截图？输入 'yes' 确认"
@@ -1131,11 +1206,27 @@ if ($ResetEdge) {
     Write-Warn "已启用 -ResetEdge：将清理除扩展本体和核心设置骨架外的绝大多数数据"
 }
 
+if ($SkipStandardEdgeCleaning -and -not $ResetEdge) {
+    $KeepHistory = $true
+    $KeepCookies = $true
+    $KeepSiteStorage = $true
+    $KeepSessions = $true
+    $script:CleanEdgeCaches = $false
+    $script:CleanExtensionRuntime = $false
+    $script:CleanMetadata = $false
+    $script:CleanSecurityData = $false
+    $script:CleanDiagnostics = $false
+    $script:CleanOtherTempData = $false
+    $script:CleanGlobalEdgeData = $false
+    $script:CleanSystemTempData = $false
+    Write-Warn "已跳过 Edge 标准隐私清理，仅执行显式选择的 Edge 子项目"
+}
+
 if ($script:CleanEdgeModule) {
     Stop-EdgeProcesses
 }
 
-if ($CleanPrivateBrowser) {
+if ($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) {
     Stop-PrivateBrowserProcesses -Root $PrivateBrowserRoot -IsDryRun:$DryRun
 }
 
@@ -1241,20 +1332,21 @@ $choices = [ordered]@{
     "扩展运行时缓存" = $script:CleanExtensionRuntime
     "密码" = -not $KeepPasswords
     "自动填充" = -not $KeepAutofill
-    "站点设置/权限" = $ClearSitePreferences
-    "浏览器界面设置" = $ClearSettings
-    "书签" = $ClearBookmarks
-    "扩展本体" = $ClearExtensions
-    "微软账户/同步" = $ClearMicrosoftAccount
+    "站点设置/权限" = [bool]$ClearSitePreferences
+    "浏览器界面设置" = [bool]$ClearSettings
+    "书签" = [bool]$ClearBookmarks
+    "扩展本体" = [bool]$ClearExtensions
+    "微软账户/同步" = [bool]$ClearMicrosoftAccount
     "缩略图与站点元数据" = $script:CleanMetadata
     "安全与隐私数据" = $script:CleanSecurityData
     "诊断日志与崩溃报告" = $script:CleanDiagnostics
-    "Windows 通知历史" = $ClearWindowsNotifications
-    "截图文件 (删除最近 $ClearScreenshotsDays 天)" = ($ClearScreenshotsDays -gt 0)
-    "剪贴板历史" = $ClearClipboardHistory
-    "opencode 快捷方式" = $ClearOpencodeShortcuts
-    "私人浏览器清理" = $CleanPrivateBrowser
-    "私人浏览器备份" = ($CleanPrivateBrowser -and -not $SkipPrivateBrowserBackup)
+    "Windows 通知历史" = [bool]$ClearWindowsNotifications
+    "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
+    "剪贴板历史" = [bool]$ClearClipboardHistory
+    "opencode 快捷方式" = [bool]$ClearOpencodeShortcuts
+    "私人浏览器浏览记录" = [bool]$ClearPrivateBrowserHistory
+    "私人浏览器清理" = [bool]$CleanPrivateBrowser
+    "私人浏览器备份" = (($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) -and -not $SkipPrivateBrowserBackup)
     "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
 }
 
@@ -1577,11 +1669,22 @@ if ($ClearWindowsNotifications) {
 }
 
 # 清理截图文件夹
-if ($ClearScreenshotsDays -gt 0) {
-    Write-Step "正在清理截图文件夹（删除最近 $ClearScreenshotsDays 天）..."
+if ($ClearScreenshots -or $ClearScreenshotsDays -gt 0) {
+    Write-Step "正在清理截图文件夹..."
     Write-Deep "路径: $env:USERPROFILE\Pictures\Screenshots"
     $requireConfirm = -not $NoMenu
-    $results["截图文件"] += Clear-Screenshots -DaysToDelete $ClearScreenshotsDays -IsDryRun:$DryRun -RequireConfirm:$requireConfirm
+    $screenshotStart = $null
+    $screenshotEnd = $null
+    if (-not [string]::IsNullOrWhiteSpace($ClearScreenshotsFrom) -and -not [string]::IsNullOrWhiteSpace($ClearScreenshotsTo)) {
+        try {
+            $screenshotStart = [datetime]::Parse($ClearScreenshotsFrom, [System.Globalization.CultureInfo]::InvariantCulture)
+            $screenshotEnd = [datetime]::Parse($ClearScreenshotsTo, [System.Globalization.CultureInfo]::InvariantCulture)
+            Write-Deep "时间窗口: $($screenshotStart.ToString('yyyy-MM-dd HH:mm')) 至 $($screenshotEnd.ToString('yyyy-MM-dd HH:mm'))"
+        } catch {
+            Write-Warn "截图时间窗口解析失败，跳过截图清理: $($_.Exception.Message)"
+        }
+    }
+    $results["截图文件"] += Clear-Screenshots -StartTime $screenshotStart -EndTime $screenshotEnd -WindowLabel $ClearScreenshotsLabel -DaysToDelete $ClearScreenshotsDays -IsDryRun:$DryRun -RequireConfirm:$requireConfirm
     Write-Success "截图文件夹清理完成"
 } else {
     Write-Warn "保留截图文件夹（默认）"
@@ -1607,10 +1710,9 @@ if ($ClearOpencodeShortcuts) {
     Write-Warn "保留 opencode 开始菜单快捷方式（默认）"
 }
 
-# 清理私人浏览器 profile
-if ($CleanPrivateBrowser) {
-    Write-Step "正在清理私人浏览器 profile..."
-    Write-Deep "清理历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据"
+# 清理私人浏览器 profile / 浏览记录
+if ($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) {
+    Write-Step "正在处理私人浏览器 profile..."
     $privateProfiles = Get-PrivateBrowserProfileDirs -Root $PrivateBrowserRoot
     if (-not $privateProfiles -or $privateProfiles.Count -eq 0) {
         Write-Warn "未找到私人浏览器 profile，跳过"
@@ -1620,8 +1722,16 @@ if ($CleanPrivateBrowser) {
         } else {
             Write-Warn "已跳过私人浏览器备份"
         }
-        $results["私人浏览器数据"] += Clear-PrivateBrowserProfile -ProfileDirs $privateProfiles -IsDryRun:$DryRun
-        Write-Success "私人浏览器 profile 清理完成"
+
+        if ($CleanPrivateBrowser) {
+            Write-Deep "清理历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据"
+            $results["私人浏览器数据"] += Clear-PrivateBrowserProfile -ProfileDirs $privateProfiles -IsDryRun:$DryRun
+            Write-Success "私人浏览器 profile 清理完成"
+        } elseif ($ClearPrivateBrowserHistory) {
+            Write-Deep "仅清理浏览记录数据库和站点图标数据库，默认保留完整 profile 备份"
+            $results["私人浏览器浏览记录"] += Clear-PrivateBrowserHistory -ProfileDirs $privateProfiles -IsDryRun:$DryRun
+            Write-Success "私人浏览器浏览记录清理完成"
+        }
     }
 } else {
     Write-Warn "保留私人浏览器 profile（默认）"

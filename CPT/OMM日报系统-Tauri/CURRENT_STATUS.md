@@ -2,7 +2,7 @@
 
 ## 当前版本
 
-- 应用版本：5.4.4
+- 应用版本：5.4.5
 - 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
 - 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
 
@@ -24,23 +24,25 @@
 - 应用图标已重绘：使用蓝色圆角底和白色报表/表格符号，并重新生成多尺寸 ico，提升资源管理器和任务栏清晰度。
 - 个人清理安全性已加固：执行和日志读取均增加后端管理员账户校验，标准清理默认保留密码和自动填充。
 - 个人清理启动等待超时调整为 60 秒；取消 UAC 或 PowerShell 被阻止时更快停止轮询并提示。
+- 个人清理截图功能已改为按班次时间窗口清理：白班 08:00-20:00，夜班 20:00-次日 08:00，执行前显示具体日期范围。
+- 个人清理新增火狐浏览记录单项清理，目标为 `C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil` 下 Firefox profile，默认先备份完整 profile。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
-- 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.4.3 发布物。
+- 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.4.5 发布物。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-> 最新源码版本为 5.4.4；本轮未打包，最新便携包仍为 5.4.3。
+> 最新源码版本和便携包版本均为 5.4.5。
 
-- packaged_at：2026-07-01T23:07:03
-- app：d870f733ff51f26b333c71df48d43f23c7d9da15c2c22d0a64bee21c290c9d11
+- packaged_at：2026-07-01T23:37:54
+- app：8fb55679a21ac28ed9007b1785d37017ad2a2d874a5b5252fa93dfd2e3771c98
 - sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
-- personal_cleaner_script：2591299c99282220872747a3bc67f604e13dc89640698e4e46e7fa4a9ad3c5af
+- personal_cleaner_script：f1d928aeb399acf0a3d8c8ec06956e3833623a5ec6deec8cdba8d9bc9b49aa9e
 - personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.4.3.zip`
-- 安装包：`src-tauri/target/release/bundle/nsis/OMM日报系统_5.4.3_x64-setup.exe`
+- 便携包：`releases/OMM日报系统_便携版_5.4.5.zip`
+- 安装包：`src-tauri/target/release/bundle/nsis/OMM日报系统_5.4.5_x64-setup.exe`
 - 移动性检查：临时解压验证已通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`，验证目录已清理。
 
 ## 常用验证
@@ -52,7 +54,7 @@ cargo check --release
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 python sidecar\build_sidecar.py
 npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.4
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.4.5
 ```
 
 ## 重要约束
