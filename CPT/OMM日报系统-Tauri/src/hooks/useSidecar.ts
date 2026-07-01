@@ -17,6 +17,7 @@ export interface PersonalCleanerOptions {
   screenshotWindowEnd?: string | null;
   screenshotWindowLabel?: string | null;
   clearClipboardHistory: boolean;
+  clearRecycleBin: boolean;
   clearOpencodeShortcuts: boolean;
   clearPrivateBrowserHistory: boolean;
   cleanPrivateBrowser: boolean;

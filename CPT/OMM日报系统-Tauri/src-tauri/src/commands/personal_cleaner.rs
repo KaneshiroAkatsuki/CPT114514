@@ -25,6 +25,8 @@ pub struct PersonalCleanerOptions {
     pub screenshot_window_end: Option<String>,
     pub screenshot_window_label: Option<String>,
     pub clear_clipboard_history: bool,
+    #[serde(default)]
+    pub clear_recycle_bin: bool,
     pub clear_opencode_shortcuts: bool,
     pub clear_private_browser_history: bool,
     pub clean_private_browser: bool,
@@ -262,6 +264,7 @@ fn build_script_args(
         options.clear_clipboard_history,
         "-ClearClipboardHistory",
     );
+    push_switch(&mut args, options.clear_recycle_bin, "-ClearRecycleBin");
     push_switch(
         &mut args,
         options.clear_opencode_shortcuts,

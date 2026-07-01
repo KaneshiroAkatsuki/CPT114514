@@ -54,6 +54,7 @@ type BoolKey = keyof Pick<
   | "clearWindowsNotifications"
   | "clearScreenshots"
   | "clearClipboardHistory"
+  | "clearRecycleBin"
   | "clearOpencodeShortcuts"
   | "forgetWifiProfiles"
   | "clearPrivateBrowserHistory"
@@ -77,6 +78,7 @@ interface CleanerFormState {
   screenshotShift: CleanerShift;
   screenshotDate: string;
   clearClipboardHistory: boolean;
+  clearRecycleBin: boolean;
   clearOpencodeShortcuts: boolean;
   forgetWifiProfiles: boolean;
   forgetWifiPatterns: string;
@@ -328,6 +330,19 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     backup: "不创建备份；剪贴板历史通常不可恢复。",
   },
   {
+    id: "recycleBin",
+    group: "windows",
+    formKey: "clearRecycleBin",
+    title: "回收站清理",
+    summary: "清理回收站，保留表格、OMM/送测和 inspec 相关项目。",
+    risk: "high",
+    confirmRequired: true,
+    clears: ["回收站中未命中保护规则的项目"],
+    keeps: [".xls / .xlsx / .csv 文件", "名称或路径包含 -OMM / 送测 的项目", "inspec 相关程序文件或文件夹"],
+    impacts: ["回收站项目被清理后通常无法从回收站恢复；执行前建议先模拟运行查看清单。"],
+    backup: "不创建备份；保护规则命中的项目会保留在回收站。",
+  },
+  {
     id: "opencodeShortcuts",
     group: "network",
     formKey: "clearOpencodeShortcuts",
@@ -447,6 +462,7 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
     screenshotShift: defaultShift,
     screenshotDate: defaultScreenshotDate(defaultShift),
     clearClipboardHistory: false,
+    clearRecycleBin: false,
     clearOpencodeShortcuts: false,
     forgetWifiProfiles: false,
     forgetWifiPatterns: "kaneshiro*, cd*",
@@ -468,6 +484,7 @@ function createRecommendedForm(defaultShift: CleanerShift): CleanerFormState {
     clearWindowsNotifications: true,
     clearScreenshots: true,
     clearClipboardHistory: true,
+    clearRecycleBin: false,
     clearOpencodeShortcuts: true,
     forgetWifiPatterns: "kaneshiro*, cd*",
     backupPrivateBrowser: true,
@@ -784,6 +801,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     screenshotWindowEnd: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.end) : null,
     screenshotWindowLabel: form.clearScreenshots ? screenshotWindowLabel : null,
     clearClipboardHistory: form.clearClipboardHistory,
+    clearRecycleBin: form.clearRecycleBin,
     clearOpencodeShortcuts: form.clearOpencodeShortcuts,
     clearPrivateBrowserHistory: form.clearPrivateBrowserHistory,
     cleanPrivateBrowser: form.cleanPrivateBrowser,

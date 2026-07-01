@@ -58,6 +58,9 @@ param(
     # 清理 Windows 剪贴板历史（保留固定项，不影响剪贴板功能）
     [switch]$ClearClipboardHistory,
 
+    # 清理回收站，但保留 Excel / OMM / 送测 / inspec 相关项目
+    [switch]$ClearRecycleBin,
+
     # 清理 opencode 在开始菜单生成的快捷方式
     [switch]$ClearOpencodeShortcuts,
 
@@ -1480,6 +1483,98 @@ function Clear-ClipboardHistory {
     return $count
 }
 
+function Test-ProtectedRecycleBinName {
+    param(
+        [string]$Name,
+        [string]$Path
+    )
+
+    $text = "$Name $Path"
+    if ($Name -match '(?i)\.(xlsx?|csv)$' -or $Path -match '(?i)\.(xlsx?|csv)$') { return $true }
+    if ($text -match '(?i)(^|\\|/| )inspec([^\\/]*)') { return $true }
+    if ($text -match '(?i)-OMM') { return $true }
+    if ($text -match '送测') { return $true }
+    return $false
+}
+
+function Clear-RecycleBinSafe {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+    $protected = 0
+
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.Namespace(10)
+        if ($recycleBin) {
+            $items = @($recycleBin.Items())
+            if ($items.Count -eq 0) {
+                Write-Host "        回收站为空" -ForegroundColor Gray
+                return 0
+            }
+
+            foreach ($item in $items) {
+                $name = [string]$item.Name
+                $path = [string]$item.Path
+                if (Test-ProtectedRecycleBinName -Name $name -Path $path) {
+                    Write-Host "        保留: $name" -ForegroundColor Gray
+                    $protected++
+                    continue
+                }
+
+                try {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟清理回收站] $name" -ForegroundColor DarkCyan
+                    } else {
+                        $item.InvokeVerb("delete")
+                        Write-Host "        已清理回收站项目: $name" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                } catch {
+                    Write-Host "        无法清理回收站项目: $name - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+
+            Write-Host "        回收站保护项目: $protected 项" -ForegroundColor Gray
+            return $count
+        }
+    } catch {
+        Write-Host "        无法通过 Shell 读取回收站，改用文件系统扫描: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+
+    $recycleRoots = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.Root '$Recycle.Bin' } |
+        Where-Object { Test-Path -LiteralPath $_ }
+
+    foreach ($root in $recycleRoots) {
+        Get-ChildItem -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { -not $_.PSIsContainer -and $_.Name -notmatch '^\$I' } |
+            ForEach-Object {
+                if (Test-ProtectedRecycleBinName -Name $_.Name -Path $_.FullName) {
+                    Write-Host "        保留: $($_.FullName)" -ForegroundColor Gray
+                    $protected++
+                } else {
+                    try {
+                        if ($IsDryRun) {
+                            Write-Host "        [模拟清理回收站] $($_.FullName)" -ForegroundColor DarkCyan
+                        } else {
+                            Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                            Write-Host "        已清理回收站项目: $($_.FullName)" -ForegroundColor DarkGreen
+                        }
+                        $count++
+                    } catch {
+                        Write-Host "        无法清理回收站项目: $($_.FullName) - $($_.Exception.Message)" -ForegroundColor Yellow
+                    }
+                }
+            }
+    }
+
+    Write-Host "        回收站保护项目: $protected 项" -ForegroundColor Gray
+    return $count
+}
+
 function Clear-OpencodeShortcuts {
     param(
         [switch]$IsDryRun
@@ -1792,6 +1887,7 @@ $results = [ordered]@{
     "Windows 通知历史" = 0
     "截图文件" = 0
     "剪贴板历史" = 0
+    "回收站" = 0
     "私人入口快捷方式" = 0
     "私人浏览器备份" = 0
     "私人浏览器数据" = 0
@@ -1814,6 +1910,7 @@ $deepItems = @{
     "Windows 通知历史" = $true
     "截图文件" = $true
     "剪贴板历史" = $true
+    "回收站" = $true
     "私人入口快捷方式" = $true
     "私人浏览器备份" = $true
     "私人浏览器数据" = $true
@@ -1845,6 +1942,7 @@ $choices = [ordered]@{
     "Windows 通知历史" = [bool]$ClearWindowsNotifications
     "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
     "剪贴板历史" = [bool]$ClearClipboardHistory
+    "回收站" = [bool]$ClearRecycleBin
     "私人入口快捷方式" = [bool]$ClearOpencodeShortcuts
     "私人浏览器浏览记录" = [bool]$ClearPrivateBrowserHistory
     "私人浏览器清理" = [bool]$CleanPrivateBrowser
@@ -2210,6 +2308,15 @@ if ($ClearClipboardHistory) {
     Write-Success "Windows 剪贴板历史清理完成"
 } else {
     Write-Warn "保留 Windows 剪贴板历史（默认）"
+}
+
+if ($ClearRecycleBin) {
+    Write-Step "正在清理回收站..."
+    Write-Deep "会跳过 .xls/.xlsx/.csv、名称或路径包含 -OMM / 送测 的项目，以及 inspec 相关程序文件"
+    $results["回收站"] += Clear-RecycleBinSafe -IsDryRun:$DryRun
+    Write-Success "回收站清理完成"
+} else {
+    Write-Warn "保留回收站（默认）"
 }
 
 # 清理私人入口在开始菜单生成的快捷方式
