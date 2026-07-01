@@ -990,6 +990,88 @@ public static class CleanerKeyboard {
     }
 }
 
+function Clear-WindowsNotificationDatabase {
+    param(
+        [switch]$IsDryRun
+    )
+
+    $count = 0
+    $serviceNames = @()
+    $serviceNames += Get-Service -Name "WpnUserService*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $serviceNames += Get-Service -Name "WpnService" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $serviceNames = @($serviceNames | Sort-Object -Unique)
+    $stoppedServices = @()
+
+    foreach ($serviceName in $serviceNames) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟暂停通知服务] $serviceName" -ForegroundColor DarkCyan
+                $stoppedServices += $serviceName
+                continue
+            }
+
+            $svc = Get-Service -Name $serviceName -ErrorAction Stop
+            if ($svc.Status -ne 'Stopped') {
+                Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 700
+            }
+
+            Write-Host "        已暂停通知服务: $serviceName" -ForegroundColor DarkGreen
+            $stoppedServices += $serviceName
+            $count++
+        } catch {
+            Write-Host "        无法暂停通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    $notificationDir = "$env:LOCALAPPDATA\Microsoft\Windows\Notifications"
+    $notificationPatterns = @(
+        "wpndatabase.db",
+        "wpndatabase.db-wal",
+        "wpndatabase.db-shm",
+        "wpndatabase.db-journal",
+        "wpndatabase.db-*"
+    )
+
+    if (Test-Path $notificationDir) {
+        $processedNotificationFiles = @{}
+        foreach ($pattern in $notificationPatterns) {
+            Get-ChildItem -Path $notificationDir -Filter $pattern -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($processedNotificationFiles.ContainsKey($_.FullName)) { return }
+                $processedNotificationFiles[$_.FullName] = $true
+                try {
+                    if ($IsDryRun) {
+                        Write-Host "        [模拟清空通知数据库] $($_.FullName)" -ForegroundColor DarkCyan
+                    } else {
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                        Write-Host "        已清空通知数据库文件: $($_.FullName)" -ForegroundColor DarkGreen
+                    }
+                    $count++
+                } catch {
+                    Write-Host "        无法清空通知数据库文件: $($_.FullName) - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
+            }
+        }
+    } else {
+        Write-Host "        通知数据库目录不存在: $notificationDir" -ForegroundColor Gray
+    }
+
+    foreach ($serviceName in $stoppedServices) {
+        try {
+            if ($IsDryRun) {
+                Write-Host "        [模拟恢复通知服务] $serviceName" -ForegroundColor DarkCyan
+            } else {
+                Start-Service -Name $serviceName -ErrorAction SilentlyContinue
+                Write-Host "        已恢复通知服务: $serviceName" -ForegroundColor DarkGreen
+            }
+        } catch {
+            Write-Host "        无法恢复通知服务 $serviceName : $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    return $count
+}
+
 function Clear-WindowsNotificationHistory {
     param(
         [switch]$IsDryRun
@@ -998,7 +1080,8 @@ function Clear-WindowsNotificationHistory {
     $count = 0
 
     # 方法1: 模拟通知中心的“全部清除”按钮，避免重启 Explorer/任务栏造成屏幕闪烁。
-    $count += Invoke-NotificationClearAllButton -IsDryRun:$IsDryRun
+    $buttonCount = Invoke-NotificationClearAllButton -IsDryRun:$IsDryRun
+    $count += $buttonCount
 
     # 方法2: 调用 Windows Runtime API。部分 PowerShell 会话会返回 0x80070490，失败不再走破坏性数据库方案。
     try {
@@ -1016,7 +1099,13 @@ function Clear-WindowsNotificationHistory {
         Write-Host "        无法通过 API 清空通知历史: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 
-    # 方法3: 清理通知设置中的历史计数和时间戳。
+    # 方法3: 如果系统没有暴露“全部清除”按钮，则清空通知数据库兜底；不重启 Explorer/任务栏。
+    if ($buttonCount -eq 0) {
+        Write-Host "        未能直接点击“全部清除”，改用通知数据库兜底清理（不重启任务栏）" -ForegroundColor Yellow
+        $count += Clear-WindowsNotificationDatabase -IsDryRun:$IsDryRun
+    }
+
+    # 方法4: 清理通知设置中的历史计数和时间戳。
     $settingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
     if (Test-Path $settingsPath) {
         try {
