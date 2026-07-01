@@ -80,15 +80,16 @@ interface SettingsCenterDialogProps {
 const APP_VERSION = "5.5.2";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
-type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
+type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "account" | "about";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string }[] = [
   { id: "basic", label: "基础", icon: <UserRound className="h-4 w-4" />, description: "使用者、班次和审核模式" },
   { id: "generation", label: "生成规则", icon: <SlidersHorizontal className="h-4 w-4" />, description: "下班策略、每件时间和补时长" },
   { id: "paths", label: "路径与配置", icon: <FolderOpen className="h-4 w-4" />, description: "工作目录、输出目录、配置文件" },
   { id: "assets", label: "模板规则", icon: <FileSpreadsheet className="h-4 w-4" />, description: "报表模板、特殊大件、识别补充" },
-  { id: "tools", label: "工具", icon: <Wrench className="h-4 w-4" />, description: "个人清理和帮助入口" },
-  { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、账户、配置和帮助" },
+  { id: "tools", label: "其他功能", icon: <Wrench className="h-4 w-4" />, description: "个人清理等附加功能" },
+  { id: "account", label: "账户", icon: <UserRound className="h-4 w-4" />, description: "显示方式和切换账户" },
+  { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、配置和帮助" },
 ];
 
 function normalizeDraft(draft: SettingsCenterDraft): SettingsCenterDraft {
@@ -433,35 +434,6 @@ export function SettingsCenterDialog({
           </div>
         </FieldRow>
       </Section>
-
-      <Section icon={<UserRound className="h-4 w-4" />} title="账户显示" description="控制页头欢迎语显示昵称还是真实姓名。">
-        <FieldRow label="当前账户" hint={currentAccount.role === "admin" ? "管理员账户" : "访客账户"}>
-          <div className="rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-800 shadow-sm">
-            {currentAccount.nickname} / {currentAccount.real_name}
-          </div>
-        </FieldRow>
-        <FieldRow label="欢迎语显示">
-          <Segmented
-            value={currentAccount.display_name_mode}
-            onChange={async (displayMode) => {
-              setAccountSaving(true);
-              setError("");
-              try {
-                await onDisplayNameModeChange(displayMode);
-              } catch (e) {
-                setError(`账户显示设置保存失败: ${e}`);
-              } finally {
-                setAccountSaving(false);
-              }
-            }}
-            options={[
-              { value: "nickname", label: "显示昵称" },
-              { value: "real_name", label: "显示真名" },
-            ]}
-          />
-          {accountSaving && <p className="mt-2 text-xs text-slate-500">正在保存账户显示设置...</p>}
-        </FieldRow>
-      </Section>
     </div>
   );
 
@@ -687,30 +659,73 @@ export function SettingsCenterDialog({
         )}
       </Section>
 
-      <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助" description="设置说明和日常操作说明统一放在帮助中心。">
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("quickstart")}>快速上手</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("personal-cleaner")}>个人清理说明</Button>
+    </div>
+  );
+
+  const renderAccount = () => (
+    <div className="space-y-5">
+      <Section icon={<UserRound className="h-4 w-4" />} title="当前账户" description="账户决定默认配置、权限范围和页头欢迎语显示方式。">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+            <div className="text-xs text-slate-500">昵称</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">{currentAccount.nickname}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+            <div className="text-xs text-slate-500">真实姓名</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">{currentAccount.real_name}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+            <div className="text-xs text-slate-500">权限</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">{currentAccount.role === "admin" ? "管理员" : "访客"}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
+            <div className="text-xs text-slate-500">配置隔离</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">账户 profile</div>
+          </div>
         </div>
       </Section>
 
-      <Section icon={<UserRound className="h-4 w-4" />} title="账户" description="切换账户会回到登录页，并加载另一套默认配置。">
+      <Section icon={<UserRound className="h-4 w-4" />} title="显示方式" description="控制主界面页头欢迎语显示昵称还是真实姓名。">
+        <FieldRow label="欢迎语显示">
+          <Segmented
+            value={currentAccount.display_name_mode}
+            onChange={async (displayMode) => {
+              setAccountSaving(true);
+              setError("");
+              try {
+                await onDisplayNameModeChange(displayMode);
+              } catch (e) {
+                setError(`账户显示设置保存失败: ${e}`);
+              } finally {
+                setAccountSaving(false);
+              }
+            }}
+            options={[
+              { value: "nickname", label: "显示昵称" },
+              { value: "real_name", label: "显示真名" },
+            ]}
+          />
+          {accountSaving && <p className="mt-2 text-xs text-slate-500">正在保存账户显示设置...</p>}
+        </FieldRow>
+      </Section>
+
+      <Section icon={<RotateCcw className="h-4 w-4" />} title="切换账户" description="切换账户会回到登录页，并加载另一套默认配置。">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-700">
-            不是您？当前为 <span className="font-medium">{currentAccount.nickname}</span>
+            不是当前使用者？
           </div>
           <Button type="button" variant="outline" onClick={onSwitchAccount}>
             切换账户 / 退出登录
           </Button>
         </div>
       </Section>
+
     </div>
   );
 
   const renderAbout = () => (
     <div className="space-y-5">
-      <Section icon={<Info className="h-4 w-4" />} title="关于软件" description="版本、账户和配置位置集中展示，便于验收和排查。">
+      <Section icon={<Info className="h-4 w-4" />} title="关于软件" description="版本和配置位置集中展示，便于验收和排查。">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">软件名称</div>
@@ -719,13 +734,6 @@ export function SettingsCenterDialog({
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">当前版本</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">v{APP_VERSION}</div>
-          </div>
-          <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
-            <div className="text-xs text-slate-500">当前账户</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900">
-              {currentAccount.nickname} / {currentAccount.real_name}
-              <span className="ml-2 text-xs font-normal text-slate-500">{currentAccount.role === "admin" ? "管理员" : "访客"}</span>
-            </div>
           </div>
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">配置来源</div>
@@ -832,6 +840,7 @@ export function SettingsCenterDialog({
       case "paths": return renderPaths();
       case "assets": return renderAssets();
       case "tools": return renderTools();
+      case "account": return renderAccount();
       case "about": return renderAbout();
       default: return renderBasic();
     }
