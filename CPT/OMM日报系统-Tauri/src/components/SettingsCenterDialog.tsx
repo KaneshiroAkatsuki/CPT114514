@@ -83,12 +83,12 @@ const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "account" | "about";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode; description: string }[] = [
-  { id: "basic", label: "基础", icon: <UserRound className="h-4 w-4" />, description: "使用者、班次和审核模式" },
+  { id: "basic", label: "基础设置", icon: <UserRound className="h-4 w-4" />, description: "使用者、班次和审核模式" },
   { id: "generation", label: "生成规则", icon: <SlidersHorizontal className="h-4 w-4" />, description: "下班策略、每件时间和补时长" },
-  { id: "paths", label: "路径与配置", icon: <FolderOpen className="h-4 w-4" />, description: "工作目录、输出目录、配置文件" },
+  { id: "paths", label: "路径配置", icon: <FolderOpen className="h-4 w-4" />, description: "工作目录、输出目录、配置文件" },
   { id: "assets", label: "模板规则", icon: <FileSpreadsheet className="h-4 w-4" />, description: "报表模板、特殊大件、识别补充" },
   { id: "tools", label: "其他功能", icon: <Wrench className="h-4 w-4" />, description: "个人清理等附加功能" },
-  { id: "account", label: "账户", icon: <UserRound className="h-4 w-4" />, description: "显示方式和切换账户" },
+  { id: "account", label: "账户管理", icon: <UserRound className="h-4 w-4" />, description: "显示方式和切换账户" },
   { id: "about", label: "关于软件", icon: <Info className="h-4 w-4" />, description: "版本、配置和帮助" },
 ];
 
