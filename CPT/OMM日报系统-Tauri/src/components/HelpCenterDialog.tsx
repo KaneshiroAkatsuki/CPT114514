@@ -56,7 +56,7 @@ const CATEGORIES: HelpCategory[] = [
   { id: "schedule", title: "时间与排程", description: "每件时间、下班策略、CNC 规则", icon: <CalendarClock className="h-4 w-4" /> },
   { id: "template", title: "模板与报表", description: "模板来源、WPS 样式、报表输出", icon: <FileSpreadsheet className="h-4 w-4" /> },
   { id: "config", title: "配置与便携版", description: "配置文件、识别规则、路径选择", icon: <Settings2 className="h-4 w-4" /> },
-  { id: "cleaner", title: "个人清理中心", description: "Edge、截图、剪贴板、WiFi、私人浏览器", icon: <Wrench className="h-4 w-4" /> },
+  { id: "cleaner", title: "数据管理局", description: "本机清理、网络、进程和备份", icon: <Wrench className="h-4 w-4" /> },
   { id: "faq", title: "常见问题", description: "按现象快速定位原因", icon: <HelpCircle className="h-4 w-4" /> },
   { id: "about", title: "关于", description: "版本和快捷键", icon: <CheckCircle2 className="h-4 w-4" /> },
 ];
@@ -65,18 +65,19 @@ const TOPICS: HelpTopic[] = [
   {
     id: "quickstart",
     categoryId: "quickstart",
-    title: "三步生成日报",
-    summary: "选择工作目录，添加日期文件夹，预览或生成 Excel。",
+    title: "从主页生成日报",
+    summary: "进入信息统计局，选择工作目录，添加日期文件夹，预览或生成 Excel。",
     keywords: ["快速开始", "生成日报", "工作目录", "日期文件夹", "预览"],
     body: (
       <div className="space-y-4">
-        <p className={text.p}>登录账户后，最短路径只需要三步，适合每天正常生成日报时使用。</p>
+        <p className={text.p}>登录账户后会先进入“玉衡山科学院管理厅”主页。日常生成日报时，先进入“信息统计局”。</p>
         <ol className={text.ol}>
+          <li><strong>进入信息统计局：</strong>在主页点击“信息统计局”，进入原 OMM 日报工作台。</li>
           <li><strong>选择工作目录：</strong>选择包含日期文件夹和日报模板的根目录。</li>
           <li><strong>添加日期文件夹：</strong>从下拉框添加单个日期，也可以全选添加所有识别到的日期。</li>
           <li><strong>预览或生成：</strong>先用预览检查排程，确认无误后生成 Excel 报表。</li>
         </ol>
-        <div className={text.note}>主界面左栏会先显示“当前设置”摘要，再显示“工作目录”。第一次使用建议先核对摘要，再打开“设置中心”确认姓名、班次、每件时间、输出目录和模板来源。</div>
+        <div className={text.note}>“数据管理局”是管理员专用入口，访客可以看见入口，但点击时会提示需要管理员权限。第一次使用日报模块时，建议先核对“当前设置”摘要，再打开“设置中心”确认姓名、班次、每件时间、输出目录和模板来源。</div>
       </div>
     ),
   },
@@ -340,7 +341,7 @@ const TOPICS: HelpTopic[] = [
           <li><strong>集中入口：</strong>识别补充、特殊大件、模板位置、账户、其他功能和关于软件都可以从设置中心进入。</li>
           <li><strong>诊断日志：</strong>主界面不显示日志；排查问题时在“关于软件”的“诊断”区域查看。</li>
           <li><strong>账户管理：</strong>管理当前账户、欢迎语显示方式和切换账户；该栏目位于“关于软件”上方。</li>
-          <li><strong>其他功能：</strong>管理员账户可从这里进入个人清理中心。</li>
+          <li><strong>数据管理：</strong>管理员账户可从这里进入数据管理局相关维护工具；访客账户会看到权限提示。</li>
           <li><strong>关于软件：</strong>显示当前版本、帮助入口、配置文件、识别补充、模板来源和本地数据管理信息，便于验收和排查。</li>
         </ul>
       </div>
@@ -366,15 +367,16 @@ const TOPICS: HelpTopic[] = [
   {
     id: "personal-cleaner",
     categoryId: "cleaner",
-    title: "个人清理中心清什么",
-    summary: "本机维护工具，清理前会说明内容、影响和备份位置。",
-    keywords: ["个人清理", "Edge", "截图", "剪贴板", "回收站", "WiFi", "私人浏览器", "火狐", "Adobi", "进程", "后台", "备份", "管理员", "UAC", "60秒", "白班", "夜班"],
+    title: "数据管理局清什么",
+    summary: "管理员专用本机维护工具，清理前会说明内容、影响和备份位置。",
+    keywords: ["数据管理局", "个人清理", "Edge", "截图", "剪贴板", "回收站", "WiFi", "私人浏览器", "火狐", "Adobi", "进程", "后台", "备份", "管理员", "UAC", "60秒", "白班", "夜班"],
     body: (
       <div className="space-y-4">
         <div className={text.warn}>建议先点“模拟运行”查看将处理的项目，再真实执行。真实执行前会汇总每个项目会清什么、可能影响和备份策略。</div>
         <ul className={text.ul}>
+          <li><strong>入口权限：</strong>数据管理局只允许管理员进入；访客点击入口时会显示权限提示，后端命令也会继续校验管理员身份。</li>
           <li><strong>界面结构：</strong>顶部按运行进程、Edge、私人 Firefox、Windows 痕迹、WiFi/工具和备份策略分类；左侧选择清理项，右侧汇总当前项的“会清理 / 会保留 / 可能影响 / 备份”和本次执行清单。</li>
-          <li><strong>清理方案：</strong>推荐清理会套用一组相对稳妥的常用项目，不包含 ResetEdge、清书签、清扩展、清微软账户、Firefox 浏览记录/完整清理或关闭进程等高风险项；自定义清理可以把当前勾选项保存为默认方案，并支持修改方案名称，下次打开个人清理中心会自动套用。</li>
+          <li><strong>清理方案：</strong>推荐清理会套用一组相对稳妥的常用项目，不包含 ResetEdge、清书签、清扩展、清微软账户、Firefox 浏览记录/完整清理或关闭进程等高风险项；自定义清理可以把当前勾选项保存为默认方案，并支持修改方案名称，下次打开数据维护中心会自动套用。</li>
           <li><strong>运行进程：</strong>可关闭 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi</code> 目录下正在运行的软件进程，并额外包含 Edge 和 Codex 前后台进程；只结束进程，不删除文件。当前 Adobi 根目录包含 AcrobatHelper/OpenCode、AcroUtil/Firefox、Kimi、lmclient 和 PortableGit 等目录，真实执行前会先弹出检测到的进程名、PID 和路径。执行后会清空当前用户系统代理和 WinHTTP 代理，避免代理软件退出后残留代理地址；不会清理 <code className={text.code}>HTTP_PROXY</code> / <code className={text.code}>HTTPS_PROXY</code> 环境变量或 Codex 自身代理配置。</li>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>

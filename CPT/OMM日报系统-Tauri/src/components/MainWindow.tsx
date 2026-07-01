@@ -18,7 +18,7 @@ import { ManualTaskDialog } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
 import type { DisplayNameMode, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount, DataStoreInfo } from "@/types/record";
-import { Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Info } from "lucide-react";
+import { ArrowLeft, BarChart3, Database, Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Home, Info, ShieldCheck } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
 function getInitials(name: string): string {
@@ -50,6 +50,8 @@ type AppConfirmRequest = {
   tone?: "info" | "warning" | "danger";
   resolve: (confirmed: boolean) => void;
 };
+
+type ModuleView = "home" | "daily" | "dataManagement";
 
 interface MainWindowProps {
   currentAccount: PublicAccount;
@@ -109,6 +111,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [helpSection, setHelpSection] = useState('quickstart');
   const [settingsCenterOpen, setSettingsCenterOpen] = useState(false);
   const [personalCleanerOpen, setPersonalCleanerOpen] = useState(false);
+  const [activeModule, setActiveModule] = useState<ModuleView>("home");
+  const [dataManagementDeniedOpen, setDataManagementDeniedOpen] = useState(false);
 
   // Config location dialog state
   const [configLocationOpen, setConfigLocationOpen] = useState(false);
@@ -148,6 +152,15 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const { setCurrentAccountDisplayMode } = useAccountManager();
   const { getDataStoreInfo } = useDataStoreManager();
   const isAdminAccount = currentAccount.role === "admin";
+  const moduleTitle = activeModule === "daily" ? "信息统计局" : activeModule === "dataManagement" ? "数据管理局" : "管理厅主页";
+
+  const handleOpenDataManagement = () => {
+    if (!isAdminAccount) {
+      setDataManagementDeniedOpen(true);
+      return;
+    }
+    setActiveModule("dataManagement");
+  };
 
   const requestAppConfirm = (request: Omit<AppConfirmRequest, "resolve">): Promise<boolean> => {
     return new Promise((resolve) => setAppConfirm({ ...request, resolve }));
@@ -1728,10 +1741,21 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       <header className="mx-3 mt-3 flex shrink-0 items-center justify-between rounded-2xl border border-slate-200/80 bg-white/85 px-4 py-3 shadow-[0_10px_32px_rgba(15,23,42,0.07)] backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-[0_10px_24px_rgba(10,132,255,0.24)]">
-            <FileSpreadsheet className="h-5 w-5" />
+            {activeModule === "home" ? <Home className="h-5 w-5" /> : activeModule === "dataManagement" ? <Database className="h-5 w-5" /> : <FileSpreadsheet className="h-5 w-5" />}
           </div>
-          <div>
-            <h1 className="text-base font-semibold leading-tight tracking-normal text-slate-950">OMM 日报自动生成</h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {activeModule !== "home" && (
+                <Button variant="ghost" size="sm" onClick={() => setActiveModule("home")} className="h-7 gap-1 px-2 text-xs">
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  主页
+                </Button>
+              )}
+              <h1 className="text-base font-semibold leading-tight tracking-normal text-slate-950">玉衡山科学院管理厅</h1>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                {moduleTitle}
+              </span>
+            </div>
             <p className="mt-0.5 text-[11px] font-medium tracking-[0.16em] text-slate-300">
               玉衡山科学院
             </p>
@@ -1756,6 +1780,109 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 lg:p-5">
         <div className="mx-auto max-w-[1440px]">
+          {activeModule === "home" ? (
+            <div className="space-y-5">
+              <section className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.07)] backdrop-blur-xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold tracking-[0.18em] text-slate-300">KANESHIRO·AKATSUKI</div>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">玉衡山科学院管理厅</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                      登录后从这里进入日报统计和本机数据维护。常用功能保持原样，只把入口收拢得更清楚。
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => setSettingsCenterOpen(true)} className="gap-1.5">
+                      <Settings className="h-4 w-4" />
+                      设置中心
+                    </Button>
+                    <Button variant="outline" onClick={() => handleHelpOpen("quickstart")} className="gap-1.5">
+                      <HelpCircle className="h-4 w-4" />
+                      帮助中心
+                    </Button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModule("daily")}
+                  className="group rounded-2xl border border-white/80 bg-white/85 p-5 text-left shadow-[0_12px_34px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+                      <BarChart3 className="h-5 w-5" />
+                    </span>
+                    <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">可进入</span>
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-slate-950">信息统计局</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">识别日期文件夹，预览日报，生成 OMM/CMM/手量日报。</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-2 py-1">日报队列</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">预览核对</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">Excel 生成</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenDataManagement}
+                  className="group rounded-2xl border border-white/80 bg-white/85 p-5 text-left shadow-[0_12px_34px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                      <Database className="h-5 w-5" />
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${isAdminAccount ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                      {isAdminAccount ? "管理员" : "需管理员"}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-slate-950">数据管理局</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">本机清理、网络切换、进程维护和数据痕迹整理。</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-2 py-1">模拟运行</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">备份保护</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">高风险确认</span>
+                  </div>
+                </button>
+              </section>
+            </div>
+          ) : activeModule === "dataManagement" ? (
+            <div className="space-y-5">
+              <section className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.07)] backdrop-blur-xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <ShieldCheck className="h-4 w-4 text-blue-600" />
+                      数据管理局
+                    </div>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                      管理员专用区域。真实执行清理前仍会列出影响范围、候选进程和高风险确认。
+                    </p>
+                  </div>
+                  <Button onClick={() => setPersonalCleanerOpen(true)} className="gap-1.5">
+                    <Database className="h-4 w-4" />
+                    打开数据维护中心
+                  </Button>
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                {[
+                  { title: "推荐清理", text: "默认避开高风险项，适合日常收尾。" },
+                  { title: "自定义方案", text: "保存自己的清理组合，下次打开继续使用。" },
+                  { title: "保护规则", text: "回收站保留表格、送测/OMM 和 inspec 相关项目。" },
+                ].map((item) => (
+                  <div key={item.title} className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-[0_10px_28px_rgba(15,23,42,0.06)]">
+                    <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{item.text}</p>
+                  </div>
+                ))}
+              </section>
+            </div>
+          ) : (
+          <>
           {/* Top warning */}
           <div className="warning-strip mb-4 flex items-start gap-2">
             <Info className="h-4 w-4 shrink-0 mt-0.5" />
@@ -2027,6 +2154,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               </Card>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
 
@@ -2176,6 +2305,20 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         tone={appConfirm?.tone}
         onConfirm={() => resolveAppConfirm(true)}
         onCancel={() => resolveAppConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={dataManagementDeniedOpen}
+        title="需要管理员权限"
+        description="数据管理局包含本机清理、网络切换、进程维护等功能，仅管理员账户可进入。"
+        confirmLabel="知道了"
+        cancelLabel="切换账户"
+        tone="info"
+        onConfirm={() => setDataManagementDeniedOpen(false)}
+        onCancel={() => {
+          setDataManagementDeniedOpen(false);
+          onSwitchAccount();
+        }}
       />
 
       <ReviewDialog
