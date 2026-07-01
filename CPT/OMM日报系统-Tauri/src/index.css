@@ -88,6 +88,11 @@
   .app-list-item {
     @apply rounded-xl border border-slate-200/80 bg-white/70 transition hover:border-blue-200 hover:bg-white hover:shadow-[0_6px_18px_rgba(15,23,42,0.06)];
   }
+
+  .pin-input::-ms-reveal,
+  .pin-input::-ms-clear {
+    display: none;
+  }
 }
 
 /* Custom scrollbar */

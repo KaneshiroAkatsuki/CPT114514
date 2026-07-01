@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Database, FileSpreadsheet, Info, KeyRound, LockKeyhole, RotateCcw, Shield, UserPlus } from "lucide-react";
+import { Database, Eye, EyeOff, FileSpreadsheet, Info, KeyRound, LockKeyhole, RotateCcw, Shield, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,43 @@ function roleLabel(account: PublicAccount): string {
 function validatePin(pin: string): string | null {
   if (!/^\d{4,6}$/.test(pin)) return "PIN 必须是 4 到 6 位数字。";
   return null;
+}
+
+function PinInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const [visible, setVisible] = React.useState(false);
+  const Icon = visible ? EyeOff : Eye;
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 6))}
+        type={visible ? "text" : "password"}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder={placeholder}
+        className="pin-input pr-10"
+      />
+      <button
+        type="button"
+        aria-label={visible ? "隐藏 PIN" : "显示 PIN"}
+        title={visible ? "隐藏 PIN" : "显示 PIN"}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setVisible((prev) => !prev)}
+        className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 export function AccountGate() {
@@ -246,7 +283,7 @@ export function AccountGate() {
                   </div>
                   <div className="space-y-2">
                     <label className="field-label">PIN</label>
-                    <Input value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="4-6 位数字" />
+                    <PinInput value={pin} onChange={setPin} placeholder="4-6 位数字" />
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Button variant="ghost" size="sm" onClick={() => { resetFormState(); setMode("forgot"); }}>
@@ -279,7 +316,7 @@ export function AccountGate() {
                   </div>
                   <div className="space-y-2">
                     <label className="field-label">设置 PIN</label>
-                    <Input value={newPin} onChange={(event) => setNewPin(event.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="4-6 位数字" />
+                    <PinInput value={newPin} onChange={setNewPin} placeholder="4-6 位数字" />
                     <p className="form-hint">新员工默认为访客账户，管理员功能不会显示。</p>
                   </div>
                   <div className="flex justify-between gap-2">
@@ -312,11 +349,11 @@ export function AccountGate() {
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label className="field-label">管理员 PIN</label>
-                      <Input value={adminPin} onChange={(event) => setAdminPin(event.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="管理员 PIN" />
+                      <PinInput value={adminPin} onChange={setAdminPin} placeholder="管理员 PIN" />
                     </div>
                     <div className="space-y-2">
                       <label className="field-label">新 PIN</label>
-                      <Input value={newPin} onChange={(event) => setNewPin(event.target.value.replace(/\D/g, "").slice(0, 6))} type="password" placeholder="4-6 位数字" />
+                      <PinInput value={newPin} onChange={setNewPin} placeholder="4-6 位数字" />
                     </div>
                   </div>
                   <div className="flex justify-between gap-2">
