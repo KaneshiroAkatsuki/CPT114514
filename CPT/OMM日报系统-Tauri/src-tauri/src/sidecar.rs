@@ -185,7 +185,7 @@ impl Drop for SidecarManager {
     }
 }
 
-pub fn find_sidecar_path(resource_dir: Option<&std::path::Path>) -> Result<(String, Vec<String>)> {
+pub fn find_sidecar_path(_resource_dir: Option<&std::path::Path>) -> Result<(String, Vec<String>)> {
     // In production, use bundled sidecar. Try several candidate locations so that
     // both Tauri-packaged installs and the manually-assembled portable layout work.
     #[cfg(not(debug_assertions))]
@@ -209,7 +209,7 @@ pub fn find_sidecar_path(resource_dir: Option<&std::path::Path>) -> Result<(Stri
                 exe_parent.join("binaries").join("generate_report.exe"),
                 exe_parent.join("generate_report.exe"),
             ];
-            if let Some(rd) = resource_dir {
+            if let Some(rd) = _resource_dir {
                 c.push(rd.join("binaries").join("generate_report.exe"));
                 c.push(rd.join("generate_report.exe"));
             }

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileSpreadsheet, KeyRound, LockKeyhole, RotateCcw, UserPlus } from "lucide-react";
+import { Database, FileSpreadsheet, Info, KeyRound, LockKeyhole, RotateCcw, Shield, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,26 @@ import type { PublicAccount } from "@/types/record";
 import { MainWindow } from "@/components/MainWindow";
 
 type GateMode = "login" | "register" | "forgot";
+
+const APP_VERSION = "5.5.2";
+
+const loginNotes = [
+  {
+    title: "本地账户",
+    description: "账户和配置只保存在本机，不需要联网。",
+    icon: Shield,
+  },
+  {
+    title: "数据隔离",
+    description: "每个账户使用独立配置，避免互相改乱默认规则。",
+    icon: Database,
+  },
+  {
+    title: "当前版本",
+    description: `v${APP_VERSION}，便携版数据会跟随程序目录。`,
+    icon: Info,
+  },
+];
 
 function roleLabel(account: PublicAccount): string {
   return account.role === "admin" ? "管理员" : "访客";
@@ -193,7 +213,7 @@ export function AccountGate() {
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
-            <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+            <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
               Kaneshiro · 禹欣
             </p>
           </div>
@@ -314,6 +334,35 @@ export function AccountGate() {
               )}
             </CardContent>
           </Card>
+
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {loginNotes.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-white/70 bg-white/60 px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)] backdrop-blur-xl"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    {item.title}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p>
+                </div>
+              );
+            })}
+          </section>
+
+          <footer className="space-y-1 pb-1 text-center">
+            <div className="text-xs font-medium uppercase tracking-[0.24em] text-slate-300">
+              Kaneshiro · 禹欣
+            </div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
+              OMM Daily Report · Local Workspace
+            </div>
+          </footer>
         </div>
       </div>
     </div>
