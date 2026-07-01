@@ -311,8 +311,8 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   const hasIncomplete = Object.values(validationMap).some((arr) => arr.length > 0);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} className="flex h-[86vh] max-h-[86vh] max-w-5xl flex-col overflow-hidden">
+      <DialogHeader className="shrink-0">
         <DialogTitle>手量任务管理 / 补录 - {item?.dateFolder || ''}</DialogTitle>
         <div className="text-sm text-slate-500">
           识别班次：{effectiveShift ? `${effectiveShift}班` : '未识别'}
@@ -323,7 +323,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
           )}
         </div>
       </DialogHeader>
-      <DialogContent className="space-y-4">
+      <DialogContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-5">
         {hasCandidates && (
           <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3 text-sm text-blue-800">
             已从日期文件夹发现 {item?.manualCandidates?.length || 0} 个手量文件夹，请确认耗时后保存。
@@ -488,7 +488,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
           </div>
         </div>
       </DialogContent>
-      <DialogFooter>
+      <DialogFooter className="shrink-0">
         <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
         <Button variant="secondary" onClick={handleSave}>保存到当前日期</Button>
         <Button onClick={handleSaveAndPreview}>保存并预览</Button>

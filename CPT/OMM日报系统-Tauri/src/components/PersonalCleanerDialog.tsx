@@ -671,15 +671,15 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogHeader>
+      <Dialog open={open} onOpenChange={onOpenChange} className="flex h-[86vh] max-h-[86vh] max-w-5xl flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>个人清理中心</DialogTitle>
           <div className="mt-1 text-sm text-slate-500">
             管理员专用的本机清理工具。先选项目，再看右侧说明；真实执行前会汇总清理内容、影响和备份策略。
           </div>
         </DialogHeader>
 
-        <DialogContent className="space-y-4">
+        <DialogContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-5">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1.2fr]">
             <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
               <div className="flex items-start gap-3">
@@ -960,7 +960,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
           )}
         </DialogContent>
 
-        <DialogFooter className="items-center justify-between">
+        <DialogFooter className="shrink-0 items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <ExternalLink className="h-3.5 w-3.5" />
             <span>真实执行会请求管理员权限；UAC 取消或 PowerShell 被阻止时约 60 秒后提示。</span>

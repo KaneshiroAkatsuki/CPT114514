@@ -56,7 +56,7 @@ const CATEGORIES: HelpCategory[] = [
   { id: "schedule", title: "时间与排程", description: "每件时间、下班策略、CNC 规则", icon: <CalendarClock className="h-4 w-4" /> },
   { id: "template", title: "模板与报表", description: "模板来源、WPS 样式、报表输出", icon: <FileSpreadsheet className="h-4 w-4" /> },
   { id: "config", title: "配置与便携版", description: "配置文件、识别规则、路径选择", icon: <Settings2 className="h-4 w-4" /> },
-  { id: "cleaner", title: "个人清理工具", description: "Edge、截图、剪贴板、WiFi、私人浏览器", icon: <Wrench className="h-4 w-4" /> },
+  { id: "cleaner", title: "个人清理中心", description: "Edge、截图、剪贴板、WiFi、私人浏览器", icon: <Wrench className="h-4 w-4" /> },
   { id: "faq", title: "常见问题", description: "按现象快速定位原因", icon: <HelpCircle className="h-4 w-4" /> },
   { id: "about", title: "关于", description: "版本和快捷键", icon: <CheckCircle2 className="h-4 w-4" /> },
 ];
@@ -333,7 +333,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>主界面只保留摘要：</strong>左栏先显示当前设置摘要，工作目录选择放在摘要下方；队列、预览和生成仍在主界面，默认规则集中放入设置中心。</li>
+          <li><strong>主界面只保留摘要：</strong>左栏先显示当前设置摘要，工作目录选择放在摘要下方；预览日报和生成报表放在工作台中间主操作区，默认规则集中放入设置中心。</li>
           <li><strong>先改草稿再保存：</strong>在设置中心修改内容不会立刻写入 config.json，点击“保存设置”后才会生效。</li>
           <li><strong>退出二次确认：</strong>有未保存改动时关闭设置中心，会提示“保存并退出 / 放弃更改 / 继续编辑”，并列出变更摘要。</li>
           <li><strong>路径选择：</strong>工作目录、输出目录和配置目录的选择窗口会优先打开当前显示的目录。</li>
@@ -417,7 +417,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.5.1。</li>
+          <li><strong>版本：</strong>5.5.2。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。项目内旧便携包、旧安装包和旧测试解压目录会定期清理，只保留最新发布物。</li>

@@ -85,14 +85,14 @@ export function RecognitionRulesDialog({
   const sinterRules = draft.sinter_plate_rules || [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} className="flex h-[86vh] max-h-[86vh] max-w-5xl flex-col overflow-hidden">
+      <DialogHeader className="shrink-0">
         <DialogTitle>识别补充规则</DialogTitle>
         <div className="text-sm text-slate-500">
           补充规则独立保存，不会随普通配置重置而清空。
         </div>
       </DialogHeader>
-      <DialogContent className="max-h-[78vh] space-y-4 overflow-y-auto">
+      <DialogContent className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-5">
         <div className="space-y-1 rounded-xl border border-blue-200/80 bg-blue-50/80 p-3 text-sm text-blue-800">
           <div>规则文件：<code className="break-all">{path || "recognition-rules.json"}</code></div>
           <div>状态：{exists ? "已存在，将继续写回此文件" : "尚未创建，保存后自动创建"}</div>
@@ -224,7 +224,7 @@ export function RecognitionRulesDialog({
           清空下方补充只会清空 <code>recognition-rules.json</code> 的用户补充规则，内置识别能力不会消失。
         </div>
       </DialogContent>
-      <DialogFooter>
+      <DialogFooter className="shrink-0">
         <Button variant="ghost" onClick={clearAll}>清空补充</Button>
         <Button variant="outline" onClick={() => onOpenChange(false)}>关闭</Button>
         <Button onClick={saveDraft}>

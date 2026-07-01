@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.5.1";
+const APP_VERSION = "5.5.2";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
@@ -674,7 +674,7 @@ export function SettingsCenterDialog({
           >
             <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
               <AlertTriangle className="h-4 w-4" />
-              个人清理工具
+              个人清理中心
             </div>
             <div className="mt-1 text-xs leading-5 text-amber-800">
               Edge、截图、剪贴板、WiFi、私人浏览器等本机维护功能。仅管理员账户可执行，危险项会二次确认。
@@ -682,7 +682,7 @@ export function SettingsCenterDialog({
           </button>
         ) : (
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm leading-6 text-slate-600">
-            访客账户不显示个人清理工具。
+            访客账户不显示个人清理中心。
           </div>
         )}
       </Section>

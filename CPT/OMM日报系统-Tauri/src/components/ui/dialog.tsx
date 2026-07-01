@@ -12,7 +12,7 @@ export const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, className, c
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-      <div className={cn("relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.24)]", className)}>
+      <div className={cn("relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.24)]", className)}>
         {children}
         <button
           className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-400 transition hover:border-slate-200/80 hover:bg-white/80 hover:text-slate-700 hover:shadow-sm"

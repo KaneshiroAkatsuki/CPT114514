@@ -144,9 +144,9 @@ fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
 
 fn require_admin_account() -> Result<(), String> {
     let account = accounts::current_account_record()?
-        .ok_or_else(|| "请先登录管理员账户后再使用个人清理工具。".to_string())?;
+        .ok_or_else(|| "请先登录管理员账户后再使用个人清理中心。".to_string())?;
     if !matches!(account.role, accounts::AccountRole::Admin) {
-        return Err("个人清理工具仅允许管理员账户使用。".to_string());
+        return Err("个人清理中心仅允许管理员账户使用。".to_string());
     }
     Ok(())
 }
@@ -329,7 +329,7 @@ pub async fn run_personal_cleaner(
         .arg("-Command")
         .arg(command)
         .spawn()
-        .map_err(|e| format!("无法启动个人清理工具: {}", e))?;
+        .map_err(|e| format!("无法启动个人清理中心: {}", e))?;
 
     Ok(PersonalCleanerRunInfo {
         run_id,
@@ -354,7 +354,7 @@ pub async fn read_personal_cleaner_log(
             .parent()
             .ok_or_else(|| "日志路径无效".to_string())?;
         if parent != log_dir {
-            return Err("只能读取个人清理工具日志目录中的文件".to_string());
+            return Err("只能读取个人清理中心日志目录中的文件".to_string());
         }
     }
 
