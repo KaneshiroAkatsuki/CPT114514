@@ -29,22 +29,22 @@
 - 个人清理中心已重构为分类导航 + 项目详情 + 执行清单确认，清理前会说明会清理什么、保留什么、可能影响和备份策略。
 - 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
 - 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
-- 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.4.5 发布物。
+- 项目内旧便携包、旧安装包和旧测试解压目录已清理，仅保留最新 5.5.0 发布物。
 - 本地账户登录已新增：默认管理员 Kaneshiro/禹欣（PIN 114514），访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
 - sidecar 通讯已增加 180 秒命令超时保护。
 
 ## 最新便携版
 
-> 最新源码版本为 5.5.0；本轮未打包，最新便携包版本仍为 5.4.5。
+> 最新源码版本和便携包版本均为 5.5.0。
 
-- packaged_at：2026-07-01T23:37:54
-- app：8fb55679a21ac28ed9007b1785d37017ad2a2d874a5b5252fa93dfd2e3771c98
+- packaged_at：2026-07-02T00:44:04
+- app：9386ae115ef834ebd189d308746079ec16f09d6731208ae3e066e6dc2c47643f
 - sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
 - template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
-- personal_cleaner_script：f1d928aeb399acf0a3d8c8ec06956e3833623a5ec6deec8cdba8d9bc9b49aa9e
+- personal_cleaner_script：950ded7440bf77a7e1026cea2a9e055e91eb12d8d2432a3e529b500ee3d9a50e
 - personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.4.5.zip`
-- 安装包：`src-tauri/target/release/bundle/nsis/OMM日报系统_5.4.5_x64-setup.exe`
+- 便携包：`releases/OMM日报系统_便携版_5.5.0.zip`
+- 安装包：`src-tauri/target/release/bundle/nsis/OMM日报系统_5.5.0_x64-setup.exe`
 - 移动性检查：临时解压验证已通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`，验证目录已清理。
 
 ## 常用验证
