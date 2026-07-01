@@ -1762,63 +1762,6 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {/* Left column */}
             <div className="space-y-4">
-              {/* Work Directory */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <Folder className="h-4 w-4 text-blue-600" />
-                    工作目录
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex gap-2">
-                    <Input
-                      value={workDir}
-                      onChange={(e) => setWorkDir(e.target.value)}
-                      placeholder="请选择包含日期文件夹的根目录"
-                    />
-                    <Button variant="secondary" onClick={handleSelectWorkDir}>
-                      <FolderOpen className="h-4 w-4 mr-1.5" />
-                      选择
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-slate-600 shrink-0">日期文件夹:</span>
-                    <select
-                      value={selectedDateFolder}
-                      onChange={(e) => setSelectedDateFolder(e.target.value)}
-                      className="h-9 min-w-[10rem] rounded-lg border border-slate-200/90 bg-white/80 px-3 py-1 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
-                    >
-                      <option value="">-- 请选择日期文件夹 --</option>
-                      {dateFolders.map((folder) => (
-                        <option key={folder} value={folder}>{folder}</option>
-                      ))}
-                    </select>
-                    <div className="flex gap-1.5">
-                      <Button variant="outline" size="sm" onClick={handleAddToQueue}>
-                        <Plus className="h-3.5 w-3.5 mr-1" />
-                        添加
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleSelectAllToQueue}>
-                        全选
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={refreshDateFolders}>
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                        刷新
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={handleClearQueue}>
-                        <X className="h-3.5 w-3.5 mr-1" />
-                        清空
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="info-strip flex items-start gap-2">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>日期文件夹请直接放在工作目录下，命名格式如 6.13A、6.13B。没有 A/B 后缀的文件夹添加时会提示选择班次。</span>
-                  </div>
-                </CardContent>
-              </Card>
-
               {/* Settings summary */}
               <Card>
                 <CardHeader className="pb-3 flex flex-row items-center justify-between gap-3">
@@ -1873,6 +1816,63 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                   <div className="info-strip flex items-start gap-2">
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>默认规则、输出目录、配置文件、模板、特殊大件、识别补充和个人清理都集中到设置中心。修改设置会先进入草稿，保存后才写入配置文件。</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Work Directory */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <Folder className="h-4 w-4 text-blue-600" />
+                    工作目录
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      value={workDir}
+                      onChange={(e) => setWorkDir(e.target.value)}
+                      placeholder="请选择包含日期文件夹的根目录"
+                    />
+                    <Button variant="secondary" onClick={handleSelectWorkDir}>
+                      <FolderOpen className="h-4 w-4 mr-1.5" />
+                      选择
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-slate-600 shrink-0">日期文件夹:</span>
+                    <select
+                      value={selectedDateFolder}
+                      onChange={(e) => setSelectedDateFolder(e.target.value)}
+                      className="h-9 min-w-[10rem] rounded-lg border border-slate-200/90 bg-white/80 px-3 py-1 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                    >
+                      <option value="">-- 请选择日期文件夹 --</option>
+                      {dateFolders.map((folder) => (
+                        <option key={folder} value={folder}>{folder}</option>
+                      ))}
+                    </select>
+                    <div className="flex gap-1.5">
+                      <Button variant="outline" size="sm" onClick={handleAddToQueue}>
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        添加
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleSelectAllToQueue}>
+                        全选
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={refreshDateFolders}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                        刷新
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleClearQueue}>
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        清空
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="info-strip flex items-start gap-2">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>日期文件夹请直接放在工作目录下，命名格式如 6.13A、6.13B。没有 A/B 后缀的文件夹添加时会提示选择班次。</span>
                   </div>
                 </CardContent>
               </Card>

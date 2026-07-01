@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.4.2";
+const APP_VERSION = "5.4.3";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
