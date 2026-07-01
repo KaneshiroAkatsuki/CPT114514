@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FileSpreadsheet, KeyRound, LockKeyhole, RotateCcw, UserPlus, UsersRound } from "lucide-react";
+import { FileSpreadsheet, KeyRound, LockKeyhole, RotateCcw, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,6 @@ function validatePin(pin: string): string | null {
 export function AccountGate() {
   const [accounts, setAccounts] = React.useState<PublicAccount[]>([]);
   const [currentAccount, setCurrentAccount] = React.useState<PublicAccount | null>(null);
-  const [storageRoot, setStorageRoot] = React.useState("");
   const [mode, setMode] = React.useState<GateMode>("login");
   const [login, setLogin] = React.useState("");
   const [pin, setPin] = React.useState("");
@@ -46,7 +45,6 @@ export function AccountGate() {
   const refreshAccounts = React.useCallback(async () => {
     const info = await loadAccounts();
     setAccounts(info.accounts);
-    setStorageRoot(info.storage_root);
     if (info.current_account) {
       setCurrentAccount(info.current_account);
     }
@@ -188,18 +186,20 @@ export function AccountGate() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] px-4 py-8 text-slate-950">
-      <div className="mx-auto flex max-w-5xl flex-col gap-5">
+      <div className="mx-auto flex max-w-3xl flex-col gap-5">
         <header className="app-surface flex items-center gap-3 rounded-2xl px-4 py-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-[0_10px_24px_rgba(10,132,255,0.24)]">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
-            <p className="text-sm text-slate-500">本地账户登录 · 配置按账户隔离</p>
+            <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+              Kaneshiro · 禹欣
+            </p>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
+        <div className="grid grid-cols-1 gap-5">
           <Card className="overflow-hidden rounded-2xl border-white/70 bg-white/85">
             <CardHeader className="border-b border-slate-200/70 bg-white/70 px-5 py-4">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -312,47 +312,6 @@ export function AccountGate() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden rounded-2xl border-white/70 bg-white/85">
-            <CardHeader className="border-b border-slate-200/70 bg-white/70 px-5 py-4">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <UsersRound className="h-4 w-4 text-blue-600" />
-                已有账户
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 p-5">
-              <div className="space-y-2">
-                {accounts.map((account) => (
-                  <button
-                    key={account.id}
-                    type="button"
-                    onClick={() => {
-                      setLogin(account.nickname);
-                      setMode("login");
-                      setError("");
-                    }}
-                    className="w-full rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-800">{account.nickname}</span>
-                      <span className={`rounded-full border px-2 py-0.5 text-xs ${
-                        account.role === "admin"
-                          ? "border-blue-200 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-600"
-                      }`}>
-                        {roleLabel(account)}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-500">{account.real_name}</div>
-                  </button>
-                ))}
-              </div>
-              <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
-                默认管理员账户为 Kaneshiro / 禹欣。本地数据目录：
-                <div className="mt-1 break-all font-mono text-[11px]">{storageRoot || ".omm"}</div>
-              </div>
             </CardContent>
           </Card>
         </div>
