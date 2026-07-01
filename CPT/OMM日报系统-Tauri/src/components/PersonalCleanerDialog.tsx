@@ -55,6 +55,7 @@ type BoolKey = keyof Pick<
   | "clearScreenshots"
   | "clearClipboardHistory"
   | "clearOpencodeShortcuts"
+  | "forgetWifiProfiles"
   | "clearPrivateBrowserHistory"
   | "cleanPrivateBrowser"
   | "backupPrivateBrowser"
@@ -77,6 +78,8 @@ interface CleanerFormState {
   screenshotDate: string;
   clearClipboardHistory: boolean;
   clearOpencodeShortcuts: boolean;
+  forgetWifiProfiles: boolean;
+  forgetWifiPatterns: string;
   clearPrivateBrowserHistory: boolean;
   cleanPrivateBrowser: boolean;
   backupPrivateBrowser: boolean;
@@ -89,6 +92,7 @@ interface CleanerFormState {
 interface CleanerRuntime {
   screenshotWindowLabel: string;
   wifiPrefixes: string[];
+  forgetWifiPatterns: string[];
   companyWifiSsid: string;
 }
 
@@ -338,12 +342,13 @@ const CLEANER_ACTIONS: CleanerAction[] = [
   {
     id: "wifiProfiles",
     group: "network",
+    formKey: "forgetWifiProfiles",
     title: "WiFi 配置管理",
-    summary: "保留指定前缀的 WiFi，忘记其他已保存 WiFi 配置。",
-    risk: "critical",
+    summary: "忘记匹配名称的私人或临时 WiFi 配置。",
+    risk: "high",
     confirmRequired: true,
-    clears: ["不匹配保留前缀的已保存 WiFi 配置文件"],
-    keeps: ["匹配输入前缀的 WiFi 会保留", "输入框为空时不处理 WiFi"],
+    clears: ["匹配 kaneshiro*、cd* 等模式的已保存 WiFi 配置文件"],
+    keeps: ["不匹配模式的 WiFi 会保留", "公司 WiFi 不会因为这个项目被删除，除非名称匹配你填写的模式"],
     impacts: ["被忘记的 WiFi 后续需要重新输入密码连接。"],
     backup: "当前 WiFi 配置管理不创建自动备份。",
   },
@@ -356,7 +361,7 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     risk: "medium",
     confirmRequired: true,
     clears: ["不会清理数据；会把目标 WiFi 设置为自动连接，并尝试连接"],
-    keeps: ["不会忘记其他 WiFi，除非同时使用 WiFi 配置管理", "不会清理 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 自身代理配置"],
+    keeps: ["不会忘记其他 WiFi，除非同时使用 WiFi 配置管理且名称命中模式", "不会清理 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 自身代理配置"],
     impacts: ["真实执行时网络可能短暂断开；如果未保存该 WiFi 密码，需要先手动连接一次。"],
     backup: "不创建备份；这是网络连接切换操作。",
   },
@@ -443,6 +448,8 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
     screenshotDate: defaultScreenshotDate(defaultShift),
     clearClipboardHistory: false,
     clearOpencodeShortcuts: false,
+    forgetWifiProfiles: false,
+    forgetWifiPatterns: "kaneshiro*, cd*",
     clearPrivateBrowserHistory: false,
     cleanPrivateBrowser: false,
     backupPrivateBrowser: true,
@@ -462,6 +469,7 @@ function createRecommendedForm(defaultShift: CleanerShift): CleanerFormState {
     clearScreenshots: true,
     clearClipboardHistory: true,
     clearOpencodeShortcuts: true,
+    forgetWifiPatterns: "kaneshiro*, cd*",
     backupPrivateBrowser: true,
   };
 }
@@ -527,7 +535,7 @@ function getActionById(actionId: string): CleanerAction {
 
 function isActionSelected(action: CleanerAction, form: CleanerFormState, runtime: CleanerRuntime): boolean {
   if (action.settingsOnly) return false;
-  if (action.id === "wifiProfiles") return runtime.wifiPrefixes.length > 0;
+  if (action.id === "wifiProfiles") return form.forgetWifiProfiles && runtime.forgetWifiPatterns.length > 0;
   if (action.id === "companyWifi") return form.connectCompanyWifi && runtime.companyWifiSsid.length > 0;
   return action.formKey ? Boolean(form[action.formKey]) : false;
 }
@@ -564,8 +572,8 @@ function actionDetails(action: CleanerAction, form: CleanerFormState, runtime: C
   }
 
   if (action.id === "wifiProfiles") {
-    const prefixText = runtime.wifiPrefixes.length > 0 ? runtime.wifiPrefixes.join("、") : "未填写";
-    keeps.push(`保留前缀：${prefixText}`);
+    const patternText = runtime.forgetWifiPatterns.length > 0 ? runtime.forgetWifiPatterns.join("、") : "未填写";
+    clears.push(`忘记匹配模式：${patternText}`);
   }
 
   if (action.id === "companyWifi") {
@@ -729,8 +737,9 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
   const runtime = React.useMemo<CleanerRuntime>(() => ({
     screenshotWindowLabel,
     wifiPrefixes: parsePrefixes(form.keepWifiPrefixes),
+    forgetWifiPatterns: parsePrefixes(form.forgetWifiPatterns),
     companyWifiSsid: form.companyWifiSsid.trim(),
-  }), [form.companyWifiSsid, form.keepWifiPrefixes, screenshotWindowLabel]);
+  }), [form.companyWifiSsid, form.forgetWifiPatterns, form.keepWifiPrefixes, screenshotWindowLabel]);
   const selectedActions = React.useMemo(() => getSelectedActions(form, runtime), [form, runtime]);
   const riskItems = React.useMemo(() => buildRiskItems(form, runtime), [form, runtime]);
   const activeAction = getActionById(activeActionId);
@@ -780,6 +789,8 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     cleanPrivateBrowser: form.cleanPrivateBrowser,
     backupPrivateBrowser: form.backupPrivateBrowser,
     keepWifiPrefixes: runtime.wifiPrefixes,
+    forgetWifiProfiles: form.forgetWifiProfiles,
+    forgetWifiPatterns: runtime.forgetWifiPatterns,
     connectCompanyWifi: form.connectCompanyWifi,
     companyWifiSsid: runtime.companyWifiSsid,
     skipBackup: form.skipBackup,
@@ -1190,14 +1201,14 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
 
               {activeAction.id === "wifiProfiles" && (
                 <label className="mt-3 block space-y-2 text-xs text-slate-500">
-                  <span className="font-medium text-slate-700">保留 WiFi 前缀</span>
+                  <span className="font-medium text-slate-700">忘记 WiFi 名称模式</span>
                   <input
-                    className="h-9 w-full rounded-lg border border-red-200 bg-white/90 px-2 text-sm focus-visible:border-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
-                    placeholder="例如：cpt3，多个前缀用逗号分隔"
-                    value={form.keepWifiPrefixes}
-                    onChange={(event) => setForm((prev) => ({ ...prev, keepWifiPrefixes: event.target.value }))}
+                    className="h-9 w-full rounded-lg border border-orange-200 bg-white/90 px-2 text-sm focus-visible:border-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-100"
+                    placeholder="kaneshiro*, cd*"
+                    value={form.forgetWifiPatterns}
+                    onChange={(event) => setForm((prev) => ({ ...prev, forgetWifiPatterns: event.target.value }))}
                   />
-                  <span className="block leading-5 text-red-700">留空表示不处理 WiFi；填写后会保留匹配前缀，忘记其他 WiFi。</span>
+                  <span className="block leading-5 text-orange-700">大小写不敏感；默认会忘记 kaneshiro、kaneshiro1/2/3，以及 cd12x、cd 开头的临时 WiFi。</span>
                 </label>
               )}
 

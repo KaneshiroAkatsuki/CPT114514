@@ -73,8 +73,11 @@ param(
     # 私人浏览器根目录
     [string]$PrivateBrowserRoot = "C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil",
 
-    # 管理已知 WiFi：保留指定前缀的 WiFi，删除/忘记其他
+    # 旧交互菜单兼容：保留指定前缀的 WiFi，删除/忘记其他
     [string[]]$KeepWifiPrefixes,
+
+    # 忘记匹配模式的 WiFi，例如 kaneshiro*, cd*；大小写不敏感
+    [string[]]$ForgetWifiPatterns,
 
     # 清理完成后连接公司 WiFi，并设置为自动连接
     [switch]$ConnectCompanyWifi,
@@ -125,6 +128,19 @@ if ($KeepWifiPrefixes) {
             ForEach-Object { $_.Trim() } |
             Where-Object { $_ -ne '' }
     )
+} else {
+    $KeepWifiPrefixes = @()
+}
+
+if ($ForgetWifiPatterns) {
+    $ForgetWifiPatterns = @(
+        $ForgetWifiPatterns |
+            ForEach-Object { $_ -split ',' } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -ne '' }
+    )
+} else {
+    $ForgetWifiPatterns = @()
 }
 
 $script:UserDataRoot = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
@@ -1512,6 +1528,7 @@ function Clear-OpencodeShortcuts {
 function Clear-WifiProfiles {
     param(
         [string[]]$KeepPrefixes,
+        [string[]]$ForgetPatterns,
         [switch]$IsDryRun
     )
 
@@ -1534,6 +1551,39 @@ function Clear-WifiProfiles {
     }
 
     foreach ($ssid in $profileNames) {
+        if ($ForgetPatterns -and $ForgetPatterns.Count -gt 0) {
+            $shouldForget = $false
+            foreach ($pattern in $ForgetPatterns) {
+                if ($ssid -like $pattern) {
+                    $shouldForget = $true
+                    break
+                }
+            }
+
+            if (-not $shouldForget) {
+                Write-Host "        保留: $ssid" -ForegroundColor Gray
+                continue
+            }
+
+            try {
+                if ($IsDryRun) {
+                    Write-Host "        [模拟忘记] WiFi: $ssid" -ForegroundColor DarkCyan
+                } else {
+                    $result = netsh wlan delete profile name="$ssid" 2>&1
+                    if ($LASTEXITCODE -eq 0 -or $result -match '已从接口|deleted from interface') {
+                        Write-Host "        已忘记 WiFi: $ssid" -ForegroundColor DarkGreen
+                    } else {
+                        Write-Host "        无法忘记 WiFi: $ssid - $result" -ForegroundColor Red
+                        continue
+                    }
+                }
+                $count++
+            } catch {
+                Write-Host "        无法忘记 WiFi: $ssid - $($_.Exception.Message)" -ForegroundColor Red
+            }
+            continue
+        }
+
         $shouldKeep = $false
         foreach ($prefix in $KeepPrefixes) {
             if ($ssid -like "$prefix*") {
@@ -1799,7 +1849,7 @@ $choices = [ordered]@{
     "私人浏览器浏览记录" = [bool]$ClearPrivateBrowserHistory
     "私人浏览器清理" = [bool]$CleanPrivateBrowser
     "私人浏览器备份" = (($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) -and -not $SkipPrivateBrowserBackup)
-    "WiFi 配置文件" = ($KeepWifiPrefixes.Count -gt 0)
+    "WiFi 配置文件" = (($KeepWifiPrefixes.Count -gt 0) -or ($ForgetWifiPatterns.Count -gt 0))
     "公司 WiFi 连接" = [bool]$ConnectCompanyWifi
 }
 
@@ -2200,11 +2250,17 @@ if ($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) {
 }
 
 # 清理 WiFi 配置文件
-if ($KeepWifiPrefixes.Count -gt 0) {
+if ($ForgetWifiPatterns.Count -gt 0) {
+    $patternList = $ForgetWifiPatterns -join ', '
+    Write-Step "正在忘记匹配模式的 WiFi 配置文件（模式: $patternList）..."
+    Write-Deep "使用 netsh wlan delete profile 忘记命中的 WiFi；匹配大小写不敏感"
+    $results["WiFi 配置文件"] += Clear-WifiProfiles -KeepPrefixes @() -ForgetPatterns $ForgetWifiPatterns -IsDryRun:$DryRun
+    Write-Success "WiFi 配置文件管理完成"
+} elseif ($KeepWifiPrefixes.Count -gt 0) {
     $prefixList = $KeepWifiPrefixes -join ', '
     Write-Step "正在管理 WiFi 配置文件（保留前缀: $prefixList）..."
     Write-Deep "使用 netsh wlan delete profile 忘记不匹配前缀的 WiFi"
-    $results["WiFi 配置文件"] += Clear-WifiProfiles -KeepPrefixes $KeepWifiPrefixes -IsDryRun:$DryRun
+    $results["WiFi 配置文件"] += Clear-WifiProfiles -KeepPrefixes $KeepWifiPrefixes -ForgetPatterns @() -IsDryRun:$DryRun
     Write-Success "WiFi 配置文件管理完成"
 } else {
     Write-Warn "保留所有 WiFi 配置文件（默认）"

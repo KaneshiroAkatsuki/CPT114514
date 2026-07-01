@@ -32,6 +32,10 @@ pub struct PersonalCleanerOptions {
     #[serde(default)]
     pub keep_wifi_prefixes: Vec<String>,
     #[serde(default)]
+    pub forget_wifi_profiles: bool,
+    #[serde(default)]
+    pub forget_wifi_patterns: Vec<String>,
+    #[serde(default)]
     pub connect_company_wifi: bool,
     #[serde(default)]
     pub company_wifi_ssid: String,
@@ -290,6 +294,18 @@ fn build_script_args(
     if !prefixes.is_empty() {
         args.push("-KeepWifiPrefixes".to_string());
         args.push(prefixes.join(","));
+    }
+    let forget_wifi_patterns: Vec<String> = options
+        .forget_wifi_patterns
+        .iter()
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .take(12)
+        .map(|p| p.to_string())
+        .collect();
+    if options.forget_wifi_profiles && !forget_wifi_patterns.is_empty() {
+        args.push("-ForgetWifiPatterns".to_string());
+        args.push(forget_wifi_patterns.join(","));
     }
     let company_wifi_ssid = options.company_wifi_ssid.trim();
     if options.connect_company_wifi && !company_wifi_ssid.is_empty() {
