@@ -725,6 +725,15 @@ export function SettingsCenterDialog({
 
   const renderAbout = () => (
     <div className="space-y-5">
+      <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助中心" description="查看日常操作、账户、设置和常见问题说明。">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("about")}>版本和快捷键</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("account-login")}>账户登录说明</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("faq")}>常见问题</Button>
+        </div>
+      </Section>
+
       <Section icon={<Info className="h-4 w-4" />} title="关于软件" description="版本和配置位置集中展示，便于验收和排查。">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
@@ -806,18 +815,6 @@ export function SettingsCenterDialog({
             <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
           </div>
         )}
-      </Section>
-
-      <Section icon={<HelpCircle className="h-4 w-4" />} title="帮助与状态" description="帮助中心会随功能更新，版本记录写入当前状态文件。">
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("about")}>版本和快捷键</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("account-login")}>账户登录说明</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("settings-center")}>设置中心说明</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenHelp("faq")}>常见问题</Button>
-        </div>
-        <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
-          日常开发验收优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。
-        </div>
       </Section>
 
       <Section icon={<ClipboardList className="h-4 w-4" />} title="诊断" description="一般情况下不需要打开，排查问题时再查看。">
