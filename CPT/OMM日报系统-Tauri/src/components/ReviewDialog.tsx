@@ -248,7 +248,7 @@ export function ReviewDialog({
             <p className="text-sm text-red-700 font-medium">{error}</p>
           </div>
         )}
-        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-200/70 bg-slate-50/80 p-4">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-slate-200/70 bg-white/70 p-4">
           <Button variant="outline" onClick={onCancel}>
             取消
           </Button>

@@ -200,8 +200,8 @@ export function AccountGate() {
         </header>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden rounded-2xl border-white/70 bg-white/85">
+            <CardHeader className="border-b border-slate-200/70 bg-white/70 px-5 py-4">
               <CardTitle className="flex items-center gap-2 text-base">
                 {mode === "login" && <LockKeyhole className="h-4 w-4 text-blue-600" />}
                 {mode === "register" && <UserPlus className="h-4 w-4 text-blue-600" />}
@@ -209,7 +209,7 @@ export function AccountGate() {
                 {mode === "login" ? "登录账户" : mode === "register" ? "注册员工账户" : "重置 PIN"}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-5">
               {error && (
                 <div className="rounded-lg border border-red-200 bg-red-50/90 px-3 py-2 text-sm leading-6 text-red-800">
                   {error}
@@ -315,14 +315,14 @@ export function AccountGate() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
+          <Card className="overflow-hidden rounded-2xl border-white/70 bg-white/85">
+            <CardHeader className="border-b border-slate-200/70 bg-white/70 px-5 py-4">
               <CardTitle className="flex items-center gap-2 text-base">
                 <UsersRound className="h-4 w-4 text-blue-600" />
                 已有账户
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-5">
               <div className="space-y-2">
                 {accounts.map((account) => (
                   <button
@@ -333,7 +333,7 @@ export function AccountGate() {
                       setMode("login");
                       setError("");
                     }}
-                    className="app-list-item w-full px-3 py-2 text-left"
+                    className="w-full rounded-xl border border-slate-200/80 bg-white/70 px-3 py-2 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-slate-800">{account.nickname}</span>
@@ -349,7 +349,7 @@ export function AccountGate() {
                   </button>
                 ))}
               </div>
-              <div className="rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
+              <div className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
                 默认管理员账户为 Kaneshiro / 禹欣。本地数据目录：
                 <div className="mt-1 break-all font-mono text-[11px]">{storageRoot || ".omm"}</div>
               </div>

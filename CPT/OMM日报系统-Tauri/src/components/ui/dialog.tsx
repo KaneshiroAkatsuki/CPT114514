@@ -14,7 +14,7 @@ export const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) 
       <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
         {children}
         <button
-          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-400 transition hover:border-slate-200/80 hover:bg-white/80 hover:text-slate-700 hover:shadow-sm"
           onClick={() => onOpenChange?.(false)}
           aria-label="关闭"
         >
@@ -38,5 +38,5 @@ export const DialogContent: React.FC<{ children: React.ReactNode; className?: st
 );
 
 export const DialogFooter: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
-  <div className={cn("border-t border-slate-200/70 bg-slate-50/80 px-6 py-4 flex justify-end gap-2", className)}>{children}</div>
+  <div className={cn("border-t border-slate-200/70 bg-white/70 px-6 py-4 flex justify-end gap-2", className)}>{children}</div>
 );

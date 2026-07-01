@@ -77,7 +77,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.0.18";
+const APP_VERSION = "5.0.19";
 
 type SettingsTab = "basic" | "generation" | "paths" | "assets" | "tools" | "about";
 
@@ -564,7 +564,7 @@ export function SettingsCenterDialog({
               onChange={(event) => updateDraft({ outputDir: event.target.value })}
               placeholder={draft.useSrcOutput ? "源文件夹输出已启用" : "请选择统一输出目录"}
               disabled={draft.useSrcOutput}
-              className={draft.useSrcOutput ? "bg-slate-50/80" : ""}
+              className={draft.useSrcOutput ? "border-slate-200/70 bg-white/60 text-slate-500" : ""}
             />
             <Button
               type="button"
@@ -588,7 +588,7 @@ export function SettingsCenterDialog({
               value={draft.configDir}
               readOnly
               placeholder="登录后自动使用账户配置目录"
-              className="bg-slate-50/80"
+              className="border-slate-200/70 bg-white/60 text-slate-500"
             />
           </div>
         </FieldRow>

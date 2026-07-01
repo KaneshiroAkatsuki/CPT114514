@@ -144,7 +144,7 @@ function Section({
         {icon}
         <span>{title}</span>
       </div>
-      <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">{children}</div>
+      <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-2">{children}</div>
     </section>
   );
 }

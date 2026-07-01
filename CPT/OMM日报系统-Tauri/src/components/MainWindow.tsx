@@ -1932,7 +1932,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div
-                    className="h-64 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/55 p-1 shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                    className="h-64 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/70 p-1 shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
                     tabIndex={0}
                     onKeyDown={handleQueueKeyDown}
                     onPaste={handleQueuePaste}
@@ -2031,20 +2031,20 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           </div>
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('A')}
           >
             方案A：弹窗审核
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('B')}
           >
             方案B：留坑自填
           </button>
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode(null)}
           >
             恢复默认（跟随全局审核模式）
@@ -2059,7 +2059,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             })()}
           </div>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'auto' });
@@ -2069,7 +2069,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：智能判断
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'early' });
@@ -2079,7 +2079,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：下早班
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'normal' });
@@ -2089,7 +2089,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：不下早班
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, {
@@ -2103,7 +2103,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2116,7 +2116,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             切换手量覆盖
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2256,7 +2256,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                 ))
               )}
             </div>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200/70 bg-white/70 px-5 py-3">
               <Button type="button" variant="outline" onClick={handleCopyDetailedLogs} disabled={logs.length === 0}>
                 复制日志
               </Button>
@@ -2422,7 +2422,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             {/* 生成结果列表 */}
             {generateResult.outputPaths.length > 0 && (
               <div className="mb-3 mt-2 flex-1 overflow-y-auto rounded-xl border border-slate-200/80 bg-white/70">
-                <div className="sticky top-0 border-b border-slate-200/70 bg-slate-50/90 px-3 py-2 text-xs font-medium text-slate-600">
+                <div className="sticky top-0 border-b border-slate-200/70 bg-white/90 px-3 py-2 text-xs font-medium text-slate-600">
                   生成结果（共 {generateResult.outputPaths.length} 份）
                 </div>
                 <ul className="divide-y divide-slate-100">

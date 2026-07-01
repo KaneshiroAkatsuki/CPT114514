@@ -60,7 +60,7 @@ export function DaySettingsDialog({
           </CardTitle>
           <button
             onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-slate-400 transition hover:border-slate-200/80 hover:bg-white/80 hover:text-slate-700 hover:shadow-sm"
           >
             <X className="h-4 w-4" />
           </button>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, Package } from "lucide-react";
 import type { SpecialItem } from "@/types/record";
 
 interface SpecialItemsDialogProps {
@@ -82,24 +82,27 @@ export function SpecialItemsDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
       <Card className="mx-4 w-[520px] overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
-        <CardHeader className="border-b border-slate-200/70 bg-white/90 pb-2">
-          <CardTitle className="text-base">特殊大件物品管理</CardTitle>
+        <CardHeader className="border-b border-slate-200/70 bg-white/90 px-5 py-4">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
+            <Package className="h-4 w-4 text-blue-600" />
+            特殊大件物品管理
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-4">
-          <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+        <CardContent className="space-y-4 p-5">
+          <p className="rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2.5 text-xs leading-6 text-blue-800">
             添加需要单独计时的特殊物品（如烧结盘）。排程时，匹配到物品名称的记录会按设定的每件耗时计算，不参与普通件的耗时缩放。匹配范围：文件夹名、工站、产品名等字段。
           </p>
 
           {/* 列表 */}
-          <div className="mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/70">
+          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/70 shadow-sm">
             {localItems.length === 0 && !adding ? (
               <div className="px-3 py-6 text-center text-sm text-slate-400">
                 暂无特殊物品，点击下方「添加物品」
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="divide-y divide-slate-100/80">
                 {localItems.map((it, i) => (
-                  <li key={i} className="px-3 py-2 flex items-center gap-2">
+                  <li key={i} className="flex items-center gap-2 px-3 py-2 transition hover:bg-blue-50/40">
                     {editingIndex === i ? (
                       <>
                         <Input
@@ -135,7 +138,7 @@ export function SpecialItemsDialog({
                     ) : (
                       <>
                         <div className="flex-1 text-sm font-medium text-slate-800">{it.name}</div>
-                        <div className="text-sm text-slate-600 w-20 text-right">
+                        <div className="w-20 text-right text-sm text-slate-600">
                           {it.minutes} 分钟/件
                         </div>
                         <Button
@@ -164,9 +167,9 @@ export function SpecialItemsDialog({
 
           {/* 添加区域 */}
           {adding ? (
-            <div className="flex items-center gap-2 mb-3 px-1">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-2">
               <Input
-                className="h-8 text-sm flex-1"
+                className="h-8 flex-1 text-sm"
                 placeholder="物品名称（如：烧结盘）"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -181,7 +184,7 @@ export function SpecialItemsDialog({
                 }}
               />
               <Input
-                className="h-8 text-sm w-24"
+                className="h-8 w-24 text-sm"
                 type="number"
                 value={newMinutes}
                 onChange={(e) => setNewMinutes(e.target.value)}
@@ -211,7 +214,7 @@ export function SpecialItemsDialog({
             <Button
               variant="outline"
               size="sm"
-              className="mb-4"
+              className="w-fit"
               onClick={() => setAdding(true)}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -220,7 +223,7 @@ export function SpecialItemsDialog({
           )}
 
           {/* 底部按钮 */}
-          <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-3">
+          <div className="flex justify-end gap-2 border-t border-slate-200/70 pt-4">
             <Button variant="outline" onClick={onClose}>
               取消
             </Button>

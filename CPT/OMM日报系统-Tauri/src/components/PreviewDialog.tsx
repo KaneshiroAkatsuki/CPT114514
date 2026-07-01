@@ -132,7 +132,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
                   <p className="text-sm leading-6 mt-0.5 opacity-90">{summary.decision.message}</p>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {contributionItems.map((item) => (
-                        <div key={item.label} className="rounded-lg bg-white/70 px-2 py-1.5">
+                        <div key={item.label} className="rounded-xl border border-white/70 bg-white/75 px-2.5 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                         <div className="text-xs opacity-80">{item.label}</div>
                         <div className="text-sm font-medium">{formatMinutes(item.value)}</div>
                       </div>
@@ -249,9 +249,9 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
           )}
 
           {/* Table */}
-          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white">
+          <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 shadow-sm">
             <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50/80">
+              <thead className="border-b border-slate-200/80 bg-white/70">
                 <tr>
                   <th className="px-3 py-2.5 text-center font-medium text-slate-700 w-14">序号</th>
                   <th className="px-3 py-2.5 text-center font-medium text-slate-700">产品</th>
@@ -273,7 +273,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
                     ? 'text-blue-700 font-medium'
                     : 'text-slate-700';
                   return (
-                    <tr key={idx} className="bg-white hover:bg-slate-50/80 transition-colors">
+                    <tr key={idx} className="bg-white/70 transition-colors hover:bg-blue-50/40">
                       <td className={`px-3 py-2 text-center ${rowText}`}>{row.seq}</td>
                       <td className={`px-3 py-2 text-center ${rowText}`}>{row.product}</td>
                       <td className={`px-3 py-2 text-center ${rowText}`}>{row.qty}</td>
@@ -298,7 +298,7 @@ export function PreviewDialog({ open, data, onClose, onGenerate, onOpenManual, o
           </div>
         </CardContent>
 
-        <div className="flex shrink-0 justify-end border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
+        <div className="flex shrink-0 justify-end border-t border-slate-200/70 bg-white/70 px-5 py-3">
           <Button onClick={onClose}>关闭</Button>
         </div>
       </Card>

@@ -413,8 +413,8 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.0.18。</li>
-          <li><strong>界面：</strong>已完成 Apple-inspired UI 第四阶段，继续统一帮助中心二级列表、小弹窗和应用内确认框。</li>
+          <li><strong>版本：</strong>5.0.19。</li>
+          <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段，继续统一登录页、帮助中心、业务弹窗、表格、设置和剩余细节状态。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、账户、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常验收：</strong>优先使用 dev 窗口；只有明确需要便携版或正式交付时再打包。</li>
           <li><strong>Ctrl + V：</strong>粘贴文件夹路径到队列。</li>
@@ -560,7 +560,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                         className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
                           activeTopicId === topic.id
                             ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
-                            : "border-transparent bg-white/55 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
+                            : "border-transparent bg-white/70 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
                         }`}
                       >
                         <span className="block font-medium">{topic.title}</span>
@@ -583,7 +583,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
                       className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-[background-color,border-color,box-shadow,color] ${
                         activeTopicId === topic.id
                           ? "border-blue-200 bg-blue-50/90 text-blue-800 shadow-sm"
-                          : "border-transparent bg-white/55 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
+                          : "border-transparent bg-white/70 text-slate-700 hover:border-slate-200/80 hover:bg-white/90 hover:shadow-sm"
                       }`}
                     >
                       <span className="block font-medium">{topic.title}</span>
@@ -602,7 +602,7 @@ export function HelpCenterDialog({ open, initialSection = "quickstart", onClose 
           </main>
         </CardContent>
 
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-200/70 bg-slate-50/80 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-t border-slate-200/70 bg-white/70 px-5 py-3">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Keyboard className="h-3.5 w-3.5" />
             <span>搜索会匹配标题、摘要和关键词。</span>

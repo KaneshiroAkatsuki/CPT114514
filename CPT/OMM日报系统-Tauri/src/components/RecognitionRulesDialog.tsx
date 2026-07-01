@@ -139,7 +139,7 @@ export function RecognitionRulesDialog({
             </Button>
           </div>
           {stationAliases.map((rule: StationAliasRule, index: number) => (
-            <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/65 p-2">
+            <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/75 p-2 shadow-sm">
               <Input placeholder="匹配词，如 FAI" value={rule.alias} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { alias: e.target.value }) }))} />
               <Input placeholder="工站，如 开发" value={rule.station} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { station: e.target.value }) }))} />
               <Input placeholder="默认类型" value={rule.default_test_type || ""} onChange={(e) => setDraft((d) => ({ ...d, station_aliases: updateAt(stationAliases, index, { default_test_type: e.target.value }) }))} />
@@ -162,7 +162,7 @@ export function RecognitionRulesDialog({
             </Button>
           </div>
           {productAliases.map((rule: ProductAliasRule, index: number) => (
-            <div key={index} className="grid grid-cols-[1fr_90px_90px_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/65 p-2">
+            <div key={index} className="grid grid-cols-[1fr_90px_90px_1fr_auto] gap-2 rounded-xl border border-slate-200/80 bg-white/75 p-2 shadow-sm">
               <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { pattern: e.target.value }) }))} />
               <Input placeholder="品名" value={rule.product} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { product: e.target.value }) }))} />
               <Input placeholder="工站(可空)" value={rule.station || ""} onChange={(e) => setDraft((d) => ({ ...d, product_aliases: updateAt(productAliases, index, { station: e.target.value }) }))} />
@@ -179,10 +179,10 @@ export function RecognitionRulesDialog({
             <h3 className="text-sm font-semibold text-slate-800">烧结盘 / 焊接特殊补充</h3>
           </div>
           <div className="text-xs text-slate-500">烧结盘多品名用逗号分隔；焊接规则适合补新编号。</div>
-          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/70 p-2">
             <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ ...d, sinter_plate_rules: [...sinterRules, { pattern: "", products: [], note: "" }] }))}>添加烧结盘规则</Button>
             {sinterRules.map((rule: SinterPlateRule, index: number) => (
-              <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-lg bg-white/75 p-2">
+              <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 rounded-xl border border-slate-200/70 bg-white/80 p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { pattern: e.target.value }) }))} />
                 <Input placeholder="品名，如 511,512" value={(rule.products || []).join(",")} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { products: e.target.value.split(/[,，]/).map((p) => p.trim()).filter(Boolean) }) }))} />
                 <Input placeholder="备注" value={rule.note || ""} onChange={(e) => setDraft((d) => ({ ...d, sinter_plate_rules: updateAt(sinterRules, index, { note: e.target.value }) }))} />
@@ -190,10 +190,10 @@ export function RecognitionRulesDialog({
               </div>
             ))}
           </div>
-          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/55 p-2">
+          <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white/70 p-2">
             <Button variant="outline" size="sm" onClick={() => setDraft((d) => ({ ...d, welding_rules: [...weldingRules, { pattern: "", product: "", note: "" }] }))}>添加焊接规则</Button>
             {weldingRules.map((rule: WeldingRule, index: number) => (
-              <div key={index} className="grid grid-cols-[1fr_100px_1fr_auto] gap-2 rounded-lg bg-white/75 p-2">
+              <div key={index} className="grid grid-cols-[1fr_100px_1fr_auto] gap-2 rounded-xl border border-slate-200/70 bg-white/80 p-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <Input placeholder="匹配词/正则" value={rule.pattern} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { pattern: e.target.value }) }))} />
                 <Input placeholder="品名" value={rule.product} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { product: e.target.value }) }))} />
                 <Input placeholder="备注" value={rule.note || ""} onChange={(e) => setDraft((d) => ({ ...d, welding_rules: updateAt(weldingRules, index, { note: e.target.value }) }))} />
@@ -210,9 +210,9 @@ export function RecognitionRulesDialog({
               <Plus className="h-3.5 w-3.5 mr-1" />添加
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200/80 bg-white/55 p-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200/80 bg-white/70 p-2 md:grid-cols-4">
             {ignoredTokens.map((token: string, index: number) => (
-              <div key={index} className="flex gap-1 rounded-lg bg-white/75 p-1">
+              <div key={index} className="flex gap-1 rounded-xl border border-slate-200/70 bg-white/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <Input value={token} onChange={(e) => setDraft((d) => ({ ...d, ignored_tokens: updateAt(ignoredTokens.map((value) => ({ value })), index, { value: e.target.value }).map((x) => x.value) }))} />
                 <Button variant="ghost" size="sm" onClick={() => setDraft((d) => ({ ...d, ignored_tokens: removeAt(ignoredTokens, index) }))}><Trash2 className="h-4 w-4 text-red-600" /></Button>
               </div>
