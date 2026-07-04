@@ -6,7 +6,7 @@ cd /d "%~dp0"
 
 cls
 echo ========================================
-echo   OMM Daily Report v5.6.0 - Dev Mode
+echo   Yuhengshan Academy Manager v5.8.1 - Dev Mode
 echo ========================================
 echo.
 echo Starting dev server...

@@ -1,11 +1,13 @@
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tauri::command;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 3;
+const APPDATA_DIR_NAME: &str = "玉衡山科学院管理厅";
+const LEGACY_APPDATA_DIR_NAME: &str = "OMM日报系统";
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -18,6 +20,8 @@ pub struct DataStoreInfo {
     pub manifests_dir: String,
     pub schema_version: i64,
     pub account_count: i64,
+    pub known_sender_count: i64,
+    pub measurement_person_count: i64,
     pub legacy_root: String,
     pub legacy_accounts_exists: bool,
     pub legacy_profiles_exists: bool,
@@ -28,23 +32,75 @@ fn portable_root_from_exe() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let exe_dir = exe.parent()?.to_path_buf();
     let has_portable_resources = exe_dir.join("resources").join("template.xlsx").is_file()
-        && exe_dir.join("binaries").join("generate_report.exe").is_file();
+        && exe_dir
+            .join("binaries")
+            .join("generate_report.exe")
+            .is_file();
     if has_portable_resources {
         return Some(exe_dir);
     }
     None
 }
 
+fn appdata_dir(name: &str) -> Option<PathBuf> {
+    let appdata = std::env::var("APPDATA").ok()?;
+    if appdata.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(appdata).join(name))
+}
+
+fn copy_dir_missing(source: &Path, target: &Path) -> Result<(), String> {
+    if !source.exists() {
+        return Ok(());
+    }
+    if source.is_file() {
+        if target.exists() {
+            return Ok(());
+        }
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建迁移目录: {}", e))?;
+        }
+        fs::copy(source, target).map_err(|e| format!("无法迁移旧数据文件: {}", e))?;
+        return Ok(());
+    }
+
+    fs::create_dir_all(target).map_err(|e| format!("无法创建迁移目录: {}", e))?;
+    for entry in fs::read_dir(source).map_err(|e| format!("无法读取旧数据目录: {}", e))? {
+        let entry = entry.map_err(|e| format!("无法读取旧数据项: {}", e))?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_missing(&source_path, &target_path)?;
+        } else if source_path.is_file() && !target_path.exists() {
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| format!("无法创建迁移目录: {}", e))?;
+            }
+            fs::copy(&source_path, &target_path)
+                .map_err(|e| format!("无法迁移旧数据文件: {}", e))?;
+        }
+    }
+    Ok(())
+}
+
+fn migrate_legacy_appdata_dir(new_dir: &Path) -> Result<(), String> {
+    let Some(legacy_dir) = appdata_dir(LEGACY_APPDATA_DIR_NAME) else {
+        return Ok(());
+    };
+    if !legacy_dir.exists() || legacy_dir == new_dir {
+        return Ok(());
+    }
+    copy_dir_missing(&legacy_dir, new_dir)
+}
+
 fn default_storage_base_dir() -> Result<PathBuf, String> {
     if let Some(portable_root) = portable_root_from_exe() {
         return Ok(portable_root);
     }
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        if !appdata.is_empty() {
-            let dir = PathBuf::from(appdata).join("OMM日报系统");
-            fs::create_dir_all(&dir).map_err(|e| format!("无法创建应用数据目录: {}", e))?;
-            return Ok(dir);
-        }
+    if let Some(dir) = appdata_dir(APPDATA_DIR_NAME) {
+        let _ = migrate_legacy_appdata_dir(&dir);
+        fs::create_dir_all(&dir).map_err(|e| format!("无法创建应用数据目录: {}", e))?;
+        return Ok(dir);
     }
     let exe_dir = std::env::current_exe()
         .map_err(|e| format!("无法获取程序路径: {}", e))?
@@ -67,12 +123,14 @@ pub fn data_root() -> Result<PathBuf, String> {
 }
 
 fn ensure_data_subdirs(root: PathBuf) -> Result<PathBuf, String> {
-    fs::create_dir_all(root.join("profiles")).map_err(|e| format!("无法创建账户配置目录: {}", e))?;
+    fs::create_dir_all(root.join("profiles"))
+        .map_err(|e| format!("无法创建账户配置目录: {}", e))?;
     fs::create_dir_all(root.join("logs").join("personal-cleaner"))
         .map_err(|e| format!("无法创建日志目录: {}", e))?;
     fs::create_dir_all(root.join("backups").join("personal-cleaner"))
         .map_err(|e| format!("无法创建备份目录: {}", e))?;
-    fs::create_dir_all(root.join("manifests")).map_err(|e| format!("无法创建 manifest 目录: {}", e))?;
+    fs::create_dir_all(root.join("manifests"))
+        .map_err(|e| format!("无法创建 manifest 目录: {}", e))?;
     Ok(root)
 }
 
@@ -149,7 +207,9 @@ pub fn legacy_session_path() -> Result<PathBuf, String> {
 }
 
 pub fn legacy_profile_dir_for_account(account_id: &str) -> Result<PathBuf, String> {
-    Ok(legacy_omm_root()?.join("profiles").join(sanitize_id(account_id)))
+    Ok(legacy_omm_root()?
+        .join("profiles")
+        .join(sanitize_id(account_id)))
 }
 
 pub fn open_database() -> Result<Connection, String> {
@@ -158,7 +218,7 @@ pub fn open_database() -> Result<Connection, String> {
         fs::create_dir_all(parent).map_err(|e| format!("无法创建数据库目录: {}", e))?;
     }
     let conn = Connection::open(&path).map_err(|e| format!("无法打开本地数据库: {}", e))?;
-    conn.busy_timeout(Duration::from_secs(2))
+    conn.busy_timeout(Duration::from_secs(10))
         .map_err(|e| format!("无法设置数据库等待时间: {}", e))?;
     conn.execute_batch(
         r#"
@@ -208,12 +268,31 @@ pub fn open_database() -> Result<Connection, String> {
             created_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
         );
 
+        CREATE TABLE IF NOT EXISTS duration_rules (
+            id TEXT PRIMARY KEY,
+            builtin_key TEXT,
+            name TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            source TEXT NOT NULL DEFAULT 'user',
+            priority INTEGER NOT NULL DEFAULT 100,
+            match_mode TEXT NOT NULL DEFAULT 'all',
+            match_json TEXT NOT NULL,
+            duration_json TEXT NOT NULL,
+            user_modified INTEGER NOT NULL DEFAULT 0,
+            builtin_version INTEGER NOT NULL DEFAULT 1,
+            deprecated INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+        );
+
         INSERT INTO app_meta (key, value, updated_at)
-        VALUES ('schema_version', '1', strftime('%s','now'))
+        VALUES ('schema_version', '3', strftime('%s','now'))
         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
         "#,
     )
     .map_err(|e| format!("无法初始化本地数据库: {}", e))?;
+    crate::commands::duration_rules::ensure_duration_rules_seed(&conn)?;
+    crate::commands::known_senders::ensure_known_senders_seed(&conn)?;
+    crate::commands::measurement_people::ensure_measurement_people_seed(&conn)?;
     Ok(conn)
 }
 
@@ -235,6 +314,9 @@ pub async fn get_data_store_info() -> Result<DataStoreInfo, String> {
     let legacy_accounts = legacy_accounts_path()?;
     let legacy_profiles = legacy_root.join("profiles");
     let account_count = account_count().unwrap_or(0);
+    let known_sender_count = crate::commands::known_senders::known_sender_count().unwrap_or(0);
+    let measurement_person_count =
+        crate::commands::measurement_people::measurement_person_count().unwrap_or(0);
 
     Ok(DataStoreInfo {
         data_root: data_root.to_string_lossy().to_string(),
@@ -245,6 +327,8 @@ pub async fn get_data_store_info() -> Result<DataStoreInfo, String> {
         manifests_dir: manifests_dir.to_string_lossy().to_string(),
         schema_version: SCHEMA_VERSION,
         account_count,
+        known_sender_count,
+        measurement_person_count,
         legacy_root: legacy_root.to_string_lossy().to_string(),
         legacy_accounts_exists: legacy_accounts.is_file(),
         legacy_profiles_exists: legacy_profiles.is_dir(),
@@ -272,21 +356,14 @@ mod tests {
             "INSERT INTO accounts
              (id, nickname, real_name, role, pin_salt, pin_hash, display_name_mode, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                "test",
-                "Test",
-                "测试",
-                "guest",
-                "salt",
-                "hash",
-                "nickname",
-                "1",
-            ],
+            params!["test", "Test", "测试", "guest", "salt", "hash", "nickname", "1",],
         )
         .expect("account row inserts");
 
         assert!(database_path().expect("database path").is_file());
-        assert!(profile_dir_for_account("test").expect("profile dir").is_dir());
+        assert!(profile_dir_for_account("test")
+            .expect("profile dir")
+            .is_dir());
         assert!(personal_cleaner_log_dir().expect("log dir").is_dir());
         assert!(personal_cleaner_backup_dir().expect("backup dir").is_dir());
         assert_eq!(account_count().expect("account count"), 1);

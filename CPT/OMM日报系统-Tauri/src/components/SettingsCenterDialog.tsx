@@ -4,11 +4,13 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  Database,
   FileSpreadsheet,
   FolderOpen,
   HelpCircle,
   Info,
   Package,
+  RefreshCw,
   RotateCcw,
   Save,
   Settings2,
@@ -25,7 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { DataStoreInfo, DisplayNameMode, PublicAccount, TemplateInfo } from "@/types/record";
+import type { DataStoreInfo, DisplayNameMode, PersonalCleanerBackupInfo, PublicAccount, TemplateInfo } from "@/types/record";
 
 export interface SettingsCenterDraft {
   workDir: string;
@@ -57,26 +59,32 @@ interface SettingsCenterDialogProps {
   currentAccount: PublicAccount;
   logCount: number;
   dataStoreInfo: DataStoreInfo | null;
+  cleanerBackupInfo: PersonalCleanerBackupInfo | null;
   onOpenChange: (open: boolean) => void;
   onSave: (draft: SettingsCenterDraft) => Promise<void>;
   onBrowseWorkDir: (defaultPath: string) => Promise<string | null>;
   onBrowseOutputDir: (defaultPath: string) => Promise<string | null>;
   onOpenRecognitionRules: () => void;
   onOpenSpecialItems: () => void;
+  onOpenKnownSenders: () => void;
+  onOpenMeasurementPeople: () => void;
   onReplaceTemplate: () => void;
   onResetTemplate: () => void;
   onViewTemplatePaths: () => void;
-  onRefreshTemplate: () => void;
+  onRefreshTemplate: () => void | Promise<void>;
   onSwitchAccount: () => void;
   onDisplayNameModeChange: (mode: DisplayNameMode) => Promise<void>;
   onOpenDetailedLogs: () => void;
   onRefreshDataStore: () => Promise<DataStoreInfo | null>;
   onOpenDataRoot: () => void;
+  onRefreshCleanerBackups: () => Promise<PersonalCleanerBackupInfo | null>;
+  onOpenCleanerBackupRoot: () => void;
+  onCleanCleanerBackups: () => Promise<PersonalCleanerBackupInfo | null>;
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.6.3";
-const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
+const APP_VERSION = "5.8.1";
+const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\玉衡山科学院管理厅备份\\cleaner-backups";
 
 type SettingsTab = "account" | "daily" | "data" | "about";
 
@@ -142,6 +150,36 @@ function templateSourceLabel(source: string | null): string {
     case "bundled": return "内置模板";
     default: return "未知";
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatModified(ms: number | null): string {
+  if (!ms) return "暂无";
+  return new Date(ms).toLocaleString("zh-CN", { hour12: false });
+}
+
+function hasBackupOlderThan30Days(info: PersonalCleanerBackupInfo | null): boolean {
+  if (!info?.oldestModifiedMs) return false;
+  return info.oldestModifiedMs <= Date.now() - 30 * 24 * 60 * 60 * 1000;
+}
+
+function waitForVisibleFeedback(ms = 650): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function nowTimeText(): string {
+  return new Date().toLocaleTimeString("zh-CN", { hour12: false });
 }
 
 function validateDraft(draft: SettingsCenterDraft): string | null {
@@ -311,12 +349,15 @@ export function SettingsCenterDialog({
   currentAccount,
   logCount,
   dataStoreInfo,
+  cleanerBackupInfo,
   onOpenChange,
   onSave,
   onBrowseWorkDir,
   onBrowseOutputDir,
   onOpenRecognitionRules,
   onOpenSpecialItems,
+  onOpenKnownSenders,
+  onOpenMeasurementPeople,
   onReplaceTemplate,
   onResetTemplate,
   onViewTemplatePaths,
@@ -326,6 +367,9 @@ export function SettingsCenterDialog({
   onOpenDetailedLogs,
   onRefreshDataStore,
   onOpenDataRoot,
+  onRefreshCleanerBackups,
+  onOpenCleanerBackupRoot,
+  onCleanCleanerBackups,
   onOpenHelp,
 }: SettingsCenterDialogProps) {
   const [activeTab, setActiveTab] = React.useState<SettingsTab>("account");
@@ -335,6 +379,12 @@ export function SettingsCenterDialog({
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [accountSaving, setAccountSaving] = React.useState(false);
+  const [cleanerBackupBusy, setCleanerBackupBusy] = React.useState(false);
+  const [cleanerBackupMessage, setCleanerBackupMessage] = React.useState("");
+  const [templateRefreshBusy, setTemplateRefreshBusy] = React.useState(false);
+  const [dataRefreshBusy, setDataRefreshBusy] = React.useState(false);
+  const [backupRefreshBusy, setBackupRefreshBusy] = React.useState(false);
+  const [refreshMessage, setRefreshMessage] = React.useState("");
 
   React.useEffect(() => {
     if (!open) return;
@@ -344,6 +394,12 @@ export function SettingsCenterDialog({
     setConfirmExit(false);
     setError("");
     setSaving(false);
+    setCleanerBackupBusy(false);
+    setCleanerBackupMessage("");
+    setTemplateRefreshBusy(false);
+    setDataRefreshBusy(false);
+    setBackupRefreshBusy(false);
+    setRefreshMessage("");
   }, [open]);
 
   const normalizedDraft = normalizeDraft(draft);
@@ -386,6 +442,70 @@ export function SettingsCenterDialog({
       setConfirmExit(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefreshTemplateClick = async () => {
+    if (templateRefreshBusy) return;
+    setTemplateRefreshBusy(true);
+    setRefreshMessage("正在刷新模板信息...");
+    try {
+      await Promise.all([onRefreshTemplate(), waitForVisibleFeedback()]);
+      setRefreshMessage(`模板信息已刷新。${nowTimeText()}`);
+    } catch (e) {
+      await waitForVisibleFeedback(300);
+      setRefreshMessage(`模板信息刷新失败：${e}`);
+    } finally {
+      setTemplateRefreshBusy(false);
+    }
+  };
+
+  const handleRefreshDataStoreClick = async () => {
+    if (dataRefreshBusy) return;
+    setDataRefreshBusy(true);
+    setRefreshMessage("正在刷新本地数据状态...");
+    try {
+      const [info] = await Promise.all([onRefreshDataStore(), waitForVisibleFeedback()]);
+      setRefreshMessage(info ? `本地数据状态已刷新。${nowTimeText()}` : "本地数据状态刷新失败，请查看详细日志。");
+    } catch (e) {
+      await waitForVisibleFeedback(300);
+      setRefreshMessage(`本地数据状态刷新失败：${e}`);
+    } finally {
+      setDataRefreshBusy(false);
+    }
+  };
+
+  const handleRefreshCleanerBackupsClick = async () => {
+    if (backupRefreshBusy) return;
+    setBackupRefreshBusy(true);
+    setCleanerBackupMessage("正在读取备份状态...");
+    try {
+      const [info] = await Promise.all([onRefreshCleanerBackups(), waitForVisibleFeedback()]);
+      setCleanerBackupMessage(info ? `备份状态已读取：${info.entryCount} 项，${formatBytes(info.totalBytes)}。${nowTimeText()}` : "备份状态读取失败，请查看详细日志。");
+    } catch (e) {
+      await waitForVisibleFeedback(300);
+      setCleanerBackupMessage(`备份状态读取失败：${e}`);
+    } finally {
+      setBackupRefreshBusy(false);
+    }
+  };
+
+  const handleCleanCleanerBackupsClick = async () => {
+    setCleanerBackupBusy(true);
+    setCleanerBackupMessage("正在检查 30 天前备份...");
+    try {
+      const info = await onCleanCleanerBackups();
+      if (!info) {
+        setCleanerBackupMessage("未执行清理：备份状态读取失败，请查看详细日志。");
+      } else if (!hasBackupOlderThan30Days(info)) {
+        setCleanerBackupMessage("没有 30 天前备份可清理，未删除任何内容。");
+      } else {
+        setCleanerBackupMessage("旧备份维护流程已返回，请查看二次确认或详细日志。");
+      }
+    } catch (e) {
+      setCleanerBackupMessage(`旧备份维护失败：${e}`);
+    } finally {
+      setCleanerBackupBusy(false);
     }
   };
 
@@ -433,14 +553,14 @@ export function SettingsCenterDialog({
   const renderGeneration = () => (
     <div className="space-y-5">
       <Section icon={<CalendarClock className="h-4 w-4" />} title="时间策略" description="控制默认下班判断、每件时间区间和包间休息补时。">
-        <FieldRow label="下班策略" hint="单日设置仍可覆盖。">
+        <FieldRow label="下班策略" hint="默认不下早班；单日设置仍可覆盖。">
           <Segmented
             value={draft.leaveStrategy}
             onChange={(leaveStrategy) => updateDraft({ leaveStrategy })}
             options={[
+              { value: "normal", label: "不下早班" },
               { value: "auto", label: "智能判断" },
               { value: "early", label: "下早班", tone: "warning" },
-              { value: "normal", label: "不下早班" },
             ]}
           />
         </FieldRow>
@@ -599,29 +719,59 @@ export function SettingsCenterDialog({
           <Button type="button" variant="outline" size="sm" onClick={onReplaceTemplate}>更新模板</Button>
           <Button type="button" variant="outline" size="sm" onClick={onResetTemplate}>重置为内置</Button>
           <Button type="button" variant="outline" size="sm" onClick={onViewTemplatePaths}>查看位置</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onRefreshTemplate}>刷新</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { void handleRefreshTemplateClick(); }} disabled={templateRefreshBusy}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${templateRefreshBusy ? "animate-spin" : ""}`} />
+            {templateRefreshBusy ? "刷新中" : "刷新"}
+          </Button>
         </div>
+        {refreshMessage && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+            {refreshMessage}
+          </div>
+        )}
       </Section>
 
-      <Section icon={<Package className="h-4 w-4" />} title="识别补充与特殊大件" description="这两类属于独立管理项，入口集中在设置中心。">
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+      <Section icon={<Database className="h-4 w-4" />} title="数据库设置" description="集中管理补充规则表、送测人库和耗时规则库。">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
           <button
             type="button"
             onClick={onOpenRecognitionRules}
             className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
           >
-            <div className="text-sm font-medium text-slate-800">识别补充规则</div>
+            <div className="text-sm font-medium text-slate-800">补充规则表</div>
             <div className="mt-1 text-xs leading-5 text-slate-500 break-all">
-              {recognitionRulesPath || "recognition-rules.json"} {recognitionRulesExists ? "（已存在）" : "（未创建）"}
+              字段识别、品名、工站和特殊命名补充。{recognitionRulesPath || "recognition-rules.json"} {recognitionRulesExists ? "（已存在）" : "（未创建）"}
             </div>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenKnownSenders}
+            className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Database className="h-4 w-4 text-blue-600" />
+              送测人库
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">维护常见送测人，支持按时间排序、修改和删除。</div>
+          </button>
+          <button
+            type="button"
+            onClick={onOpenMeasurementPeople}
+            className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <Database className="h-4 w-4 text-blue-600" />
+              测量人库
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">维护 OMM 普通员工、班长/管理人员和姓名别名。</div>
           </button>
           <button
             type="button"
             onClick={onOpenSpecialItems}
             className="rounded-xl border border-slate-200/80 bg-white/70 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)]"
           >
-            <div className="text-sm font-medium text-slate-800">特殊大件</div>
-            <div className="mt-1 text-xs leading-5 text-slate-500">管理烧结盘等固定耗时物品。</div>
+            <div className="text-sm font-medium text-slate-800">耗时规则库</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">管理 CNC、烧结盘、035 等包时/件时区间、压缩和包/件优先规则。</div>
           </button>
         </div>
       </Section>
@@ -647,7 +797,7 @@ export function SettingsCenterDialog({
           {[
             ["权限校验", "入口、执行和日志读取都需要管理员账户；后端命令会再次校验。"],
             ["执行方式", "推荐先模拟运行，真实执行前会汇总项目影响和备份策略。"],
-            ["保护对象", "回收站清理保留 Excel、-OMM、送测和 inspec 相关项目。"],
+            ["保护对象", "受保护回收站清理会扫描整个回收站，但保留 Excel、-OMM、送测和 inspec 相关项目。"],
             ["代理边界", "可清系统代理和 WinHTTP 代理，不改 HTTP_PROXY / HTTPS_PROXY 环境变量。"],
           ].map(([title, description]) => (
             <div key={title} className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
@@ -659,6 +809,11 @@ export function SettingsCenterDialog({
       </Section>
 
       <Section icon={<Package className="h-4 w-4" />} title="备份与日志" description="数据管理局产生的日志和备份路径集中展示，便于回溯。">
+        {refreshMessage && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+            {refreshMessage}
+          </div>
+        )}
         {dataStoreInfo ? (
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
@@ -671,13 +826,48 @@ export function SettingsCenterDialog({
             </div>
             <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm md:col-span-2">
               <div className="text-xs text-slate-500">清理备份根目录</div>
-              <div className="mt-1 break-all text-xs font-mono text-slate-700">{PERSONAL_CLEANER_BACKUP_ROOT}</div>
+              <div className="mt-1 break-all text-xs font-mono text-slate-700">{cleanerBackupInfo?.root || PERSONAL_CLEANER_BACKUP_ROOT}</div>
+              <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                <div>条目：{cleanerBackupInfo ? cleanerBackupInfo.entryCount : "未读取"}</div>
+                <div>占用：{cleanerBackupInfo ? formatBytes(cleanerBackupInfo.totalBytes) : "未读取"}</div>
+                <div>最近：{cleanerBackupInfo ? formatModified(cleanerBackupInfo.newestModifiedMs) : "未读取"}</div>
+              </div>
+              {cleanerBackupInfo && !hasBackupOlderThan30Days(cleanerBackupInfo) && (
+                <div className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs leading-5 text-green-800">
+                  没有 30 天前备份可清理。
+                </div>
+              )}
+              {cleanerBackupMessage && (
+                <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+                  {cleanerBackupMessage}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => { void handleRefreshCleanerBackupsClick(); }} disabled={backupRefreshBusy}>
+                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${backupRefreshBusy ? "animate-spin" : ""}`} />
+                  {backupRefreshBusy ? "读取中" : "读取备份"}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={onOpenCleanerBackupRoot}>打开备份文件夹</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-amber-700 hover:text-amber-800 disabled:text-slate-400"
+                  disabled={cleanerBackupBusy || Boolean(cleanerBackupInfo && !hasBackupOlderThan30Days(cleanerBackupInfo))}
+                  onClick={() => { void handleCleanCleanerBackupsClick(); }}
+                >
+                  {cleanerBackupBusy ? "检查中..." : "清理30天前备份"}
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm text-slate-600">
             <span>尚未读取本地数据状态。</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => { void handleRefreshDataStoreClick(); }} disabled={dataRefreshBusy}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${dataRefreshBusy ? "animate-spin" : ""}`} />
+              {dataRefreshBusy ? "读取中" : "读取状态"}
+            </Button>
           </div>
         )}
       </Section>
@@ -760,7 +950,7 @@ export function SettingsCenterDialog({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">软件名称</div>
-            <div className="mt-1 text-sm font-semibold text-slate-900">OMM 日报系统</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">玉衡山科学院管理厅</div>
           </div>
           <div className="rounded-xl border border-slate-200/80 bg-white/70 p-3 shadow-sm">
             <div className="text-xs text-slate-500">当前版本</div>
@@ -778,7 +968,7 @@ export function SettingsCenterDialog({
             <span className="break-all">{configPath || normalizedDraft.configDir || "未识别"}</span>
           </div>
           <div>
-            <span className="font-medium text-slate-700">识别补充：</span>
+            <span className="font-medium text-slate-700">补充规则表：</span>
             <span className="break-all">{recognitionRulesPath || "recognition-rules.json"}</span>
             <span className="ml-1 text-slate-400">{recognitionRulesExists ? "已存在" : "未创建"}</span>
           </div>
@@ -792,6 +982,11 @@ export function SettingsCenterDialog({
       </Section>
 
       <Section icon={<Package className="h-4 w-4" />} title="本地数据管理" description="账号、配置、日志和 manifest 收纳在本地 data 目录；个人清理备份统一放到外部备份根目录。">
+        {refreshMessage && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+            {refreshMessage}
+          </div>
+        )}
         {dataStoreInfo ? (
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -820,6 +1015,7 @@ export function SettingsCenterDialog({
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200/70 bg-blue-50/80 px-3 py-2 text-xs leading-6 text-blue-800">
               <div>
                 SQLite schema v{dataStoreInfo.schemaVersion}，账户 {dataStoreInfo.accountCount} 个，
+                送测人词库 {dataStoreInfo.knownSenderCount} 个，
                 {dataStoreInfo.isPortable ? "便携版数据跟随程序目录。" : "安装版数据位于当前 Windows 用户目录。"}
                 {(dataStoreInfo.legacyAccountsExists || dataStoreInfo.legacyProfilesExists) && (
                   <span className="ml-1">检测到旧 .omm 数据，已作为兼容导入来源保留。</span>
@@ -827,14 +1023,20 @@ export function SettingsCenterDialog({
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={onOpenDataRoot}>打开数据目录</Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => { void onRefreshDataStore(); }}>刷新</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { void handleRefreshDataStoreClick(); }} disabled={dataRefreshBusy}>
+                  <RefreshCw className={`mr-1 h-3.5 w-3.5 ${dataRefreshBusy ? "animate-spin" : ""}`} />
+                  {dataRefreshBusy ? "刷新中" : "刷新"}
+                </Button>
               </div>
             </div>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-3 text-sm text-slate-600">
             <span>尚未读取本地数据状态。</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => { void onRefreshDataStore(); }}>读取状态</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => { void handleRefreshDataStoreClick(); }} disabled={dataRefreshBusy}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${dataRefreshBusy ? "animate-spin" : ""}`} />
+              {dataRefreshBusy ? "读取中" : "读取状态"}
+            </Button>
           </div>
         )}
       </Section>

@@ -20,6 +20,7 @@ export interface FolderRecord {
 export interface ReviewInfo {
   missing: string[];
   placeholders: string[];
+  warnings?: string[];
 }
 
 export interface ParseFoldersResponse {
@@ -33,7 +34,7 @@ export interface ParseFoldersResponse {
 
 export interface GenerateSettings {
   early_leave: boolean;
-  /** 下班策略：auto 智能判断 / early 下早班 / normal 不下早班 */
+  /** 下班策略：auto 智能判断但不自动下早班 / early 下早班 / normal 不下早班 */
   leave_strategy?: 'auto' | 'early' | 'normal';
   enable_hand: boolean;
   enable_other: boolean;
@@ -45,13 +46,20 @@ export interface GenerateSettings {
   use_src_output: boolean;
   shift_override: string | null;
   special_items?: SpecialItem[];
+  duration_rules?: DurationRule[];
   /** 手量单次最大时长（分钟），默认 120 */
   hand_max?: number;
   /** 其他事务单次最大时长（分钟），默认 90 */
   other_max?: number;
+  /** 其他事务补时备注，默认“其他事务” */
+  other_note?: string;
+  /** 系统补时间手量/其他事务插入位置 */
+  filler_position?: FillerPosition;
   /** 真实手量任务列表，按日期单独绑定 */
   real_manual_tasks?: RealManualTask[];
 }
+
+export type FillerPosition = 'head' | 'middle' | 'tail' | 'random';
 
 /** 真实手量任务记录 */
 export interface RealManualTask {
@@ -98,6 +106,16 @@ export interface RealManualTask {
   recognition_warnings?: string[];
 }
 
+export type DurationOverrideMode = 'package_total' | 'per_piece';
+
+/** 预览页本日包耗时覆盖，绑定到当前日期队列项内的单个文件夹 */
+export interface DurationOverride {
+  folder: string;
+  mode: DurationOverrideMode;
+  minutes: number;
+  computed_total_minutes?: number;
+}
+
 /** 队列项单独覆盖设置（用于多天不同策略） */
 export interface QueueItemSettingsOverride {
   leave_strategy?: 'auto' | 'early' | 'normal';
@@ -108,15 +126,59 @@ export interface QueueItemSettingsOverride {
   pkg_rest?: number;
   hand_max?: number;
   other_max?: number;
+  other_note?: string;
+  filler_position?: FillerPosition;
+  duration_rules?: DurationRule[];
   special_items?: SpecialItem[];
   /** 真实手量任务列表，绑定到该日期 */
   real_manual_tasks?: RealManualTask[];
+  /** 当前日期内单包耗时覆盖，key 为文件夹名 */
+  duration_overrides?: Record<string, DurationOverride>;
+  /** 当前日期内已确认暂不写入本日报的包，通常来自任务量过多省略清单 */
+  omitted_folders?: string[];
 }
 
-/// 特殊大件物品（如烧结盘），每件耗时固定，不参与 tpp 缩放
+/// 旧版固定件时物品配置，仅用于兼容迁移前的配置文件
 export interface SpecialItem {
   name: string;
   minutes: number;
+}
+
+export interface DurationRuleMatcher {
+  field: 'folder' | 'station' | 'product' | 'test_type' | 'sender' | 'operator';
+  op: 'contains' | 'not_contains' | 'equals' | 'regex';
+  value: string;
+}
+
+export interface DurationRuleDuration {
+  mode: 'per_package' | 'per_piece' | 'max_package_piece' | 'package_piece';
+  minutes?: number | null;
+  minMinutes?: number | null;
+  maxMinutes?: number | null;
+  packageMinutes?: number | null;
+  packageMinMinutes?: number | null;
+  packageMaxMinutes?: number | null;
+  pieceMinutes?: number | null;
+  pieceMinMinutes?: number | null;
+  pieceMaxMinutes?: number | null;
+  quantityPolicy?: 'package_first' | 'piece_first' | 'max' | 'min' | null;
+  compressible?: boolean | null;
+  missingQuantityPolicy?: string | null;
+}
+
+export interface DurationRule {
+  id: string;
+  builtinKey?: string | null;
+  name: string;
+  enabled: boolean;
+  source: 'builtin' | 'user' | 'migrated' | string;
+  priority: number;
+  matchMode: 'all' | 'any';
+  matchers: DurationRuleMatcher[];
+  duration: DurationRuleDuration;
+  userModified: boolean;
+  builtinVersion: number;
+  deprecated: boolean;
 }
 
 export interface GenerateResponse {
@@ -189,10 +251,54 @@ export interface DataStoreInfo {
   manifestsDir: string;
   schemaVersion: number;
   accountCount: number;
+  knownSenderCount: number;
+  measurementPersonCount: number;
   legacyRoot: string;
   legacyAccountsExists: boolean;
   legacyProfilesExists: boolean;
   isPortable: boolean;
+}
+
+export interface KnownSender {
+  id: string;
+  name: string;
+  normalizedName: string;
+  source: string;
+  note: string;
+  enabled: boolean;
+  usageCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  updatedAt: string;
+  sampleFolder: string;
+}
+
+export type KnownSenderSortBy = 'name' | 'usageCount' | 'firstSeenAt' | 'lastSeenAt' | 'updatedAt';
+
+export type MeasurementPersonRole = 'ordinary' | 'manager' | 'extra';
+
+export interface MeasurementPerson {
+  id: string;
+  name: string;
+  normalizedName: string;
+  role: MeasurementPersonRole | string;
+  aliases: string[];
+  source: string;
+  note: string;
+  enabled: boolean;
+  usageCount: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  updatedAt: string;
+}
+
+export interface PersonalCleanerBackupInfo {
+  root: string;
+  exists: boolean;
+  entryCount: number;
+  totalBytes: number;
+  oldestModifiedMs: number | null;
+  newestModifiedMs: number | null;
 }
 
 export interface StationAliasRule {
@@ -240,6 +346,7 @@ export const FIELD_LABELS: Record<string, string> = {
   station: '工站',
   product: '产品',
   sender: '送测人',
+  operator: '测量员',
   work_order: '工单号',
   mold: '模号',
   machine: '机台号',
@@ -254,6 +361,7 @@ export const FIELD_HINTS: Record<string, string> = {
   station: '文件夹名中没有识别到工站（如 CNC、射出、整形等）',
   product: '文件夹名中没有识别到产品编号',
   sender: '文件夹名中没有找到"送测"前的人名',
+  operator: '文件夹名中没有识别到 OMM/CMM 后的测量员',
   work_order: '文件夹名中没有找到工单号（ww 开头）',
   mold: '文件夹名中没有找到模号',
   machine: '文件夹名中没有找到机台号（#号 或 DC/DV）',
@@ -300,6 +408,41 @@ export interface PreviewRow {
   source?: string;
 }
 
+export interface TimeAnomalyAdjustmentItem {
+  folder: string;
+  quantity: number;
+  current_per_piece: number;
+  recommended_per_piece: number;
+  current_total_minutes: number;
+  recommended_total_minutes: number;
+  add_minutes: number;
+  reason: string;
+}
+
+export interface TimeAnomalyOmitItem {
+  folder: string;
+  quantity: number | '/';
+  current_per_piece?: number | null;
+  current_total_minutes: number;
+  reason: string;
+}
+
+export interface TimeAnomalyInfo {
+  kind: 'ok' | 'too_little' | 'too_much';
+  title: string;
+  message: string;
+  current_effective?: number;
+  min_effective?: number;
+  shortage_minutes?: number;
+  overrun_minutes?: number;
+  target_clock_end?: string;
+  actual_last_end?: string;
+  adjustment_items?: TimeAnomalyAdjustmentItem[];
+  omit_items?: TimeAnomalyOmitItem[];
+  supplemental_minutes?: number;
+  note?: string;
+}
+
 export interface PreviewSummary {
   total_shift: number;   // total on-duty time in minutes
   total_work: number;   // total effective work time in minutes
@@ -325,8 +468,14 @@ export interface PreviewSummary {
   cnc_effective?: number;
   hand_filler_minutes?: number;
   other_filler_minutes?: number;
+  regular_quantity?: number;
+  regular_avg_tpp?: number;
+  regular_tpp_max?: number;
+  regular_tpp_headroom_minutes?: number;
+  regular_tpp_at_upper?: boolean;
   need_minutes?: number;
   shortage_level?: 'ok' | 'shortage' | 'severe' | 'extreme';
+  time_anomaly?: TimeAnomalyInfo;
   decision?: {
     level: 'ok' | 'shortage' | 'severe' | 'extreme';
     need_minutes: number;
@@ -337,12 +486,18 @@ export interface PreviewSummary {
     cnc_effective: number;
     hand_filler_minutes: number;
     other_filler_minutes: number;
+    regular_quantity?: number;
+    regular_avg_tpp?: number;
+    regular_tpp_max?: number;
+    regular_tpp_headroom_minutes?: number;
+    regular_tpp_at_upper?: boolean;
     hidden_buffer_total: number;
     target_clock_end: string;
     actual_last_end: string;
     message?: string;
     title?: string;
     options: { key: string; label: string; description: string }[];
+    time_anomaly?: TimeAnomalyInfo;
   };
 }
 
@@ -350,6 +505,7 @@ export interface PreviewData {
   folder_name: string;
   shift_label: string;
   early_leave: boolean;
+  leave_strategy?: 'auto' | 'early' | 'normal';
   records: FolderRecord[];
   warnings: [string, string[]][];  // [folder, warnings][]
   schedule_warnings: string[];

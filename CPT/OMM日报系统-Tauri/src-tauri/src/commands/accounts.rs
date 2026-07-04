@@ -13,6 +13,10 @@ const ADMIN_ID: &str = "kaneshiro";
 const ADMIN_NICKNAME: &str = "Kaneshiro";
 const ADMIN_REAL_NAME: &str = "禹欣";
 const ADMIN_INITIAL_PIN: &str = "114514";
+const VISITOR_ID: &str = "guest_yuchengshan";
+const VISITOR_NICKNAME: &str = "御馔津";
+const VISITOR_REAL_NAME: &str = "禹承山";
+const VISITOR_INITIAL_PIN: &str = "114514";
 const HASH_ROUNDS: usize = 100_000;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -100,7 +104,9 @@ pub fn profile_dir_for_account(account_id: &str) -> Result<PathBuf, String> {
 pub fn current_profile_config_path() -> Result<Option<PathBuf>, String> {
     let session = read_session()?;
     if let Some(account_id) = session.current_account_id {
-        return Ok(Some(profile_dir_for_account(&account_id)?.join("config.json")));
+        return Ok(Some(
+            profile_dir_for_account(&account_id)?.join("config.json"),
+        ));
     }
     Ok(None)
 }
@@ -111,11 +117,17 @@ pub fn current_account_record() -> Result<Option<AccountRecord>, String> {
         return Ok(None);
     };
     let store = read_store()?;
-    Ok(store.accounts.into_iter().find(|account| account.id == account_id))
+    Ok(store
+        .accounts
+        .into_iter()
+        .find(|account| account.id == account_id))
 }
 
 fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+    bytes
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>()
 }
 
 fn hash_pin(pin: &str, salt: &[u8]) -> String {
@@ -174,7 +186,7 @@ fn parse_hex(value: &str) -> Option<Vec<u8>> {
 }
 
 fn normalize_login(value: &str) -> String {
-    value.trim().to_lowercase()
+    value.split_whitespace().collect::<String>().to_lowercase()
 }
 
 fn sanitize_id(value: &str) -> String {
@@ -228,6 +240,33 @@ fn admin_account() -> AccountRecord {
         display_name_mode: DisplayNameMode::Nickname,
         created_at: now_string(),
     }
+}
+
+fn visitor_account() -> AccountRecord {
+    let (pin_salt, pin_hash) = new_pin_hash(VISITOR_INITIAL_PIN);
+    AccountRecord {
+        id: VISITOR_ID.to_string(),
+        nickname: VISITOR_NICKNAME.to_string(),
+        real_name: VISITOR_REAL_NAME.to_string(),
+        role: AccountRole::Guest,
+        pin_salt,
+        pin_hash,
+        display_name_mode: DisplayNameMode::Nickname,
+        created_at: now_string(),
+    }
+}
+
+fn has_account_identity(store: &AccountStore, id: &str, nickname: &str, real_name: &str) -> bool {
+    let id_norm = normalize_login(id);
+    let nickname_norm = normalize_login(nickname);
+    let real_name_norm = normalize_login(real_name);
+    store.accounts.iter().any(|account| {
+        normalize_login(&account.id) == id_norm
+            || normalize_login(&account.nickname) == nickname_norm
+            || normalize_login(&account.real_name) == real_name_norm
+            || normalize_login(&account.nickname) == real_name_norm
+            || normalize_login(&account.real_name) == nickname_norm
+    })
 }
 
 fn role_to_db(role: &AccountRole) -> &'static str {
@@ -372,7 +411,11 @@ fn read_legacy_session() -> Result<Option<AccountSessionFile>, String> {
     ))
 }
 
-fn copy_profile_file_if_missing(legacy_dir: &PathBuf, new_dir: &PathBuf, file_name: &str) -> Result<(), String> {
+fn copy_profile_file_if_missing(
+    legacy_dir: &PathBuf,
+    new_dir: &PathBuf,
+    file_name: &str,
+) -> Result<(), String> {
     let source = legacy_dir.join(file_name);
     let target = new_dir.join(file_name);
     if source.is_file() && !target.exists() {
@@ -411,8 +454,16 @@ fn read_store() -> Result<AccountStore, String> {
     }
 
     store.version = ACCOUNT_STORE_VERSION;
+    let mut changed = false;
     if !store.accounts.iter().any(|account| account.id == ADMIN_ID) {
         store.accounts.insert(0, admin_account());
+        changed = true;
+    }
+    if !has_account_identity(&store, VISITOR_ID, VISITOR_NICKNAME, VISITOR_REAL_NAME) {
+        store.accounts.push(visitor_account());
+        changed = true;
+    }
+    if changed {
         write_store_to_database(&store)?;
     }
     Ok(store)
@@ -448,7 +499,11 @@ fn find_account_by_login<'a>(store: &'a AccountStore, login: &str) -> Option<&'a
     })
 }
 
-fn ensure_unique_account(store: &AccountStore, nickname: &str, real_name: &str) -> Result<(), String> {
+fn ensure_unique_account(
+    store: &AccountStore,
+    nickname: &str,
+    real_name: &str,
+) -> Result<(), String> {
     let nickname_norm = normalize_login(nickname);
     let real_name_norm = normalize_login(real_name);
     if store.accounts.iter().any(|account| {
@@ -463,7 +518,11 @@ fn ensure_unique_account(store: &AccountStore, nickname: &str, real_name: &str) 
 }
 
 fn make_unique_id(store: &AccountStore, nickname: &str, real_name: &str) -> String {
-    let base = sanitize_id(if nickname.trim().is_empty() { real_name } else { nickname });
+    let base = sanitize_id(if nickname.trim().is_empty() {
+        real_name
+    } else {
+        nickname
+    });
     let mut candidate = base.clone();
     let mut suffix = 2;
     while store.accounts.iter().any(|account| account.id == candidate) {
@@ -507,7 +566,11 @@ pub async fn login_account(login: String, pin: String) -> Result<AccountSession,
 }
 
 #[command]
-pub async fn register_account(nickname: String, real_name: String, pin: String) -> Result<AccountSession, String> {
+pub async fn register_account(
+    nickname: String,
+    real_name: String,
+    pin: String,
+) -> Result<AccountSession, String> {
     let nickname = nickname.trim();
     let real_name = real_name.trim();
     if nickname.is_empty() || real_name.is_empty() {
@@ -549,7 +612,11 @@ pub async fn logout_account() -> Result<(), String> {
 }
 
 #[command]
-pub async fn reset_account_pin(target_account_id: String, admin_pin: String, new_pin: String) -> Result<(), String> {
+pub async fn reset_account_pin(
+    target_account_id: String,
+    admin_pin: String,
+    new_pin: String,
+) -> Result<(), String> {
     validate_pin(&new_pin)?;
     let mut store = read_store()?;
     let admin = store
@@ -577,7 +644,9 @@ pub async fn reset_account_pin(target_account_id: String, admin_pin: String, new
 }
 
 #[command]
-pub async fn set_current_account_display_mode(mode: DisplayNameMode) -> Result<PublicAccount, String> {
+pub async fn set_current_account_display_mode(
+    mode: DisplayNameMode,
+) -> Result<PublicAccount, String> {
     let session = read_session()?;
     let account_id = session.current_account_id.ok_or("尚未登录。".to_string())?;
     let mut store = read_store()?;

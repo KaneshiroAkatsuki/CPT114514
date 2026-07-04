@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Package OMM Daily Report portable edition.
+    Package 玉衡山科学院管理厅 portable edition.
 .DESCRIPTION
     Copies the latest app exe, sidecar exe and bundled template into a
     versioned portable directory and creates a zip plus data\manifests\portable-manifest.json.
@@ -13,7 +13,7 @@
 .PARAMETER OutDir
     Output directory for the portable package. Default: releases.
 .PARAMETER SkipBuildCheck
-    If set, do not verify that SourceDir\OMM Daily Report.exe exists.
+    If set, do not verify that SourceDir\app.exe exists.
 #>
 param(
     [string]$Version = $null,
@@ -30,7 +30,7 @@ Set-Location -LiteralPath $ROOT
 function Resolve-Version {
     $confPath = Join-Path (Join-Path $ROOT "src-tauri") "tauri.conf.json"
     if (Test-Path $confPath) {
-        $conf = Get-Content $confPath -Raw | ConvertFrom-Json
+        $conf = Get-Content $confPath -Raw -Encoding UTF8 | ConvertFrom-Json
         return $conf.version
     }
     return "unknown"
@@ -40,7 +40,7 @@ if (-not $Version) {
     $Version = Resolve-Version
 }
 
-$appName = "OMM日报系统"
+$appName = "玉衡山科学院管理厅"
 $portableBaseName = $appName + "_便携版_" + $Version
 $portableDir = Join-Path $OutDir $portableBaseName
 $innerDir = Join-Path $portableDir ($appName + "_便携版")

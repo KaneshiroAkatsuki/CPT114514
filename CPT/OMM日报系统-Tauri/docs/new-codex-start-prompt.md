@@ -1,69 +1,53 @@
-# 新 Codex 窗口启动提示词
+# 新窗口启动提示词
 
-下面这段可以直接复制到新的 Codex 窗口作为第一条消息。
+更新时间：2026-07-04 02:40 +08:00
+状态：兼容入口。新窗口默认以 `AGENTS.md` 和角色交接为准，不再读取旧 5.6.x 交接链。
 
-```text
-你是 Codex，接力开发/审查当前项目。请先不要改代码，先读取并理解交接文档，然后向我简短确认当前状态、风险点和下一步建议。
+## 推荐启动方式
 
-项目目录：
-D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri
-
-Git 根目录：
-D:\KSoftware\KMAA
-
-绿色版 Git：
-C:\Program Files\Adobe\Acrobat DC\Adobi\PortableGit\cmd\git.exe
-
-请优先读取这些文档：
-1. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\handoff-v5.6.0-to-next-codex.md
-2. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\codex-working-memory.md
-3. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\next-development-plan.md
-4. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\new-codex-start-prompt.md
-5. D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\CURRENT_STATUS.md
-
-当前重要状态：
-- 当前源码版本为 5.6.3；最新便携包应以 `CURRENT_STATUS.md` 中记录为准。
-- “玉衡山科学院管理厅”主页外壳已经落地，登录后先进入主页。
-- 主页有两个模块：“信息统计局”（OMM 日报工作台）和“数据管理局”（管理员本机数据维护）。
-- “数据管理局”只允许管理员进入，访客点击时显示统一 Apple 风格权限提示。
-- 设置中心已重组为四个分区：账户登录、信息统计局设置、数据管理局设置、关于软件；后续新增模块时按“模块名 + 设置”扩展。
-- 个人清理执行入口不在设置中心，统一从主页“数据管理局”进入。
-- 待实现：手量补录/偏低确认要给推荐时间；每件时间下次默认建议 `2~5 分钟/件`，普通测料最低 `1 分钟/件`，CNC 最低 `20 分钟/任务`，时间不够时倾向补足日报缺口。
-- 待实现格式规则：手量项目后面要写 `手量`；送测日期不要写 `6月28日`，日期本体写 `6.28`，班次只写 `A`、`B` 或留空。
-
-重要约束：
-- 不要 git add .，只精确 add 修改过的文件。
-- 不要移动、删除、重命名 C:\Users\Administrator\Desktop\勿动\日期文件。
-- 不要写回原始测试数据目录，测试输出只能放到项目 test-output。
-- sidecar exe 只从 stdin 读取 JSONL，不支持 --input / --output。
-- PowerShell 不要用 < file。
-- 不要触碰 sidecar 排程核心、CNC、整形 CNC、特殊大件、缺口诊断算法，除非我明确要求。
-- 日期文件夹如有更新，需要随代码一起提交上传。
-- 一般只需要便携包，不需要专门交付安装包。
-
-协作习惯：
-- 小 bug 和普通代码你可以直接改。
-- 大量重复实现可以提醒我交给 op/Kimi。
-- 复杂但范围不大的代码，先提醒我切到“高”，再设计和执行。
-- 关键架构、核心模块、安全边界、清理模块大改，先提醒我切到“超高”，先方案后执行。
-- UI 要保持 Apple-inspired 风格，页面不要拥挤，帮助文档要同步更新。
-- 有实际成果后尽量 commit 并 push。
-
-现在请先读取上述文档和 git 状态，不要改代码，然后告诉我：
-1. 你理解的当前项目状态。
-2. 目前最应该优先做什么。
-3. 如果继续做“玉衡山科学院管理厅”外壳，你建议使用高还是超高。
-```
-
-## 如果要直接开始实现
-
-如果用户已经明确说“可以开始”，新窗口可以把最后一段改成：
+如果是普通 Codex 接力窗口，直接发送：
 
 ```text
-现在我已经确认方向，可以开始实现。请按交接文档中的建议顺序推进：
-1. 先读取 CURRENT_STATUS.md 和 git 状态，确认最新版本与便携包。
-2. 继续完善“信息统计局”和“数据管理局”的模块体验，并保持管理员权限限制。
-3. 新增模块时同步设置中心，按“模块名 + 设置”添加独立设置分区。
-4. 同步帮助中心、关于软件和状态文档。
-5. 先用 dev / release 验证，打包前再升版本并生成便携包。
+请先读取 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\AGENTS.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\CURRENT_STATUS.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\README.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\document-governance.md。
+
+请控制上下文，不要读取 archive 目录，不要一次性读取全部历史文档。先检查 git status，确认当前版本、未提交文件和最新交接，再告诉我你理解的当前状态和下一步建议。
 ```
+
+## 杰启动方式
+
+```text
+请读取 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\AGENTS.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\jay.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\core-memory.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\document-governance.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\tooling-policy.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\handoffs\2026-07-04_0205_v5.8.1_to-jay_rehandoff-maintenance.md 和 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\handoffs\2026-07-04_0212_v5.8.1_to-jay_beginner-guardrails-addendum.md。
+
+请按交接文件接管项目控制权：先控制上下文、检查 git status、不要读取大量历史文档、不要回滚现有改动，并主动合理使用工具、插件、Skill、MCP 和必要网页参考。然后告诉我你准备如何安排寇和凯。
+```
+
+## 寇启动方式
+
+```text
+你是“寇”，玉衡山科学院管理厅项目的实现工程师和初步自测负责人。
+
+请先读取 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\AGENTS.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\kou.md，以及杰提供的任务说明。
+
+不要读取 archive 目录，不要扩大需求，不要擅自改核心算法、数据库迁移、清理策略或发布策略。先确认任务范围，再做小范围实现和基础自测。
+```
+
+## 凯启动方式
+
+```text
+你是“凯”，玉衡山科学院管理厅项目的验收测试负责人和质量反馈人。
+
+请先读取 D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\AGENTS.md、D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\docs\role-prompts\kai.md，以及杰/寇提供的验收说明。
+
+不要读取 archive 目录，不要擅自改代码、删除数据、清空数据库、发布、打包或升版本。优先测试登录后的真实流程、便携版启动、UI 一致性、异常提示、清理保护、数据库维护和帮助文档同步。
+```
+
+## 旧资料位置
+
+旧 5.6.x 启动链和历史设计资料已归档，不作为默认上下文：
+
+- `docs/archive/legacy-current-layer/handoff-v5.6.0-to-next-codex.md`
+- `docs/archive/legacy-current-layer/next-development-plan.md`
+- `docs/archive/legacy-current-layer/apple-inspired-ui-system-v5.0.15.md`
+- `docs/archive/legacy-root/`
+
+只有追溯历史、查错或杰明确要求时才读取这些归档。

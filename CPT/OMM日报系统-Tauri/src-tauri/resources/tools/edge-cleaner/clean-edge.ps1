@@ -40,6 +40,9 @@ param(
     # 清理 Windows 通知历史记录（不影响通知权限设置）
     [switch]$ClearWindowsNotifications,
 
+    # 确保 Windows 请勿打扰已开启；已开启时不重复操作，不清理通知历史
+    [switch]$EnsureDoNotDisturb,
+
     # 关闭 Adobi 根目录下运行的软件进程，并包含 Edge / Codex 前后台进程
     [switch]$CloseAdobiProcesses,
 
@@ -101,6 +104,9 @@ param(
     # JSON 结果摘要路径（由 Tauri 页面传入，用于判断脚本是否结束）
     [string]$JsonSummaryPath,
 
+    # 内部参数：父 PowerShell 调度单个清理项时传入，用户关闭该子窗口即跳过当前项
+    [string]$WorkerTask,
+
     # 清理前备份根目录
     [string]$BackupRoot,
 
@@ -122,6 +128,24 @@ if (-not [string]::IsNullOrWhiteSpace($LogPath)) {
     } catch {
         Write-Host "无法启动日志记录: $($_.Exception.Message)" -ForegroundColor Yellow
     }
+}
+
+function Write-JsonSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Summary,
+        [int]$Depth = 8
+    )
+
+    if ([string]::IsNullOrWhiteSpace($JsonSummaryPath)) { return }
+    $summaryDir = Split-Path -Parent $JsonSummaryPath
+    if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
+        New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
+    }
+
+    $json = $Summary | ConvertTo-Json -Depth $Depth
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($JsonSummaryPath, $json, $encoding)
 }
 
 if ($KeepWifiPrefixes) {
@@ -285,7 +309,7 @@ function Backup-EdgeKeyData {
         }
         $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
         @(
-            "OMM 日报系统个人清理备份"
+            "玉衡山科学院管理厅个人清理备份"
             "类型：Edge 关键数据备份"
             "来源：$script:UserDataRoot"
             "内容：Bookmarks、Bookmarks.bak、Preferences、Secure Preferences、Extensions"
@@ -603,7 +627,7 @@ function Backup-PrivateBrowserProfile {
         }
         $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $backupRoot "manifest.json") -Encoding utf8
         @(
-            "OMM 日报系统个人清理备份"
+            "玉衡山科学院管理厅个人清理备份"
             "类型：私人 Firefox profile 备份"
             "来源：$Root"
             "内容：完整 Firefox profile，可能包含书签、历史、Cookie、登录态、保存登录和站点数据"
@@ -1020,6 +1044,52 @@ function Clear-PreferencesSiteSettings {
     return $count
 }
 
+function Test-NotificationButtonName {
+    param(
+        [string]$Name,
+        [string[]]$Aliases
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    foreach ($alias in $Aliases) {
+        if ($Name -eq $alias -or $Name -like "*$alias*") {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Invoke-NotificationElementClick {
+    param(
+        [object]$Element,
+        [string]$Name
+    )
+
+    try {
+        $pattern = $Element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+        $pattern.Invoke()
+        Start-Sleep -Milliseconds 300
+        Write-Host "        已点击通知中心按钮: $Name" -ForegroundColor DarkGreen
+        return $true
+    } catch {
+        try {
+            $rect = $Element.Current.BoundingRectangle
+            if ($rect.Width -gt 2 -and $rect.Height -gt 2) {
+                $x = [int]($rect.Left + ($rect.Width / 2))
+                $y = [int]($rect.Top + ($rect.Height / 2))
+                [CleanerKeyboard]::LeftClick($x, $y)
+                Start-Sleep -Milliseconds 300
+                Write-Host "        已点击通知中心按钮坐标: $Name" -ForegroundColor DarkGreen
+                return $true
+            }
+        } catch {
+            Write-Host "        找到通知中心按钮但无法点击: $Name - $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    return $false
+}
+
 function Invoke-NotificationClearAllButton {
     param(
         [switch]$IsDryRun
@@ -1027,8 +1097,6 @@ function Invoke-NotificationClearAllButton {
 
     if ($IsDryRun) {
         Write-Host "        [模拟点击] 打开通知中心并点击“全部清除”按钮" -ForegroundColor DarkCyan
-        Write-Host "        [模拟开启] 点击“请勿打扰”按钮；如果已开启则保持开启" -ForegroundColor DarkCyan
-        Write-Host "        [模拟兜底] 如果通知中心没有暴露按钮，则写入当前用户 QuietHoursServiceState=1" -ForegroundColor DarkCyan
         return 1
     }
 
@@ -1045,7 +1113,15 @@ public static class CleanerKeyboard {
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private const uint MOUSEEVENTF_LEFTUP = 0x0004;
 
     public static void WinN() {
         keybd_event(0x5B, 0, 0, UIntPtr.Zero);
@@ -1058,133 +1134,206 @@ public static class CleanerKeyboard {
         keybd_event(0x1B, 0, 0, UIntPtr.Zero);
         keybd_event(0x1B, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
+
+    public static void LeftClick(int x, int y) {
+        SetCursorPos(x, y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
 }
 "@ -ErrorAction Stop
         }
 
+        [CleanerKeyboard]::Escape()
+        Start-Sleep -Milliseconds 150
         [CleanerKeyboard]::WinN()
-        Start-Sleep -Milliseconds 900
 
         $root = [System.Windows.Automation.AutomationElement]::RootElement
-        $condition = New-Object System.Windows.Automation.PropertyCondition -ArgumentList @(
-            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-            [System.Windows.Automation.ControlType]::Button
+        $aliases = @(
+            "全部清除",
+            "全部清理",
+            "全部清空",
+            "清除全部",
+            "清除所有通知",
+            "全部清除通知",
+            "Clear all",
+            "Clear all notifications",
+            "Dismiss all notifications"
         )
-        $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
-        $aliases = @("全部清除", "全部清理", "全部清空", "清除全部", "Clear all", "Clear all notifications")
-        $doNotDisturbAliases = @("请勿打扰", "勿扰", "Do not disturb", "Do Not Disturb", "Focus assist", "专注助手")
 
         $clickedClearAll = $false
-        for ($i = 0; $i -lt $buttons.Count; $i++) {
-            $button = $buttons.Item($i)
-            $name = $button.Current.Name
-            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        for ($attempt = 0; $attempt -lt 8 -and -not $clickedClearAll; $attempt++) {
+            Start-Sleep -Milliseconds $(if ($attempt -eq 0) { 800 } else { 350 })
+            $root = [System.Windows.Automation.AutomationElement]::RootElement
+            $elements = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
 
-            $matched = $false
-            foreach ($alias in $aliases) {
-                if ($name -eq $alias -or $name -like "*$alias*") {
-                    $matched = $true
+            for ($i = 0; $i -lt $elements.Count; $i++) {
+                $element = $elements.Item($i)
+                $name = $element.Current.Name
+                if (-not (Test-NotificationButtonName -Name $name -Aliases $aliases)) { continue }
+                if (Invoke-NotificationElementClick -Element $element -Name $name) {
+                    $clickedClearAll = $true
                     break
                 }
             }
-
-            if ($matched) {
-                $pattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                $pattern.Invoke()
-                Start-Sleep -Milliseconds 300
-                Write-Host "        已点击通知中心按钮: $name" -ForegroundColor DarkGreen
-                $clickedClearAll = $true
-                break
-            }
-        }
-
-        $dndCount = 0
-        $dndHandled = $false
-        $buttons = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
-        for ($i = 0; $i -lt $buttons.Count; $i++) {
-            $button = $buttons.Item($i)
-            $name = $button.Current.Name
-            if ([string]::IsNullOrWhiteSpace($name)) { continue }
-
-            $matched = $false
-            foreach ($alias in $doNotDisturbAliases) {
-                if ($name -eq $alias -or $name -like "*$alias*") {
-                    $matched = $true
-                    break
-                }
-            }
-            if (-not $matched) { continue }
-
-            if ($name -match '(关闭|Turn off|Disable|已开启|On)') {
-                Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
-                $dndHandled = $true
-                break
-            }
-
-            try {
-                $togglePattern = $button.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
-                if ($togglePattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off) {
-                    $togglePattern.Toggle()
-                    Start-Sleep -Milliseconds 200
-                    Write-Host "        已开启请勿打扰: $name" -ForegroundColor DarkGreen
-                    $dndCount = 1
-                    $dndHandled = $true
-                } else {
-                    Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
-                    $dndHandled = $true
-                }
-            } catch {
-                try {
-                    $invokePattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                    $invokePattern.Invoke()
-                    Start-Sleep -Milliseconds 200
-                    Write-Host "        已点击请勿打扰按钮: $name" -ForegroundColor DarkGreen
-                    $dndCount = 1
-                    $dndHandled = $true
-                } catch {
-                    Write-Host "        找到请勿打扰按钮但无法点击: $name - $($_.Exception.Message)" -ForegroundColor Yellow
-                }
-            }
-            break
         }
 
         [CleanerKeyboard]::Escape()
-        if (-not $dndHandled) {
-            $dndCount += Enable-DoNotDisturbFallback -IsDryRun:$false
-        }
         if ($clickedClearAll) {
-            return (1 + $dndCount)
+            return 1
         }
 
         Write-Host "        未找到通知中心“全部清除”按钮，可能当前没有可清理通知。" -ForegroundColor Yellow
-        return $dndCount
+        return 0
     } catch {
         try { [CleanerKeyboard]::Escape() } catch { }
         Write-Host "        无法通过通知中心按钮清理: $($_.Exception.Message)" -ForegroundColor Yellow
-        return (Enable-DoNotDisturbFallback -IsDryRun:$false)
+        return 0
     }
 }
 
-function Enable-DoNotDisturbFallback {
+function Invoke-EnsureDoNotDisturb {
     param(
         [switch]$IsDryRun
     )
 
-    $quietHoursPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\QuietHours"
     if ($IsDryRun) {
-        Write-Host "        [模拟兜底] 写入 $quietHoursPath -> QuietHoursServiceState=1" -ForegroundColor DarkCyan
+        Write-Host "        [模拟检测] 确认请勿打扰状态；未开启时才开启" -ForegroundColor DarkCyan
         return 1
     }
 
     try {
-        if (-not (Test-Path -LiteralPath $quietHoursPath)) {
-            New-Item -Path $quietHoursPath -Force | Out-Null
+        $quietHoursPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\QuietHours"
+        $quietHoursState = (Get-ItemProperty -LiteralPath $quietHoursPath -Name "QuietHoursServiceState" -ErrorAction SilentlyContinue).QuietHoursServiceState
+        if ($quietHoursState -eq 1) {
+            Write-Host "        请勿打扰已开启，跳过重复操作" -ForegroundColor DarkGreen
+            return 0
         }
-        Set-ItemProperty -LiteralPath $quietHoursPath -Name "QuietHoursServiceState" -Type DWord -Value 1 -ErrorAction Stop
-        Write-Host "        已通过注册表兜底开启请勿打扰: QuietHoursServiceState=1" -ForegroundColor DarkGreen
-        return 1
+    } catch { }
+
+    try {
+        Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+        Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
+
+        if (-not ("CleanerKeyboard" -as [type])) {
+            Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class CleanerKeyboard {
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+    public static void WinN() {
+        keybd_event(0x5B, 0, 0, UIntPtr.Zero);
+        keybd_event(0x4E, 0, 0, UIntPtr.Zero);
+        keybd_event(0x4E, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event(0x5B, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    public static void Escape() {
+        keybd_event(0x1B, 0, 0, UIntPtr.Zero);
+        keybd_event(0x1B, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    public static void LeftClick(int x, int y) {
+        SetCursorPos(x, y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+    }
+}
+"@ -ErrorAction Stop
+        }
+
+        [CleanerKeyboard]::Escape()
+        Start-Sleep -Milliseconds 150
+        [CleanerKeyboard]::WinN()
+
+        $onAliases = @(
+            "请勿打扰已开启",
+            "请勿打扰，已开启",
+            "请勿打扰 已开启",
+            "关闭请勿打扰",
+            "已开启请勿打扰",
+            "Do not disturb on",
+            "Do Not Disturb on",
+            "Turn off do not disturb",
+            "Turn off Do Not Disturb"
+        )
+        $offAliases = @(
+            "请勿打扰已关闭",
+            "请勿打扰，已关闭",
+            "请勿打扰 已关闭",
+            "打开请勿打扰",
+            "开启请勿打扰",
+            "Do not disturb off",
+            "Do Not Disturb off",
+            "Turn on do not disturb",
+            "Turn on Do Not Disturb"
+        )
+        $genericAliases = @("请勿打扰", "Do not disturb", "Do Not Disturb", "Focus assist", "专注助手")
+
+        for ($attempt = 0; $attempt -lt 8; $attempt++) {
+            Start-Sleep -Milliseconds $(if ($attempt -eq 0) { 800 } else { 350 })
+            $root = [System.Windows.Automation.AutomationElement]::RootElement
+            $elements = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+
+            for ($i = 0; $i -lt $elements.Count; $i++) {
+                $element = $elements.Item($i)
+                $name = [string]$element.Current.Name
+                if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+                if (Test-NotificationButtonName -Name $name -Aliases $onAliases) {
+                    [CleanerKeyboard]::Escape()
+                    Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                    return 0
+                }
+
+                if (Test-NotificationButtonName -Name $name -Aliases $offAliases) {
+                    if (Invoke-NotificationElementClick -Element $element -Name $name) {
+                        [CleanerKeyboard]::Escape()
+                        Write-Host "        已开启请勿打扰: $name" -ForegroundColor DarkGreen
+                        return 1
+                    }
+                    continue
+                }
+
+                if (Test-NotificationButtonName -Name $name -Aliases $genericAliases) {
+                    try {
+                        $togglePattern = $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+                        if ($togglePattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) {
+                            [CleanerKeyboard]::Escape()
+                            Write-Host "        请勿打扰已开启: $name" -ForegroundColor DarkGreen
+                            return 0
+                        }
+                        if ($togglePattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off) {
+                            $togglePattern.Toggle()
+                            Start-Sleep -Milliseconds 250
+                            [CleanerKeyboard]::Escape()
+                            Write-Host "        已开启请勿打扰: $name" -ForegroundColor DarkGreen
+                            return 1
+                        }
+                    } catch { }
+                }
+            }
+        }
+
+        [CleanerKeyboard]::Escape()
+        Write-Host "        未能可靠判断请勿打扰状态，已跳过，避免误切换当前状态。" -ForegroundColor Yellow
+        return 0
     } catch {
-        Write-Host "        请勿打扰兜底失败: $($_.Exception.Message)" -ForegroundColor Yellow
+        try { [CleanerKeyboard]::Escape() } catch { }
+        Write-Host "        无法确保请勿打扰开启: $($_.Exception.Message)" -ForegroundColor Yellow
         return 0
     }
 }
@@ -1497,6 +1646,40 @@ function Test-ProtectedRecycleBinName {
     return $false
 }
 
+function Get-RecycleBinOriginalPath {
+    param(
+        [string]$InfoPath
+    )
+
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($InfoPath)
+        if ($bytes.Length -lt 26) { return "" }
+
+        # $I records store the original path as UTF-16LE. Newer Windows builds
+        # may include a 4-byte character count before the string, so parse both.
+        $candidates = @()
+        if ($bytes.Length -gt 28) {
+            try {
+                $charCount = [System.BitConverter]::ToInt32($bytes, 24)
+                if ($charCount -gt 0 -and $charCount -lt 32768 -and (28 + ($charCount * 2)) -le $bytes.Length) {
+                    $candidates += [System.Text.Encoding]::Unicode.GetString($bytes, 28, $charCount * 2)
+                }
+            } catch { }
+        }
+        $candidates += [System.Text.Encoding]::Unicode.GetString($bytes, 24, $bytes.Length - 24)
+
+        foreach ($candidate in $candidates) {
+            $path = ($candidate -replace "`0.*$", "").Trim()
+            $path = ($path -replace '^[\x00-\x1F]+', '').Trim()
+            if ($path -match '^[A-Za-z]:\\|^\\\\') {
+                return $path
+            }
+        }
+    } catch { }
+
+    return ""
+}
+
 function Clear-RecycleBinSafe {
     param(
         [switch]$IsDryRun
@@ -1504,45 +1687,8 @@ function Clear-RecycleBinSafe {
 
     $count = 0
     $protected = 0
-
-    try {
-        $shell = New-Object -ComObject Shell.Application
-        $recycleBin = $shell.Namespace(10)
-        if ($recycleBin) {
-            $items = @($recycleBin.Items())
-            if ($items.Count -eq 0) {
-                Write-Host "        回收站为空" -ForegroundColor Gray
-                return 0
-            }
-
-            foreach ($item in $items) {
-                $name = [string]$item.Name
-                $path = [string]$item.Path
-                if (Test-ProtectedRecycleBinName -Name $name -Path $path) {
-                    Write-Host "        保留: $name" -ForegroundColor Gray
-                    $protected++
-                    continue
-                }
-
-                try {
-                    if ($IsDryRun) {
-                        Write-Host "        [模拟清理回收站] $name" -ForegroundColor DarkCyan
-                    } else {
-                        $item.InvokeVerb("delete")
-                        Write-Host "        已清理回收站项目: $name" -ForegroundColor DarkGreen
-                    }
-                    $count++
-                } catch {
-                    Write-Host "        无法清理回收站项目: $name - $($_.Exception.Message)" -ForegroundColor Yellow
-                }
-            }
-
-            Write-Host "        回收站保护项目: $protected 项" -ForegroundColor Gray
-            return $count
-        }
-    } catch {
-        Write-Host "        无法通过 Shell 读取回收站，改用文件系统扫描: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
+    $skippedUnknown = 0
+    $scanOnly = $true
 
     $recycleRoots = Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue |
         ForEach-Object { Join-Path $_.Root '$Recycle.Bin' } |
@@ -1550,28 +1696,34 @@ function Clear-RecycleBinSafe {
 
     foreach ($root in $recycleRoots) {
         Get-ChildItem -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue |
-            Where-Object { -not $_.PSIsContainer -and $_.Name -notmatch '^\$I' } |
+            Where-Object { -not $_.PSIsContainer -and $_.Name -match '^\$I' } |
             ForEach-Object {
-                if (Test-ProtectedRecycleBinName -Name $_.Name -Path $_.FullName) {
-                    Write-Host "        保留: $($_.FullName)" -ForegroundColor Gray
+                $infoFile = $_.FullName
+                $originalPath = Get-RecycleBinOriginalPath -InfoPath $infoFile
+                $suffix = $_.Name.Substring(2)
+                $dataPath = Join-Path $_.DirectoryName ('$R' + $suffix)
+                $originalName = if ($originalPath) { Split-Path -Path $originalPath -Leaf } else { "" }
+
+                if ([string]::IsNullOrWhiteSpace($originalPath)) {
+                    Write-Host "        跳过无法识别原始路径的回收站项目: $infoFile" -ForegroundColor Yellow
+                    $skippedUnknown++
+                } elseif (Test-ProtectedRecycleBinName -Name $originalName -Path $originalPath) {
+                    Write-Host "        保留: $originalPath" -ForegroundColor Gray
                     $protected++
                 } else {
-                    try {
-                        if ($IsDryRun) {
-                            Write-Host "        [模拟清理回收站] $($_.FullName)" -ForegroundColor DarkCyan
-                        } else {
-                            Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
-                            Write-Host "        已清理回收站项目: $($_.FullName)" -ForegroundColor DarkGreen
-                        }
-                        $count++
-                    } catch {
-                        Write-Host "        无法清理回收站项目: $($_.FullName) - $($_.Exception.Message)" -ForegroundColor Yellow
-                    }
+                    Write-Host "        [仅扫描回收站，不删除] $originalPath" -ForegroundColor DarkCyan
+                    $count++
                 }
             }
     }
 
+    if ($scanOnly -and -not $IsDryRun) {
+        Write-Host "        安全锁已启用：回收站模块只扫描，不执行永久删除。" -ForegroundColor Yellow
+    }
     Write-Host "        回收站保护项目: $protected 项" -ForegroundColor Gray
+    if ($skippedUnknown -gt 0) {
+        Write-Host "        回收站未知项目已跳过: $skippedUnknown 项" -ForegroundColor Gray
+    }
     return $count
 }
 
@@ -1774,6 +1926,154 @@ function Connect-CompanyWifi {
     return $count
 }
 
+function ConvertTo-WorkerCommandLineArg {
+    param([string]$Value)
+
+    if ($null -eq $Value) { return '""' }
+    $text = [string]$Value
+    if ($text.Length -eq 0) { return '""' }
+    if ($text -notmatch '[\s"]') { return $text }
+    return '"' + ($text -replace '"', '\"') + '"'
+}
+
+function Add-WorkerSwitch {
+    param(
+        [System.Collections.Generic.List[string]]$Args,
+        [bool]$Enabled,
+        [string]$Name
+    )
+    if ($Enabled) { $Args.Add($Name) }
+}
+
+function Add-WorkerValue {
+    param(
+        [System.Collections.Generic.List[string]]$Args,
+        [string]$Name,
+        [object]$Value
+    )
+    if ($null -eq $Value) { return }
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text)) { return }
+    $Args.Add($Name)
+    $Args.Add($text)
+}
+
+function Get-WorkerScriptPath {
+    $path = [string]$PSCommandPath
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        $path = [string]$MyInvocation.MyCommand.Path
+    }
+    if ($path.StartsWith("\\?\")) {
+        $path = $path.Substring(4)
+    }
+    return $path
+}
+
+function Get-WorkerLogPath {
+    param([string]$TaskName)
+
+    if ([string]::IsNullOrWhiteSpace($LogPath)) { return "" }
+    $dir = Split-Path -Parent $LogPath
+    if ([string]::IsNullOrWhiteSpace($dir)) { return "" }
+    $base = [System.IO.Path]::GetFileNameWithoutExtension($LogPath)
+    $safeTask = ($TaskName -replace '[^A-Za-z0-9_\-]', '_')
+    return (Join-Path $dir "$base-$safeTask.log")
+}
+
+function New-WorkerBaseArgs {
+    param(
+        [string]$TaskName,
+        [string]$WorkerLogPath
+    )
+
+    $baseArgs = [System.Collections.Generic.List[string]]::new()
+    $baseArgs.Add("-NoProfile")
+    $baseArgs.Add("-ExecutionPolicy")
+    $baseArgs.Add("Bypass")
+    $baseArgs.Add("-File")
+    $baseArgs.Add((Get-WorkerScriptPath))
+    $baseArgs.Add("-NoMenu")
+    $baseArgs.Add("-WorkerTask")
+    $baseArgs.Add($TaskName)
+    Add-WorkerSwitch -Args $baseArgs -Enabled ([bool]$DryRun) -Name "-DryRun"
+    Add-WorkerValue -Args $baseArgs -Name "-LogPath" -Value $WorkerLogPath
+    Add-WorkerValue -Args $baseArgs -Name "-BackupRoot" -Value $BackupRoot
+    Add-WorkerValue -Args $baseArgs -Name "-AdobiRoot" -Value $AdobiRoot
+    Add-WorkerValue -Args $baseArgs -Name "-PrivateBrowserRoot" -Value $PrivateBrowserRoot
+    return ,$baseArgs
+}
+
+function Start-CleanerWorker {
+    param(
+        [string]$TaskName,
+        [string]$Label,
+        [string[]]$TaskArgs
+    )
+
+    $workerLogPath = Get-WorkerLogPath -TaskName $TaskName
+    if (-not [string]::IsNullOrWhiteSpace($workerLogPath)) {
+        Remove-Item -LiteralPath $workerLogPath -Force -ErrorAction SilentlyContinue
+    }
+
+    $workerArgs = New-WorkerBaseArgs -TaskName $TaskName -WorkerLogPath $workerLogPath
+    foreach ($arg in $TaskArgs) {
+        if (-not [string]::IsNullOrWhiteSpace($arg)) {
+            $workerArgs.Add($arg)
+        }
+    }
+
+    $argumentLine = ($workerArgs | ForEach-Object { ConvertTo-WorkerCommandLineArg $_ }) -join " "
+    Write-Host ""
+    Write-Host "[>] 启动清理项: $Label" -ForegroundColor Cyan
+    Write-Host "    可关闭弹出的子 PowerShell 跳过当前项；调度窗口会继续下一个项目。" -ForegroundColor DarkGray
+
+    try {
+        $process = Start-Process -FilePath "powershell.exe" -ArgumentList $argumentLine -WindowStyle Normal -Wait -PassThru
+        $exitCode = if ($null -ne $process.ExitCode) { [int]$process.ExitCode } else { -1 }
+        if ($exitCode -eq 0) {
+            Write-Host "[√] 清理项完成: $Label" -ForegroundColor Green
+        } else {
+            Write-Host "[!] 清理项已跳过或中断: $Label (ExitCode=$exitCode)" -ForegroundColor Yellow
+        }
+        if (-not [string]::IsNullOrWhiteSpace($workerLogPath) -and (Test-Path -LiteralPath $workerLogPath)) {
+            Write-Host "----- 子项日志: $Label -----" -ForegroundColor DarkGray
+            Get-Content -LiteralPath $workerLogPath -Encoding UTF8 -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host $_ }
+            Write-Host "----- 子项日志结束: $Label -----" -ForegroundColor DarkGray
+        }
+        return $exitCode
+    } catch {
+        Write-Host "[!] 无法启动清理项: $Label - $($_.Exception.Message)" -ForegroundColor Yellow
+        return -1
+    }
+}
+
+function Write-OrchestratedSummary {
+    param(
+        [hashtable]$TaskResults,
+        [hashtable]$SkippedTasks
+    )
+
+    if ([string]::IsNullOrWhiteSpace($JsonSummaryPath)) { return }
+    try {
+        $summaryDir = Split-Path -Parent $JsonSummaryPath
+        if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
+            New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
+        }
+        Write-JsonSummary -Depth 8 -Summary ([ordered]@{
+            status = "complete"
+            dry_run = [bool]$DryRun
+            orchestrated = $true
+            finished_at = (Get-Date).ToString("o")
+            results = $TaskResults
+            skipped = $SkippedTasks
+        })
+        Write-Host "`n结果摘要: $JsonSummaryPath" -ForegroundColor Green
+    } catch {
+        Write-Host "无法写入结果摘要: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 # ====================== 主流程 ======================
 
 Clear-Host
@@ -1812,6 +2112,113 @@ if ($SkipStandardEdgeCleaning -and -not $ResetEdge) {
     Write-Warn "已跳过 Edge 标准隐私清理，仅执行显式选择的 Edge 子项目"
 }
 
+if ($NoMenu -and [string]::IsNullOrWhiteSpace($WorkerTask)) {
+    $taskList = @()
+
+    if ($CloseAdobiProcesses) {
+        $taskList += [pscustomobject]@{
+            Key = "process"
+            Label = "运行进程与系统代理"
+            Args = @("-SkipEdgeCleaning", "-CloseAdobiProcesses")
+        }
+    }
+
+    if ($script:CleanEdgeModule) {
+        $edgeArgs = @()
+        $edgeArgList = [System.Collections.Generic.List[string]]::new()
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepCookies) -Name "-KeepCookies"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepHistory) -Name "-KeepHistory"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepSiteStorage) -Name "-KeepSiteStorage"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepSessions) -Name "-KeepSessions"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepPasswords) -Name "-KeepPasswords"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$KeepAutofill) -Name "-KeepAutofill"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ClearBookmarks) -Name "-ClearBookmarks"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ClearExtensions) -Name "-ClearExtensions"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ClearSettings) -Name "-ClearSettings"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ClearMicrosoftAccount) -Name "-ClearMicrosoftAccount"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ClearSitePreferences) -Name "-ClearSitePreferences"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$ResetEdge) -Name "-ResetEdge"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$SkipBackup) -Name "-SkipBackup"
+        Add-WorkerSwitch -Args $edgeArgList -Enabled ([bool]$SkipStandardEdgeCleaning) -Name "-SkipStandardEdgeCleaning"
+        $edgeArgs = @($edgeArgList)
+        $taskList += [pscustomobject]@{
+            Key = "edge"
+            Label = "Edge 浏览器数据"
+            Args = $edgeArgs
+        }
+    }
+
+    if ($ClearWindowsNotifications) {
+        $taskList += [pscustomobject]@{ Key = "notifications"; Label = "Windows 通知历史"; Args = @("-SkipEdgeCleaning", "-ClearWindowsNotifications") }
+    }
+    if ($EnsureDoNotDisturb) {
+        $taskList += [pscustomobject]@{ Key = "doNotDisturb"; Label = "请勿打扰模式"; Args = @("-SkipEdgeCleaning", "-EnsureDoNotDisturb") }
+    }
+    if ($ClearScreenshots -or $ClearScreenshotsDays -gt 0) {
+        $shotArgs = [System.Collections.Generic.List[string]]::new()
+        $shotArgs.Add("-SkipEdgeCleaning")
+        Add-WorkerSwitch -Args $shotArgs -Enabled ([bool]$ClearScreenshots) -Name "-ClearScreenshots"
+        Add-WorkerValue -Args $shotArgs -Name "-ClearScreenshotsFrom" -Value $ClearScreenshotsFrom
+        Add-WorkerValue -Args $shotArgs -Name "-ClearScreenshotsTo" -Value $ClearScreenshotsTo
+        Add-WorkerValue -Args $shotArgs -Name "-ClearScreenshotsLabel" -Value $ClearScreenshotsLabel
+        if ($ClearScreenshotsDays -gt 0) {
+            Add-WorkerValue -Args $shotArgs -Name "-ClearScreenshotsDays" -Value $ClearScreenshotsDays
+        }
+        $taskList += [pscustomobject]@{ Key = "screenshots"; Label = "截图文件"; Args = @($shotArgs) }
+    }
+    if ($ClearClipboardHistory) {
+        $taskList += [pscustomobject]@{ Key = "clipboard"; Label = "剪贴板历史"; Args = @("-SkipEdgeCleaning", "-ClearClipboardHistory") }
+    }
+    if ($ClearRecycleBin) {
+        $taskList += [pscustomobject]@{ Key = "recycle"; Label = "回收站保护扫描"; Args = @("-SkipEdgeCleaning", "-ClearRecycleBin") }
+    }
+    if ($ClearOpencodeShortcuts) {
+        $taskList += [pscustomobject]@{ Key = "shortcuts"; Label = "私人入口快捷方式"; Args = @("-SkipEdgeCleaning", "-ClearOpencodeShortcuts") }
+    }
+    if ($CleanPrivateBrowser -or $ClearPrivateBrowserHistory) {
+        $privateArgs = [System.Collections.Generic.List[string]]::new()
+        $privateArgs.Add("-SkipEdgeCleaning")
+        Add-WorkerSwitch -Args $privateArgs -Enabled ([bool]$CleanPrivateBrowser) -Name "-CleanPrivateBrowser"
+        Add-WorkerSwitch -Args $privateArgs -Enabled ([bool]$ClearPrivateBrowserHistory) -Name "-ClearPrivateBrowserHistory"
+        Add-WorkerSwitch -Args $privateArgs -Enabled ([bool]$SkipPrivateBrowserBackup) -Name "-SkipPrivateBrowserBackup"
+        $taskList += [pscustomobject]@{ Key = "private_browser"; Label = "私人浏览器"; Args = @($privateArgs) }
+    }
+    if ($KeepWifiPrefixes.Count -gt 0 -or $ForgetWifiPatterns.Count -gt 0 -or $ConnectCompanyWifi) {
+        $wifiArgs = [System.Collections.Generic.List[string]]::new()
+        $wifiArgs.Add("-SkipEdgeCleaning")
+        if ($KeepWifiPrefixes.Count -gt 0) {
+            Add-WorkerValue -Args $wifiArgs -Name "-KeepWifiPrefixes" -Value ($KeepWifiPrefixes -join ",")
+        }
+        if ($ForgetWifiPatterns.Count -gt 0) {
+            Add-WorkerValue -Args $wifiArgs -Name "-ForgetWifiPatterns" -Value ($ForgetWifiPatterns -join ",")
+        }
+        Add-WorkerSwitch -Args $wifiArgs -Enabled ([bool]$ConnectCompanyWifi) -Name "-ConnectCompanyWifi"
+        Add-WorkerValue -Args $wifiArgs -Name "-CompanyWifiSsid" -Value $CompanyWifiSsid
+        $taskList += [pscustomobject]@{ Key = "wifi"; Label = "WiFi 配置"; Args = @($wifiArgs) }
+    }
+
+    if ($taskList.Count -gt 0) {
+        Write-Host "已启用分项调度模式：每个清理项会在独立子 PowerShell 中运行。" -ForegroundColor Cyan
+        Write-Host "关闭某个子 PowerShell 只会跳过该项；关闭本调度窗口则停止全部后续项目。" -ForegroundColor Cyan
+
+        $taskResults = @{}
+        $skippedTasks = @{}
+        foreach ($task in $taskList) {
+            $code = Start-CleanerWorker -TaskName $task.Key -Label $task.Label -TaskArgs $task.Args
+            $taskResults[$task.Label] = $code
+            if ($code -ne 0) {
+                $skippedTasks[$task.Label] = "closed_or_failed"
+            }
+        }
+
+        Write-OrchestratedSummary -TaskResults $taskResults -SkippedTasks $skippedTasks
+        if ($script:TranscriptStarted) {
+            Stop-Transcript | Out-Null
+        }
+        exit 0
+    }
+}
+
 if ($script:CleanEdgeModule) {
     Stop-EdgeProcesses
 }
@@ -1828,12 +2235,12 @@ if ($script:CleanEdgeModule -and -not $profileDirs -and -not (Test-Path $script:
         if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
             New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
         }
-        [ordered]@{
+        Write-JsonSummary -Depth 5 -Summary ([ordered]@{
             status = "failed"
             dry_run = [bool]$DryRun
             error = "未找到 Microsoft Edge 用户数据目录"
             finished_at = (Get-Date).ToString("o")
-        } | ConvertTo-Json -Depth 5 | Set-Content -Path $JsonSummaryPath -Encoding utf8
+        })
     }
     if ($script:TranscriptStarted) {
         Stop-Transcript | Out-Null
@@ -1885,6 +2292,7 @@ $results = [ordered]@{
     "运行进程" = 0
     "系统代理设置" = 0
     "Windows 通知历史" = 0
+    "请勿打扰模式" = 0
     "截图文件" = 0
     "剪贴板历史" = 0
     "回收站" = 0
@@ -1908,6 +2316,7 @@ $deepItems = @{
     "运行进程" = $true
     "系统代理设置" = $true
     "Windows 通知历史" = $true
+    "请勿打扰模式" = $true
     "截图文件" = $true
     "剪贴板历史" = $true
     "回收站" = $true
@@ -1940,6 +2349,7 @@ $choices = [ordered]@{
     "诊断日志与崩溃报告" = $script:CleanDiagnostics
     "Adobi / Edge / Codex 运行进程" = [bool]$CloseAdobiProcesses
     "Windows 通知历史" = [bool]$ClearWindowsNotifications
+    "请勿打扰模式" = [bool]$EnsureDoNotDisturb
     "截图文件 (当班时间窗口)" = ($ClearScreenshots -or $ClearScreenshotsDays -gt 0)
     "剪贴板历史" = [bool]$ClearClipboardHistory
     "回收站" = [bool]$ClearRecycleBin
@@ -2278,6 +2688,16 @@ if ($ClearWindowsNotifications) {
     Write-Warn "保留 Windows 通知历史记录（默认）"
 }
 
+# 确保 Windows 请勿打扰开启
+if ($EnsureDoNotDisturb) {
+    Write-Step "正在确认 Windows 请勿打扰模式..."
+    Write-Deep "仅在明确检测到未开启时才开启；已开启或状态不可靠时不盲目切换"
+    $results["请勿打扰模式"] += Invoke-EnsureDoNotDisturb -IsDryRun:$DryRun
+    Write-Success "请勿打扰模式检查完成"
+} else {
+    Write-Warn "不调整请勿打扰模式（默认）"
+}
+
 # 清理截图文件夹
 if ($ClearScreenshots -or $ClearScreenshotsDays -gt 0) {
     Write-Step "正在清理截图文件夹..."
@@ -2311,10 +2731,10 @@ if ($ClearClipboardHistory) {
 }
 
 if ($ClearRecycleBin) {
-    Write-Step "正在清理回收站..."
-    Write-Deep "会跳过 .xls/.xlsx/.csv、名称或路径包含 -OMM / 送测 的项目，以及 inspec 相关程序文件"
+    Write-Step "正在扫描回收站..."
+    Write-Deep "安全锁已启用：只读取原始路径并列出项目，不执行永久删除"
     $results["回收站"] += Clear-RecycleBinSafe -IsDryRun:$DryRun
-    Write-Success "回收站清理完成"
+    Write-Success "回收站扫描完成"
 } else {
     Write-Warn "保留回收站（默认）"
 }
@@ -2428,13 +2848,13 @@ if (-not [string]::IsNullOrWhiteSpace($JsonSummaryPath)) {
         if (-not [string]::IsNullOrWhiteSpace($summaryDir)) {
             New-Item -Path $summaryDir -ItemType Directory -Force | Out-Null
         }
-        [ordered]@{
+        Write-JsonSummary -Depth 8 -Summary ([ordered]@{
             status = "complete"
             dry_run = [bool]$DryRun
             finished_at = (Get-Date).ToString("o")
             results = $results
             choices = $choices
-        } | ConvertTo-Json -Depth 8 | Set-Content -Path $JsonSummaryPath -Encoding utf8
+        })
         Write-Host "`n结果摘要: $JsonSummaryPath" -ForegroundColor Green
     } catch {
         Write-Host "无法写入结果摘要: $($_.Exception.Message)" -ForegroundColor Yellow

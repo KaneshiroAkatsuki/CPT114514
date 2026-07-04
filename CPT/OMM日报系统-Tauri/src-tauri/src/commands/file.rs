@@ -1,7 +1,11 @@
 use tauri::{command, AppHandle};
+use serde::Serialize;
 
 #[command]
-pub async fn select_folder(app: AppHandle, default_path: Option<String>) -> Result<Option<String>, String> {
+pub async fn select_folder(
+    app: AppHandle,
+    default_path: Option<String>,
+) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let mut dialog = app.dialog().file();
@@ -13,7 +17,7 @@ pub async fn select_folder(app: AppHandle, default_path: Option<String>) -> Resu
     }
 
     let path = dialog.blocking_pick_folder();
-    
+
     match path {
         Some(path) => Ok(Some(path.to_string())),
         None => Ok(None),
@@ -25,7 +29,8 @@ pub async fn select_folder(app: AppHandle, default_path: Option<String>) -> Resu
 pub async fn select_xlsx_file(app: AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    let path = app.dialog()
+    let path = app
+        .dialog()
         .file()
         .add_filter("Excel 模板", &["xlsx"])
         .blocking_pick_file();
@@ -39,12 +44,22 @@ pub async fn select_xlsx_file(app: AppHandle) -> Result<Option<String>, String> 
 fn is_date_folder(name: &str) -> bool {
     let chars: Vec<char> = name.chars().collect();
     let mut i = 0;
-    while i < chars.len() && chars[i].is_ascii_digit() { i += 1; }
-    if i == 0 { return false; }
-    if i >= chars.len() || chars[i] != '.' { return false; }
+    while i < chars.len() && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == 0 {
+        return false;
+    }
+    if i >= chars.len() || chars[i] != '.' {
+        return false;
+    }
     i += 1;
-    while i < chars.len() && chars[i].is_ascii_digit() { i += 1; }
-    if i < chars.len() && (chars[i] == 'A' || chars[i] == 'B') { i += 1; }
+    while i < chars.len() && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i < chars.len() && (chars[i] == 'A' || chars[i] == 'B') {
+        i += 1;
+    }
     i == chars.len()
 }
 
@@ -55,8 +70,7 @@ pub fn list_date_folders(work_dir: String) -> Result<Vec<String>, String> {
         return Ok(vec![]);
     }
     let mut folders = Vec::new();
-    let entries = std::fs::read_dir(&path)
-        .map_err(|e| format!("无法读取目录: {}", e))?;
+    let entries = std::fs::read_dir(&path).map_err(|e| format!("无法读取目录: {}", e))?;
     for entry in entries {
         if let Ok(entry) = entry {
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -79,8 +93,7 @@ pub fn list_child_folders(path: String) -> Result<Vec<String>, String> {
         return Ok(vec![]);
     }
     let mut names = Vec::new();
-    let entries = std::fs::read_dir(p)
-        .map_err(|e| format!("无法读取目录: {}", e))?;
+    let entries = std::fs::read_dir(p).map_err(|e| format!("无法读取目录: {}", e))?;
     for entry in entries {
         if let Ok(entry) = entry {
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -90,6 +103,89 @@ pub fn list_child_folders(path: String) -> Result<Vec<String>, String> {
     }
     names.sort();
     Ok(names)
+}
+
+#[derive(Serialize)]
+pub struct MovedFolderInfo {
+    pub folder_name: String,
+    pub source_path: String,
+    pub target_path: String,
+}
+
+fn safe_unique_destination(target_dir: &std::path::Path, folder_name: &str) -> std::path::PathBuf {
+    let mut candidate = target_dir.join(folder_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    for index in 1..=999 {
+        let next_name = format!("{}-{}", folder_name, index);
+        candidate = target_dir.join(next_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    let fallback = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0);
+    target_dir.join(format!("{}-{}", folder_name, fallback))
+}
+
+#[command]
+pub fn move_folders_to_shift_bucket(
+    date_dir: String,
+    folder_names: Vec<String>,
+    shift: String,
+) -> Result<Vec<MovedFolderInfo>, String> {
+    if folder_names.is_empty() {
+        return Ok(vec![]);
+    }
+    let shift = shift.trim().to_uppercase();
+    if shift != "A" && shift != "B" {
+        return Err("班次必须是 A 或 B".into());
+    }
+    let date_path = std::fs::canonicalize(&date_dir).map_err(|e| format!("日期目录无效: {}", e))?;
+    if !date_path.is_dir() {
+        return Err("日期目录不是有效文件夹".into());
+    }
+    let target_dir = date_path.join(format!("新建文件夹{}", shift));
+    if target_dir.exists() && !target_dir.is_dir() {
+        return Err(format!("目标位置已存在但不是文件夹: {}", target_dir.display()));
+    }
+    if !target_dir.exists() {
+        std::fs::create_dir_all(&target_dir).map_err(|e| format!("无法创建目标文件夹: {}", e))?;
+    }
+
+    let mut moved = Vec::new();
+    for raw_name in folder_names {
+        let folder_name = raw_name.trim();
+        if folder_name.is_empty() || folder_name == "." || folder_name == ".." {
+            return Err("省略清单包含无效文件夹名".into());
+        }
+        let source = date_path.join(folder_name);
+        let source_canonical = std::fs::canonicalize(&source)
+            .map_err(|e| format!("源文件夹不存在或不可访问 {}: {}", folder_name, e))?;
+        if !source_canonical.is_dir() {
+            return Err(format!("源路径不是文件夹: {}", folder_name));
+        }
+        if source_canonical.parent() != Some(date_path.as_path()) {
+            return Err(format!("只允许移动当前日期目录的直接子文件夹: {}", folder_name));
+        }
+        if source_canonical == target_dir {
+            return Err(format!("不能移动目标文件夹本身: {}", folder_name));
+        }
+
+        let destination = safe_unique_destination(&target_dir, folder_name);
+        std::fs::rename(&source_canonical, &destination)
+            .map_err(|e| format!("移动 {} 失败: {}", folder_name, e))?;
+        moved.push(MovedFolderInfo {
+            folder_name: folder_name.to_string(),
+            source_path: source_canonical.to_string_lossy().to_string(),
+            target_path: destination.to_string_lossy().to_string(),
+        });
+    }
+
+    Ok(moved)
 }
 
 #[command]
@@ -110,8 +206,7 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     };
 
     // Validate that target is a real local directory
-    let canonical = std::fs::canonicalize(target)
-        .map_err(|e| format!("无效路径: {}", e))?;
+    let canonical = std::fs::canonicalize(target).map_err(|e| format!("无效路径: {}", e))?;
     if !canonical.is_dir() {
         return Err("路径不是有效目录".into());
     }

@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ReviewDialog } from "@/components/ReviewDialog";
 import { ShiftChooseDialog } from "@/components/ShiftChooseDialog";
 import { PreviewDialog } from "@/components/PreviewDialog";
+import { MultiDayOverviewDialog, type MultiDayOverviewItem, type MultiDayOverviewStatus } from "@/components/MultiDayOverviewDialog";
 import { DaySettingsDialog } from "@/components/DaySettingsDialog";
 import { HelpCenterDialog } from "@/components/HelpCenterDialog";
 import { ConfigLocationDialog } from "@/components/ConfigLocationDialog";
@@ -13,12 +14,14 @@ import { RecognitionRulesDialog } from "@/components/RecognitionRulesDialog";
 import { PersonalCleanerDialog } from "@/components/PersonalCleanerDialog";
 import { SettingsCenterDialog, type SettingsCenterDraft } from "@/components/SettingsCenterDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { useFile, useSidecar, useConfigManager, useAccountManager, useDataStoreManager } from "@/hooks/useSidecar";
-import { ManualTaskDialog } from "@/components/ManualTaskDialog";
+import { KnownSendersDialog } from "@/components/KnownSendersDialog";
+import { MeasurementPeopleDialog } from "@/components/MeasurementPeopleDialog";
+import { useFile, useSidecar, useConfigManager, useAccountManager, useDataStoreManager, usePersonalCleaner, useKnownSenderManager } from "@/hooks/useSidecar";
+import { ManualTaskDialog, type ManualTimeSuggestion } from "@/components/ManualTaskDialog";
 import { detectManualCandidates, validateRealManualTask } from "@/lib/utils";
 import { emptyRecognitionRules } from "@/lib/recognitionRules";
-import type { DisplayNameMode, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount, DataStoreInfo } from "@/types/record";
-import { ArrowLeft, BarChart3, Database, Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Home, Info, ShieldCheck } from "lucide-react";
+import type { DisplayNameMode, DurationOverride, DurationRule, DurationRuleMatcher, FillerPosition, FolderRecord, ReviewInfo, GenerateSettings, Config, QueueItem, QueueItemSettingsOverride, PreviewData, TemplateInfo, TemplatePaths, SpecialItem, ManualFolderCandidate, RecognitionRules, RealManualTask, PublicAccount, DataStoreInfo, PersonalCleanerBackupInfo } from "@/types/record";
+import { ArrowLeft, BarChart3, Clock, Database, Folder, Settings, Play, HelpCircle, FolderOpen, Trash2, Plus, RefreshCw, X, FileSpreadsheet, Home, Info, ShieldCheck } from "lucide-react";
 import { pinyin } from "pinyin-pro";
 
 function getInitials(name: string): string {
@@ -34,6 +37,10 @@ function schemePillClass(label: string): string {
   return "bg-slate-100 text-slate-600 border-slate-200";
 }
 
+function waitForVisibleFeedback(ms = 650): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 type GenerateFailureDetail = {
   dateFolder: string;
   reason: string;
@@ -46,12 +53,38 @@ type AppConfirmRequest = {
   title: string;
   description: string;
   confirmLabel: string;
-  cancelLabel?: string;
+  cancelLabel?: string | null;
   tone?: "info" | "warning" | "danger";
   resolve: (confirmed: boolean) => void;
 };
 
 type ModuleView = "home" | "daily" | "dataManagement";
+type QueueContextMenu = { x: number; y: number; index: number };
+const DEFAULT_FILLER_POSITION: FillerPosition = "middle";
+const DEFAULT_OTHER_NOTE = "其他事务";
+const CONTEXT_MENU_WIDTH = 260;
+const CONTEXT_MENU_MAX_HEIGHT = 520;
+const CONTEXT_MENU_MARGIN = 12;
+const FILLER_POSITION_LABELS: Record<FillerPosition, string> = {
+  head: "头部",
+  middle: "中部",
+  tail: "尾部",
+  random: "随机",
+};
+
+function getContextMenuStyle(menu: QueueContextMenu): CSSProperties {
+  if (typeof window === "undefined") {
+    return { left: menu.x, top: menu.y, width: CONTEXT_MENU_WIDTH, maxHeight: CONTEXT_MENU_MAX_HEIGHT };
+  }
+  const maxHeight = Math.min(window.innerHeight * 0.7, CONTEXT_MENU_MAX_HEIGHT);
+  const maxLeft = Math.max(CONTEXT_MENU_MARGIN, window.innerWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_MARGIN);
+  const left = Math.min(Math.max(CONTEXT_MENU_MARGIN, menu.x), maxLeft);
+  const top = Math.max(
+    CONTEXT_MENU_MARGIN,
+    Math.min(menu.y, window.innerHeight - maxHeight - CONTEXT_MENU_MARGIN)
+  );
+  return { left, top, width: CONTEXT_MENU_WIDTH, maxHeight };
+}
 
 interface MainWindowProps {
   currentAccount: PublicAccount;
@@ -75,14 +108,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [dateFolders, setDateFolders] = useState<string[]>([]);
 
   // Settings state
-  const [leaveStrategy, setLeaveStrategy] = useState<'auto' | 'early' | 'normal'>('auto');
+  const [leaveStrategy, setLeaveStrategy] = useState<'auto' | 'early' | 'normal'>('normal');
   const [enableHand, setEnableHand] = useState(true);
   const [enableOther, setEnableOther] = useState(false);
   const [useSrcOutput, setUseSrcOutput] = useState(true);
   const [outputDir, setOutputDir] = useState("");
   const [shiftDefault, setShiftDefault] = useState<'A' | 'B'>('B');
-  const [tppMin, setTppMin] = useState(3.0);
-  const [tppMax, setTppMax] = useState(7.0);
+  const [tppMin, setTppMin] = useState(2.0);
+  const [tppMax, setTppMax] = useState(5.0);
   const [pkgRest, setPkgRest] = useState(0);
   const [handMax, setHandMax] = useState(120);
   const [otherMax, setOtherMax] = useState(90);
@@ -96,11 +129,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [recognitionRulesPath, setRecognitionRulesPath] = useState("");
   const [recognitionRulesExists, setRecognitionRulesExists] = useState(false);
   const [dataStoreInfo, setDataStoreInfo] = useState<DataStoreInfo | null>(null);
+  const [cleanerBackupInfo, setCleanerBackupInfo] = useState<PersonalCleanerBackupInfo | null>(null);
+  const [dateFoldersRefreshing, setDateFoldersRefreshing] = useState(false);
+  const [dateFoldersRefreshMessage, setDateFoldersRefreshMessage] = useState("");
 
   // Preview dialog state
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [multiDayOverviewOpen, setMultiDayOverviewOpen] = useState(false);
+  const [multiDayOverviewLoading, setMultiDayOverviewLoading] = useState(false);
+  const [multiDayOverviewItems, setMultiDayOverviewItems] = useState<MultiDayOverviewItem[]>([]);
 
   // Day settings dialog state
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
@@ -110,6 +149,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpSection, setHelpSection] = useState('quickstart');
   const [settingsCenterOpen, setSettingsCenterOpen] = useState(false);
+  const [knownSendersOpen, setKnownSendersOpen] = useState(false);
+  const [measurementPeopleOpen, setMeasurementPeopleOpen] = useState(false);
   const [personalCleanerOpen, setPersonalCleanerOpen] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleView>("home");
   const [dataManagementDeniedOpen, setDataManagementDeniedOpen] = useState(false);
@@ -117,11 +158,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   // Config location dialog state
   const [configLocationOpen, setConfigLocationOpen] = useState(false);
 
-  // 特殊大件物品管理
+  // 耗时规则库管理（旧 special_items 仅作兼容兜底）
   const [specialItemsOpen, setSpecialItemsOpen] = useState(false);
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([
     { name: "烧结盘", minutes: 8 },
   ]);
+  const [durationRules, setDurationRules] = useState<DurationRule[]>([]);
 
   // Template info state
   const [templateInfo, setTemplateInfo] = useState<TemplateInfo | null>(null);
@@ -134,7 +176,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [pendingRecords, setPendingRecords] = useState<FolderRecord[]>([]);
 
   // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<QueueContextMenu | null>(null);
 
   // 手量任务管理弹窗
   const [manualTaskOpen, setManualTaskOpen] = useState(false);
@@ -146,11 +188,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [shiftChooseFolderName, setShiftChooseFolderName] = useState("");
   const [shiftChooseOpen, setShiftChooseOpen] = useState(false);
 
-  const { selectFolder, selectXlsxFile, openFolder } = useFile();
+  const { selectFolder, selectXlsxFile, openFolder, moveFoldersToShiftBucket } = useFile();
   const { parseFolders, generate, preview, listDateFolders, listChildFolders, getTemplateInfo, replaceTemplate, resetTemplate, getTemplatePaths } = useSidecar();
-  const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules } = useConfigManager();
+  const { loadConfigWithInfo, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules, loadDurationRules, saveDurationRules } = useConfigManager();
   const { setCurrentAccountDisplayMode } = useAccountManager();
   const { getDataStoreInfo } = useDataStoreManager();
+  const { upsertKnownSender } = useKnownSenderManager();
+  const { getPersonalCleanerBackupInfo, cleanPersonalCleanerBackups } = usePersonalCleaner();
   const isAdminAccount = currentAccount.role === "admin";
   const moduleTitle = activeModule === "daily" ? "信息统计局" : activeModule === "dataManagement" ? "数据管理局" : "管理厅主页";
 
@@ -179,6 +223,53 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     setRecognitionRulesPath(info.path);
     setRecognitionRulesExists(info.exists);
     return info;
+  };
+
+  const buildMigratedDurationRule = (item: SpecialItem): DurationRule => {
+    const key = item.name.trim().replace(/\s+/g, "-").toLowerCase();
+    return {
+      id: `migrated-special-${encodeURIComponent(key)}`,
+      builtinKey: null,
+      name: item.name.trim(),
+      enabled: true,
+      source: "migrated",
+      priority: 300,
+      matchMode: "any",
+      matchers: [
+        { field: "folder", op: "contains", value: item.name.trim() },
+        { field: "station", op: "contains", value: item.name.trim() },
+        { field: "product", op: "contains", value: item.name.trim() },
+      ],
+      duration: {
+        mode: "per_piece",
+        minutes: item.minutes,
+        minMinutes: item.minutes,
+        maxMinutes: item.minutes,
+        quantityPolicy: "piece_first",
+        compressible: false,
+        missingQuantityPolicy: "one_piece",
+      },
+      userModified: true,
+      builtinVersion: 1,
+      deprecated: false,
+    };
+  };
+
+  const refreshDurationRules = async (legacySpecialItems?: SpecialItem[]) => {
+    let rules = await loadDurationRules();
+    const legacyItems = (legacySpecialItems || []).filter((item) => item.name?.trim() && Number.isFinite(item.minutes) && item.minutes > 0);
+    if (legacyItems.length > 0) {
+      const existingNames = new Set(rules.map((rule) => rule.name.trim()));
+      const migrated = legacyItems
+        .filter((item) => !existingNames.has(item.name.trim()))
+        .map(buildMigratedDurationRule);
+      if (migrated.length > 0) {
+        rules = await saveDurationRules([...rules, ...migrated]);
+        addLog(`旧特殊物品已迁移为耗时规则: ${migrated.map((rule) => rule.name).join("、")}`);
+      }
+    }
+    setDurationRules(rules);
+    return rules;
   };
 
   const handleDisplayNameModeChange = async (mode: DisplayNameMode) => {
@@ -219,7 +310,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         syncConfigState(c)
           .then((effectiveDir) => {
             if (!c.config_dir && effectiveDir) setConfigDir(effectiveDir);
-            refreshRecognitionRules().catch((e) => addLog(`识别补充规则读取失败: ${e}`));
+            refreshRecognitionRules().catch((e) => addLog(`补充规则表读取失败: ${e}`));
+            refreshDurationRules(c.special_items).catch((e) => addLog(`耗时规则库读取失败: ${e}`));
           })
           .catch(() => {});
         if (!cfg.config_dir_ever_set) {
@@ -234,11 +326,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     // 加载模板信息
     getTemplateInfo().then(setTemplateInfo).catch(() => { /* ignore */ });
     refreshDataStoreInfo().catch(() => { /* logged in helper */ });
+    refreshDurationRules().catch((e) => addLog(`耗时规则库读取失败: ${e}`));
   }, []);
 
   useEffect(() => {
     if (settingsCenterOpen) {
       refreshDataStoreInfo().catch(() => { /* logged in helper */ });
+      refreshCleanerBackupInfo().catch(() => { /* logged in helper */ });
     }
   }, [settingsCenterOpen]);
 
@@ -401,6 +495,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     try {
       const info = await getTemplateInfo();
       setTemplateInfo(info);
+      addLog(`模板信息已刷新: ${info.exists ? info.path ?? "内置模板" : "未找到模板"}`);
     } catch (e) {
       addLog(`获取模板信息失败: ${e}`);
     }
@@ -417,16 +512,15 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
   };
 
-  // 保存特殊物品列表
-  const handleSaveSpecialItems = (items: SpecialItem[]) => {
-    setSpecialItems(items);
-    // 立即持久化（specialItems state 更新有延迟，直接用参数）
-    saveConfig(buildConfigPatch({ special_items: items })).catch(() => {});
-    if (items.length > 0) {
-      addLog(`特殊物品已保存: ${items.map((it) => `${it.name}(${it.minutes}分钟)`).join(", ")}`);
-    } else {
-      addLog(`特殊物品列表已清空`);
-    }
+  const handleSaveDurationRules = async (rules: DurationRule[]) => {
+    const savedRules = await saveDurationRules(rules);
+    setDurationRules(savedRules);
+    const fallbackSpecialItems = savedRules
+      .filter((rule) => rule.enabled && !rule.deprecated && rule.duration.mode === "per_piece" && Number.isFinite(rule.duration.maxMinutes || rule.duration.minutes || NaN))
+      .map((rule) => ({ name: rule.name, minutes: Number(rule.duration.maxMinutes || rule.duration.minutes) }));
+    setSpecialItems(fallbackSpecialItems);
+    saveConfig(buildConfigPatch({ special_items: fallbackSpecialItems })).catch(() => {});
+    addLog(`耗时规则库已保存: ${savedRules.filter((rule) => rule.enabled && !rule.deprecated).length} 条启用规则`);
   };
 
   // 模板来源中文标签
@@ -482,6 +576,145 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     return match ? match[0] : "";
   };
 
+  const getQuantityFromText = (value?: string | number | null): number => {
+    const text = normalizeQuantityText(value);
+    return text ? Number(text) : 0;
+  };
+
+  const getRecordRuleField = (record: FolderRecord, field: DurationRuleMatcher["field"]): string => {
+    if (field === "folder") return normalizeRecordText(record.folder);
+    if (field === "station") return normalizeRecordText(record.station);
+    if (field === "product") return normalizeRecordText(record.product);
+    if (field === "test_type") return normalizeRecordText(record.test_type);
+    if (field === "sender") return normalizeRecordText(record.sender);
+    if (field === "operator") return normalizeRecordText(record.operator);
+    return "";
+  };
+
+  const durationRuleMatcherOk = (record: FolderRecord, matcher: DurationRuleMatcher): boolean => {
+    const actual = getRecordRuleField(record, matcher.field);
+    const expected = matcher.value.trim();
+    if (!expected) return false;
+    if (matcher.op === "equals") return actual.toLowerCase() === expected.toLowerCase();
+    if (matcher.op === "not_contains") return !actual.toLowerCase().includes(expected.toLowerCase());
+    if (matcher.op === "regex") {
+      try {
+        return new RegExp(expected, "i").test(actual);
+      } catch {
+        return actual.toLowerCase().includes(expected.toLowerCase());
+      }
+    }
+    return actual.toLowerCase().includes(expected.toLowerCase());
+  };
+
+  const matchDurationRuleForRecord = (record: FolderRecord, rules?: DurationRule[]): DurationRule | null => {
+    const activeRules = (rules || []).filter((rule) => rule.enabled && !rule.deprecated);
+    activeRules.sort((a, b) => b.priority - a.priority);
+    for (const rule of activeRules) {
+      const results = rule.matchers.map((matcher) => durationRuleMatcherOk(record, matcher));
+      if (results.length === 0) continue;
+      if (rule.matchMode === "any" ? results.some(Boolean) : results.every(Boolean)) return rule;
+    }
+    return null;
+  };
+
+  const applyDurationOverrides = (
+    records: FolderRecord[],
+    overrides?: Record<string, DurationOverride>,
+    rules?: DurationRule[]
+  ): FolderRecord[] => {
+    if (!overrides || Object.keys(overrides).length === 0) return records;
+    return records.map((record) => {
+      const override = overrides[record.folder];
+      if (!override || !Number.isFinite(override.minutes) || override.minutes <= 0) return record;
+      if (record.station === "CNC" || matchDurationRuleForRecord(record, rules)) return record;
+      if (override.mode === "per_piece") {
+        const qty = getNumericQuantity(record.quantity);
+        if (qty <= 0) return record;
+        return { ...record, manual_duration: Math.round(qty * override.minutes * 10) / 10 };
+      }
+      return { ...record, manual_duration: Math.round(override.minutes * 10) / 10 };
+    });
+  };
+
+  const filterOmittedRecords = (
+    item: QueueItem,
+    records: FolderRecord[],
+    actionLabel: string,
+    shouldLog = true,
+  ): FolderRecord[] => {
+    const omitted = new Set(item.settingsOverride?.omitted_folders || []);
+    if (omitted.size === 0) return records;
+    const filtered = records.filter((record) => !omitted.has(record.folder));
+    const omittedCount = records.length - filtered.length;
+    if (shouldLog && omittedCount > 0) {
+      addLog(`${actionLabel}: 已排除 ${omittedCount} 个确认暂不写入本日报的包`);
+    }
+    return filtered;
+  };
+
+  const buildManualTaskSuggestion = (): ManualTimeSuggestion | null => {
+    if (!manualTaskItem) return null;
+    const candidateInfos = (manualTaskItem.manualCandidates || [])
+      .map((candidate) => {
+        const qty = getQuantityFromText(candidate.recognized?.quantity);
+        return {
+          key: `folder:${candidate.folderName}`,
+          folderName: candidate.folderName,
+          qty,
+        };
+      })
+      .filter((candidate) => candidate.qty > 0);
+    const totalCandidateQuantity = candidateInfos.reduce((sum, candidate) => sum + candidate.qty, 0);
+    const previewMatches = previewData?.folder_name === manualTaskItem.dateFolder;
+    const summary = previewMatches ? previewData?.summary : null;
+    const previewNeed = Math.max(
+      0,
+      Math.round(
+        summary?.need_minutes ??
+        summary?.decision?.need_minutes ??
+        summary?.estimates?.need_minutes ??
+        0
+      )
+    );
+    if (totalCandidateQuantity > 0) {
+      const taskMinutes: Record<string, number> = {};
+      const taskReasons: Record<string, string> = {};
+      for (const candidate of candidateInfos) {
+        const baseMinutes = Math.min(180, Math.max(10, Math.round(candidate.qty * 2)));
+        const gapShare = previewNeed > 0
+          ? Math.round((previewNeed * candidate.qty) / totalCandidateQuantity)
+          : 0;
+        const minutes = Math.min(480, Math.max(baseMinutes, gapShare));
+        taskMinutes[candidate.key] = minutes;
+        taskReasons[candidate.key] = previewNeed > 0
+          ? `该条 ${candidate.qty} PCS；基础按约 2 分钟/件估算为 ${baseMinutes} 分钟，并按件数分摊日报缺口约 ${gapShare} 分钟。`
+          : `该条 ${candidate.qty} PCS；先按约 2 分钟/件给出 ${baseMinutes} 分钟起点。`;
+      }
+      const averageMinutes = Math.round(Object.values(taskMinutes).reduce((sum, minutes) => sum + minutes, 0) / Math.max(1, Object.keys(taskMinutes).length));
+      return {
+        minutes: averageMinutes,
+        taskMinutes,
+        taskReasons,
+        reason: previewNeed > 0
+          ? `当前预览还差约 ${previewNeed} 分钟有效工时；已按各手量件数比例分摊缺口，不同件数会得到不同推荐值。`
+          : `按已识别 ${totalCandidateQuantity} PCS 估算，先按约 2 分钟/件给出每条手量起点。`,
+      };
+    }
+
+    if (previewNeed > 0) {
+      return {
+        minutes: Math.min(480, previewNeed),
+        reason: `当前预览还差约 ${previewNeed} 分钟有效工时；未识别到各条件数，先给出补足缺口的总量起点。`,
+      };
+    }
+
+    return {
+      minutes: 60,
+      reason: "未识别到明确件数，先给 60 分钟作为补录起点；请按实际手量时间调整。",
+    };
+  };
+
   const manualOnlyTaskMatchesRecord = (task: RealManualTask, record: FolderRecord): boolean => {
     if (task.counting_mode !== 'manual_only') return false;
 
@@ -506,7 +739,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const filterRecordsByManualCountingMode = (
     item: QueueItem,
     records: FolderRecord[],
-    actionLabel: "预览" | "生成"
+    actionLabel: "预览" | "生成" | "总览",
+    shouldLog = true,
   ): FolderRecord[] => {
     const manualOnlyTasks = (item.settingsOverride?.real_manual_tasks || []).filter(
       (task) => task.counting_mode === 'manual_only'
@@ -521,7 +755,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       return false;
     });
 
-    if (skipped.length > 0) {
+    if (shouldLog && skipped.length > 0) {
       addLog(`${actionLabel}：${item.dateFolder} 已按“只计手量”跳过 ${skipped.length} 个普通 OMM 记录`);
       skipped.forEach((name) => addLog(`  - ${name}`));
     }
@@ -538,60 +772,137 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     );
   };
 
-  const buildTppRangeRiskMessage = (
-    item: QueueItem,
-    records: FolderRecord[],
-    settings: GenerateSettings,
-    actionLabel: "预览" | "生成"
-  ): string | null => {
-    if (records.length === 0) return null;
-    const min = settings.tpp_min;
-    const max = settings.tpp_max;
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  const hasMissingSender = (sourceReviewMap: Record<string, ReviewInfo>): boolean =>
+    Object.values(sourceReviewMap).some((info) => info.missing.includes("sender"));
 
-    const packageCount = records.length;
-    const totalQuantity = records.reduce((sum, record) => sum + getNumericQuantity(record.quantity), 0);
-    const manyPackages = packageCount >= 6;
-    const heavyQuantity = totalQuantity >= 60;
-    const veryManyPackages = packageCount >= 10;
-    const veryHeavyQuantity = totalQuantity >= 120;
-
-    const suspicious =
-      (max <= 5 && (manyPackages || heavyQuantity)) ||
-      (max <= 6 && (veryManyPackages || veryHeavyQuantity));
-
-    if (!suspicious) return null;
-
-    const quantityText = totalQuantity > 0 ? `、约 ${totalQuantity} PCS` : "";
-    return [
-      `${item.dateFolder} 当前每件时间范围是 ${min}~${max} 分钟。`,
-      `本日已识别 ${packageCount} 个普通任务${quantityText}，这个范围可能偏短，容易让大量料的总耗时被压低。`,
-      `如果这是你故意设置的，可以继续${actionLabel}；如果不是，建议先把“每件时间”调回常用范围（例如 3~7 分钟）或在单日设置里单独调整。`,
-    ].join("\n");
+  const learnReviewedSenders = async (updatedRecords: FolderRecord[]) => {
+    const candidates = updatedRecords.filter((record) => {
+      const info = reviewMap[record.folder];
+      if (!info?.missing.includes("sender") && !info?.placeholders.includes("sender")) return false;
+      const sender = normalizeRecordText(record.sender);
+      return sender !== "" && sender !== "/";
+    });
+    for (const record of candidates) {
+      try {
+        await upsertKnownSender(normalizeRecordText(record.sender), "review", record.folder, "审核弹窗补录");
+      } catch (e) {
+        addLog(`  送测人词库未写入 ${record.sender}: ${e}`);
+      }
+    }
+    if (candidates.length > 0) {
+      addLog(`  已学习 ${candidates.length} 个审核补录送测人`);
+      void refreshDataStoreInfo();
+    }
   };
 
-  const confirmTppRangeIfNeeded = async (
-    item: QueueItem,
-    records: FolderRecord[],
-    settings: GenerateSettings,
-    actionLabel: "预览" | "生成"
-  ): Promise<boolean> => {
-    const message = buildTppRangeRiskMessage(item, records, settings, actionLabel);
-    if (!message) return true;
-
-    const ok = await requestAppConfirm({
-      title: "每件时间偏低确认",
-      description: `${message}\n\n是否继续${actionLabel}？`,
-      confirmLabel: `继续${actionLabel}`,
-      cancelLabel: "先不继续",
-      tone: "warning",
-    });
-    if (ok) {
-      addLog(`注意: ${item.dateFolder} 每件时间 ${settings.tpp_min}~${settings.tpp_max} 分钟偏低，用户已确认继续${actionLabel}`);
-    } else {
-      addLog(`${actionLabel}已取消: ${item.dateFolder} 每件时间 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低`);
+  const getOverviewStatusFromPreview = (
+    previewData: PreviewData,
+    needsReview: boolean,
+    manualPending: boolean,
+  ): { status: MultiDayOverviewStatus; statusText: string; detail: string } => {
+    if (manualPending) {
+      return { status: "manual_pending", statusText: "手量待确认", detail: "存在手量候选未确认，需先确认后再生成。" };
     }
-    return ok;
+    if (needsReview) {
+      return { status: "needs_review", statusText: "需审核", detail: "存在识别缺失或占位字段，点击进入单日预览后处理。" };
+    }
+    const anomaly = previewData.summary.time_anomaly || previewData.summary.decision?.time_anomaly;
+    if (anomaly?.kind === "too_little") {
+      return {
+        status: "too_little",
+        statusText: "测料太少",
+        detail: anomaly.message || `有效工时还缺约 ${Math.round(anomaly.shortage_minutes || 0)} 分钟。`,
+      };
+    }
+    if (anomaly?.kind === "too_much") {
+      return {
+        status: "too_much",
+        statusText: "任务量过多",
+        detail: anomaly.message || `预计超过目标结束约 ${Math.round(anomaly.overrun_minutes || 0)} 分钟。`,
+      };
+    }
+    return {
+      status: "ok",
+      statusText: "可生成",
+      detail: `目标 ${previewData.summary.target_clock_end}，实际 ${previewData.summary.actual_last_end}，有效 ${Math.round(previewData.summary.total_effective)} 分钟。`,
+    };
+  };
+
+  const handleOpenMultiDayOverview = async () => {
+    setMultiDayOverviewOpen(true);
+    setMultiDayOverviewLoading(true);
+    setMultiDayOverviewItems([]);
+    if (queue.length === 0) {
+      setMultiDayOverviewLoading(false);
+      return;
+    }
+
+    const results: MultiDayOverviewItem[] = [];
+    for (let index = 0; index < queue.length; index += 1) {
+      const item = queue[index];
+      const shift = item.shiftOverride || item.shift || shiftDefault;
+      try {
+        const manualPending = (item.manualCandidates || []).some(
+          (candidate) => !isManualCandidateConfirmed(candidate, item)
+        );
+        const parseResponse = await parseFolders(item.fullPath, operatorName);
+        if (!parseResponse.success) {
+          results.push({
+            index,
+            dateFolder: item.dateFolder,
+            shift: shift || "-",
+            status: "error",
+            statusText: "读取失败",
+            detail: parseResponse.error || "无法读取该日期文件夹。",
+          });
+          continue;
+        }
+        const candidateNames = new Set(item.manualCandidates?.map((c) => c.folderName) || []);
+        const manualCandidateFilteredRecords = parseResponse.data.records.filter((record) => !candidateNames.has(record.folder));
+        const manualFilteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "总览", false);
+        const filteredRecords = filterOmittedRecords(item, manualFilteredRecords, "总览", false);
+        const settings = buildItemSettings(item);
+        const durationAppliedRecords = applyDurationOverrides(
+          filteredRecords,
+          item.settingsOverride?.duration_overrides,
+          settings.duration_rules
+        );
+        const filteredReviewMap = filterReviewMapByRecords(parseResponse.data.review_map, durationAppliedRecords);
+        const needsReview = Object.values(filteredReviewMap).some(
+          (info) => info.missing.length > 0 || info.placeholders.length > 0
+        );
+        const previewResponse = await preview(item.fullPath, durationAppliedRecords, settings);
+        if (!previewResponse.success || !previewResponse.data) {
+          results.push({
+            index,
+            dateFolder: item.dateFolder,
+            shift: shift || "-",
+            status: "error",
+            statusText: "预览失败",
+            detail: previewResponse.error || "无法生成该日预览。",
+          });
+          continue;
+        }
+        const status = getOverviewStatusFromPreview(previewResponse.data, needsReview, manualPending);
+        results.push({
+          index,
+          dateFolder: item.dateFolder,
+          shift: previewResponse.data.shift_label || shift || "-",
+          ...status,
+        });
+      } catch (e) {
+        results.push({
+          index,
+          dateFolder: item.dateFolder,
+          shift: shift || "-",
+          status: "error",
+          statusText: "读取失败",
+          detail: String(e),
+        });
+      }
+    }
+    setMultiDayOverviewItems(results);
+    setMultiDayOverviewLoading(false);
   };
 
   const handlePreview = async () => {
@@ -628,7 +939,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       if (skippedCount > 0) {
         addLog(`预览：已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
       }
-      const filteredRecords = filterRecordsByManualCountingMode(targetItem, manualCandidateFilteredRecords, "预览");
+      const manualFilteredRecords = filterRecordsByManualCountingMode(targetItem, manualCandidateFilteredRecords, "预览");
+      const filteredRecords = filterOmittedRecords(targetItem, manualFilteredRecords, "预览");
 
       const unconfirmedCount = (targetItem.manualCandidates || []).filter(
         (candidate) => !isManualCandidateConfirmed(candidate, targetItem)
@@ -638,10 +950,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(targetItem);
-      if (!(await confirmTppRangeIfNeeded(targetItem, filteredRecords, settings, "预览"))) {
-        return;
-      }
-      const previewResponse = await preview(targetItem.fullPath, filteredRecords, settings);
+      const durationAppliedRecords = applyDurationOverrides(
+        filteredRecords,
+        targetItem.settingsOverride?.duration_overrides,
+        settings.duration_rules
+      );
+      const previewResponse = await preview(targetItem.fullPath, durationAppliedRecords, settings);
       if (previewResponse.success && previewResponse.data) {
         setPreviewData(previewResponse.data);
         setPreviewIndex(targetIndex ?? queue.findIndex((q) => q.fullPath === targetItem.fullPath));
@@ -698,6 +1012,91 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       return info;
     } catch (e) {
       addLog(`本地数据状态读取失败: ${e}`);
+      return null;
+    }
+  };
+
+  const refreshCleanerBackupInfo = async () => {
+    try {
+      const info = await getPersonalCleanerBackupInfo();
+      setCleanerBackupInfo(info);
+      return info;
+    } catch (e) {
+      addLog(`个人清理备份状态读取失败: ${e}`);
+      return null;
+    }
+  };
+
+  const handleOpenCleanerBackupRoot = async () => {
+    const info = cleanerBackupInfo || await refreshCleanerBackupInfo();
+    if (info?.root) {
+      await openFolder(info.root);
+    }
+  };
+
+  const handleCleanCleanerBackups = async () => {
+    try {
+      const before = cleanerBackupInfo || await refreshCleanerBackupInfo();
+      if (!before) {
+        await requestAppConfirm({
+          title: "无法读取备份状态",
+          description: "没有读取到个人清理备份目录状态，未执行旧备份清理。请先点击“读取备份”或查看详细日志。",
+          confirmLabel: "知道了",
+          cancelLabel: null,
+          tone: "warning",
+        });
+        return null;
+      }
+      const root = before?.root || "个人清理备份根目录";
+      const entryCount = before?.entryCount ?? 0;
+      const totalBytes = before?.totalBytes ?? 0;
+      const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const cutoff = new Date(cutoffMs).toLocaleString("zh-CN", { hour12: false });
+      const hasOldBackups = Boolean(before.oldestModifiedMs && before.oldestModifiedMs <= cutoffMs);
+      if (!before.exists || entryCount === 0 || !hasOldBackups) {
+        await requestAppConfirm({
+          title: "没有 30 天前备份可清理",
+          description: [
+            "个人清理备份目录中未发现最后修改时间早于 30 天的备份项。",
+            "本次不会删除任何内容。",
+            `备份目录：${root}`,
+            `当前可见条目：${entryCount} 项，约 ${Math.round(totalBytes / 1024 / 1024 * 10) / 10} MB`,
+            `判断范围：最后修改时间早于 ${cutoff} 的备份项`,
+          ].join("\n"),
+          confirmLabel: "知道了",
+          cancelLabel: null,
+          tone: "info",
+        });
+        addLog("个人清理备份维护无需执行: 没有 30 天前备份可清理");
+        return before;
+      }
+      const ok = await requestAppConfirm({
+        title: "确认清理旧备份",
+        description: [
+          "将只清理个人清理备份目录中最后修改时间早于 30 天的备份项。",
+          "会保留 30 天内备份，不处理日志、账户数据库、配置、日期资料或原始测试资料。",
+          "取消后不会删除任何内容。",
+          `清理目录：${root}`,
+          `当前可见条目：${entryCount} 项，约 ${Math.round(totalBytes / 1024 / 1024 * 10) / 10} MB`,
+          `时间范围：最后修改时间早于 ${cutoff} 的备份项`,
+          "保留策略：30 天内备份、日志、本地数据库、配置文件、日期文件夹全部保留",
+        ].join("\n"),
+        confirmLabel: "确认清理旧备份",
+        cancelLabel: "取消",
+        tone: "warning",
+      });
+      if (!ok) {
+        addLog("个人清理备份维护已取消: 未执行旧备份清理");
+        return before;
+      }
+      const info = await cleanPersonalCleanerBackups(30);
+      setCleanerBackupInfo(info);
+      const beforeCount = before?.entryCount ?? 0;
+      const removedCount = Math.max(0, beforeCount - info.entryCount);
+      addLog(`个人清理备份已维护: 清理30天前备份，移除约 ${removedCount} 项，剩余 ${info.entryCount} 项`);
+      return info;
+    } catch (e) {
+      addLog(`个人清理备份清理失败: ${e}`);
       return null;
     }
   };
@@ -853,17 +1252,29 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   const refreshDateFolders = async () => {
+    if (dateFoldersRefreshing) return;
     if (!workDir) {
       addLog("请先选择工作目录");
+      setDateFoldersRefreshMessage("请先选择工作目录。");
       return;
     }
+    setDateFoldersRefreshing(true);
+    setDateFoldersRefreshMessage("正在刷新日期文件夹...");
     try {
-      const folders = await listDateFolders(workDir);
+      const [folders] = await Promise.all([
+        listDateFolders(workDir),
+        waitForVisibleFeedback(),
+      ]);
       setDateFolders(folders);
+      setDateFoldersRefreshMessage(`刷新完成，找到 ${folders.length} 个日期文件夹。${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`);
       addLog(`刷新完成，找到 ${folders.length} 个日期文件夹`);
     } catch (e) {
+      await waitForVisibleFeedback(300);
       setDateFolders([]);
+      setDateFoldersRefreshMessage(`刷新失败: ${e}`);
       addLog(`获取日期文件夹失败: ${e}`);
+    } finally {
+      setDateFoldersRefreshing(false);
     }
   };
 
@@ -952,6 +1363,11 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     setContextMenu({ x: e.clientX, y: e.clientY, index });
   };
 
+  const openDaySettingsForQueueItem = (index: number) => {
+    setDaySettingsIndex(index);
+    setDaySettingsOpen(true);
+  };
+
   const handleSetReviewMode = (mode: 'A' | 'B' | null) => {
     if (contextMenu === null) return;
     const idx = contextMenu.index;
@@ -1020,17 +1436,21 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     use_src_output: useSrcOutput,
     shift_override: shiftDefault,
     special_items: specialItems,
+    duration_rules: durationRules,
     hand_max: handMax,
     other_max: otherMax,
+    other_note: DEFAULT_OTHER_NOTE,
+    filler_position: DEFAULT_FILLER_POSITION,
   });
 
   // 构造某个队列项的最终生成设置：全局 + item.settingsOverride 浅合并
   const buildItemSettings = (item: QueueItem): GenerateSettings => {
     const base = buildGlobalSettings();
     const ov = item.settingsOverride || {};
+    const { duration_overrides: _durationOverrides, omitted_folders: _omittedFolders, ...generationOverride } = ov;
     return {
       ...base,
-      ...ov,
+      ...generationOverride,
       // shift_override 优先级：item.shiftOverride > item.shift > shiftDefault
       shift_override: item.shiftOverride || item.shift || shiftDefault,
       // early_leave 与 leave_strategy 保持一致
@@ -1092,6 +1512,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     if (skippedFolders.length > 0) {
       addLog(`  跳过的文件夹: ${skippedFolders.join(", ")}`);
     }
+    await learnReviewedSenders(effectiveRecords);
 
     const state = generateStateRef.current;
     if (!state) return;
@@ -1347,9 +1768,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       if (skippedCount > 0) {
         addLog(`  已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
       }
-      const filteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
-      const filteredReviewMap = filterReviewMapByRecords(reviewMap, filteredRecords);
-      setReviewMap(filteredReviewMap);
+      const manualFilteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
+      const filteredRecords = filterOmittedRecords(item, manualFilteredRecords, "生成");
 
       // 如果还有未确认的手量候选，生成前阻止
       const unconfirmedCandidates = (item.manualCandidates || []).filter(
@@ -1379,23 +1799,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(item);
-      if (!(await confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成"))) {
-        recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
-        setGenerateResult({
-          ok: successCount,
-          fail: failCount,
-          outputPath: outputPathsRef.current.length > 0 ? outputPathsRef.current[outputPathsRef.current.length - 1] : null,
-          outputPaths: outputPathsRef.current.slice(),
-          commonParent: computeCommonParent(outputPathsRef.current.slice()),
-          schedWarnings: schedWarningsRef.current.slice(),
-          failures: failureDetailsRef.current.slice(),
-          status: 'paused',
-          pendingItems: queue.slice(index).map((it) => it.dateFolder),
-        });
-        setIsGenerating(false);
-        setProgress(0);
-        return;
-      }
+      const durationAppliedRecords = applyDurationOverrides(
+        filteredRecords,
+        item.settingsOverride?.duration_overrides,
+        settings.duration_rules
+      );
+      const filteredReviewMap = filterReviewMapByRecords(reviewMap, durationAppliedRecords);
+      setReviewMap(filteredReviewMap);
 
       const needsReview = Object.keys(filteredReviewMap).some(
         (key) =>
@@ -1404,16 +1814,19 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       );
 
       const effectiveReviewMode = item.reviewMode ?? complexDefault;
-      if (needsReview && effectiveReviewMode === 'A') {
-        addLog(`  需要审核，打开审核对话框`);
-        setPendingRecords(filteredRecords);
+      const forceReviewDialog = hasMissingSender(filteredReviewMap);
+      if (needsReview && (effectiveReviewMode === 'A' || forceReviewDialog)) {
+        addLog(forceReviewDialog && effectiveReviewMode === 'B'
+          ? `  缺少送测人，强制打开审核对话框`
+          : `  需要审核，打开审核对话框`);
+        setPendingRecords(durationAppliedRecords);
         setReviewMap(filteredReviewMap);
         setReviewOpen(true);
         generateStateRef.current = {
           currentIndex: index,
           successCount,
           failCount,
-          currentRecords: filteredRecords,
+          currentRecords: durationAppliedRecords,
         };
         return;
       }
@@ -1422,7 +1835,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         addLog(`  警告: 部分记录需要审核 (留坑自填模式)`);
       }
 
-      await generateWithRecords(item, filteredRecords, index, successCount, failCount);
+      await generateWithRecords(item, durationAppliedRecords, index, successCount, failCount);
     } catch (e) {
       addLog(`  错误: ${e}`);
       recordGenerateFailure(item, `处理时发生异常：${e}`, "check", index);
@@ -1599,9 +2012,8 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       if (skippedCount > 0) {
         addLog(`  已过滤 ${skippedCount} 个手量候选文件夹，避免与普通任务重复排程`);
       }
-      const filteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
-      const filteredReviewMap = filterReviewMapByRecords(reviewMap, filteredRecords);
-      setReviewMap(filteredReviewMap);
+      const manualFilteredRecords = filterRecordsByManualCountingMode(item, manualCandidateFilteredRecords, "生成");
+      const filteredRecords = filterOmittedRecords(item, manualFilteredRecords, "生成");
 
       const unconfirmedCandidates = (item.manualCandidates || []).filter(
         (candidate) => !isManualCandidateConfirmed(candidate, item)
@@ -1629,37 +2041,31 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       }
 
       const settings = buildItemSettings(item);
-      if (!(await confirmTppRangeIfNeeded(item, filteredRecords, settings, "生成"))) {
-        recordGenerateFailure(item, `每件时间范围 ${settings.tpp_min}~${settings.tpp_max} 分钟可能偏低，用户取消生成以便调整设置`, "check", index);
-        setGenerateResult({
-          ok: 0,
-          fail: 0,
-          outputPath: null,
-          outputPaths: [],
-          commonParent: null,
-          schedWarnings: schedWarningsRef.current.slice(),
-          failures: failureDetailsRef.current.slice(),
-          status: 'paused',
-          pendingItems: queue.slice(index).map((it) => it.dateFolder),
-        });
-        setIsGenerating(false);
-        return;
-      }
+      const durationAppliedRecords = applyDurationOverrides(
+        filteredRecords,
+        item.settingsOverride?.duration_overrides,
+        settings.duration_rules
+      );
+      const filteredReviewMap = filterReviewMapByRecords(reviewMap, durationAppliedRecords);
+      setReviewMap(filteredReviewMap);
 
       const needsReview = Object.keys(filteredReviewMap).some(
         (key) => filteredReviewMap[key].missing.length > 0 || filteredReviewMap[key].placeholders.length > 0
       );
       const effectiveReviewMode = item.reviewMode ?? complexDefault;
-      if (needsReview && effectiveReviewMode === 'A') {
-        addLog(`  需要审核，打开审核对话框`);
-        setPendingRecords(filteredRecords);
+      const forceReviewDialog = hasMissingSender(filteredReviewMap);
+      if (needsReview && (effectiveReviewMode === 'A' || forceReviewDialog)) {
+        addLog(forceReviewDialog && effectiveReviewMode === 'B'
+          ? `  缺少送测人，强制打开审核对话框`
+          : `  需要审核，打开审核对话框`);
+        setPendingRecords(durationAppliedRecords);
         setReviewMap(filteredReviewMap);
         setReviewOpen(true);
         generateStateRef.current = {
           currentIndex: index,
           successCount: 0,
           failCount: 0,
-          currentRecords: filteredRecords,
+          currentRecords: durationAppliedRecords,
           single: true,
         };
         return;
@@ -1668,7 +2074,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         addLog(`  警告: 部分记录需要审核 (留坑自填模式)`);
       }
 
-      await generateSingleItemFinal(item, filteredRecords);
+      await generateSingleItemFinal(item, durationAppliedRecords);
     } catch (e) {
       addLog(`  错误: ${e}`);
       recordGenerateFailure(item, `处理时发生异常：${e}`, "check", index);
@@ -1708,6 +2114,132 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
   };
 
+  const handleOpenPreviewFromOverview = (index: number) => {
+    const item = queue[index];
+    if (!item) return;
+    setMultiDayOverviewOpen(false);
+    handlePreviewForItem(item, index);
+  };
+
+  const handlePreviewDurationOverridesSave = async (overrides: Record<string, DurationOverride>) => {
+    if (previewIndex < 0 || previewIndex >= queue.length) return;
+    const item = queue[previewIndex];
+    const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}) };
+    if (Object.keys(overrides).length > 0) {
+      nextOverride.duration_overrides = overrides;
+    } else {
+      delete nextOverride.duration_overrides;
+    }
+    const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
+    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    addLog(Object.keys(overrides).length > 0
+      ? `已保存 ${item.dateFolder} 的本日包耗时覆盖，重新预览`
+      : `已清除 ${item.dateFolder} 的本日包耗时覆盖，重新预览`);
+    await handlePreviewForItem(nextItem, previewIndex);
+  };
+
+  const handleApplyTimeAnomalyRecommendation = async () => {
+    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return;
+    const anomaly = previewData.summary.time_anomaly || previewData.summary.decision?.time_anomaly;
+    const items = anomaly?.kind === "too_little" ? (anomaly.adjustment_items || []) : [];
+    if (items.length === 0) {
+      addLog("应用推荐已跳过: 当前没有可应用的普通包调时建议");
+      return;
+    }
+    const currentOverrides = queue[previewIndex]?.settingsOverride?.duration_overrides || {};
+    const nextOverrides: Record<string, DurationOverride> = { ...currentOverrides };
+    for (const item of items) {
+      const minutes = Math.min(6, Math.max(0, item.recommended_per_piece));
+      if (!Number.isFinite(minutes) || minutes <= 0) continue;
+      nextOverrides[item.folder] = {
+        folder: item.folder,
+        mode: "per_piece",
+        minutes: Math.round(minutes * 10) / 10,
+        computed_total_minutes: Math.round(item.recommended_total_minutes * 10) / 10,
+      };
+    }
+    addLog(`应用时间异常推荐: ${queue[previewIndex].dateFolder} 写入 ${items.length} 个包耗时覆盖`);
+    await handlePreviewDurationOverridesSave(nextOverrides);
+  };
+
+  const handleMoveTimeAnomalyOmitItems = async () => {
+    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return;
+    const item = queue[previewIndex];
+    const anomaly = previewData.summary.time_anomaly || previewData.summary.decision?.time_anomaly;
+    const omitItems = anomaly?.kind === "too_much" ? (anomaly.omit_items || []) : [];
+    const folderNames = omitItems.map((omit) => omit.folder).filter(Boolean);
+    if (folderNames.length === 0) {
+      addLog("省略清单处理已跳过: 当前没有可移动的候选包");
+      return;
+    }
+    const settings = buildItemSettings(item);
+    const shift = (settings.shift_override === "A" || settings.shift_override === "B" ? settings.shift_override : item.shiftOverride || item.shift || shiftDefault) as "A" | "B";
+    const targetName = `新建文件夹${shift}`;
+    const confirmed = await requestAppConfirm({
+      title: "确认移动省略清单",
+      description: [
+        `将把 ${folderNames.length} 个文件夹移动到当前日期目录内的“${targetName}”。`,
+        "目标同名不会覆盖，会自动追加序号。",
+        "",
+        ...folderNames.map((name) => `- ${name} -> ${targetName}`),
+      ].join("\n"),
+      confirmLabel: "确认移动",
+      cancelLabel: "取消",
+      tone: "warning",
+    });
+    if (!confirmed) {
+      addLog(`省略清单移动已取消: ${item.dateFolder}`);
+      return;
+    }
+
+    const moved = await moveFoldersToShiftBucket(item.fullPath, folderNames, shift);
+    const movedNames = moved.map((entry) => entry.folder_name);
+    const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}) };
+    const omitted = new Set([...(nextOverride.omitted_folders || []), ...movedNames]);
+    nextOverride.omitted_folders = Array.from(omitted);
+    if (nextOverride.duration_overrides) {
+      const nextDurationOverrides = { ...nextOverride.duration_overrides };
+      for (const name of movedNames) delete nextDurationOverrides[name];
+      nextOverride.duration_overrides = Object.keys(nextDurationOverrides).length > 0 ? nextDurationOverrides : undefined;
+    }
+    const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
+    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    moved.forEach((entry) => addLog(`省略清单已移动: ${entry.folder_name} -> ${entry.target_path}`));
+    await handlePreviewForItem(nextItem, previewIndex);
+  };
+
+  const handlePreviewDecisionSettingsSave = async (patch: Partial<QueueItemSettingsOverride>) => {
+    if (previewIndex < 0 || previewIndex >= queue.length) return;
+    const item = queue[previewIndex];
+    const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}), ...patch };
+    if (nextOverride.other_note !== undefined) {
+      const normalizedOtherNote = String(nextOverride.other_note).trim();
+      nextOverride.other_note = normalizedOtherNote || DEFAULT_OTHER_NOTE;
+    }
+    const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
+    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    addLog(`已更新 ${item.dateFolder} 的生成前排程决策，重新预览`);
+    await handlePreviewForItem(nextItem, previewIndex);
+  };
+
+  const buildPreviewDurationOverrideDisabledFolders = (): Record<string, string> => {
+    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return {};
+    const item = queue[previewIndex];
+    const settings = buildItemSettings(item);
+    const disabled: Record<string, string> = {};
+    for (const record of previewData.records) {
+      if (record.station === "CNC") {
+        disabled[record.folder] = "CNC 本轮不覆盖";
+        continue;
+      }
+      const matchedRule = matchDurationRuleForRecord(record, settings.duration_rules);
+      if (matchedRule) {
+        disabled[record.folder] = `耗时规则料本轮不覆盖：${matchedRule.name}`;
+      }
+    }
+    return disabled;
+  };
+
   const getSchemeLabel = (item: QueueItem): string[] => {
     const labels: string[] = [];
     // 班次标签（从文件夹后缀或手动选择）—— 显示为 [A班]/[B班]
@@ -1730,7 +2262,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       if (item.settingsOverride.pkg_rest !== undefined) labels.push('[包材休息覆盖]');
       if (item.settingsOverride.hand_max !== undefined) labels.push('[手量上限覆盖]');
       if (item.settingsOverride.other_max !== undefined) labels.push('[其他上限覆盖]');
-      if (item.settingsOverride.special_items !== undefined) labels.push('[特殊物品覆盖]');
+      if (item.settingsOverride.filler_position !== undefined) labels.push(`[补时:${FILLER_POSITION_LABELS[item.settingsOverride.filler_position]}]`);
+      if (item.settingsOverride.special_items !== undefined) labels.push('[耗时规则覆盖]');
+      if (item.settingsOverride.duration_overrides && Object.keys(item.settingsOverride.duration_overrides).length > 0) labels.push('[包耗时覆盖]');
+      if (item.settingsOverride.omitted_folders && item.settingsOverride.omitted_folders.length > 0) labels.push(`[已省略:${item.settingsOverride.omitted_folders.length}]`);
     }
     return labels;
   };
@@ -2028,9 +2563,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                       <Button variant="outline" size="sm" onClick={handleSelectAllToQueue}>
                         全选
                       </Button>
-                      <Button variant="outline" size="sm" onClick={refreshDateFolders}>
-                        <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                        刷新
+                      <Button variant="outline" size="sm" onClick={refreshDateFolders} disabled={dateFoldersRefreshing}>
+                        <RefreshCw className={`h-3.5 w-3.5 mr-1 ${dateFoldersRefreshing ? "animate-spin" : ""}`} />
+                        {dateFoldersRefreshing ? "刷新中" : "刷新"}
                       </Button>
                       <Button variant="outline" size="sm" onClick={handleClearQueue}>
                         <X className="h-3.5 w-3.5 mr-1" />
@@ -2042,6 +2577,11 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     <Info className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>日期文件夹请直接放在工作目录下，命名格式如 6.13A、6.13B。没有 A/B 后缀的文件夹添加时会提示选择班次。</span>
                   </div>
+                  {dateFoldersRefreshMessage && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+                      {dateFoldersRefreshMessage}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -2082,47 +2622,73 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                           onClick={() => toggleQueueItem(index)}
                           onContextMenu={(e) => handleQueueItemContextMenu(e, index)}
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-slate-800 truncate">{item.dateFolder}</span>
-                            <span className="flex flex-wrap gap-1">
-                              {getSchemeLabel(item).map((label, li) => (
-                                <span key={li} className={`rounded-full border px-2 py-0.5 text-[10px] ${schemePillClass(label)}`}>
-                                  {label.replace(/[\[\]]/g, "")}
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate font-medium text-slate-800">{item.dateFolder}</span>
+                                <span className="flex flex-wrap gap-1">
+                                  {getSchemeLabel(item).map((label, li) => (
+                                    <span key={li} className={`rounded-full border px-2 py-0.5 text-[10px] ${schemePillClass(label)}`}>
+                                      {label.replace(/[\[\]]/g, "")}
+                                    </span>
+                                  ))}
+                                  {(() => {
+                                    const { pendingCount, manualTaskCount } = getManualCandidateCounts(item);
+                                    return (
+                                      <>
+                                        {pendingCount > 0 && (
+                                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                            手量待确认×{pendingCount}
+                                          </span>
+                                        )}
+                                        {manualTaskCount > 0 && (
+                                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                                            真实手量×{manualTaskCount}
+                                          </span>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </span>
-                              ))}
-                              {(() => {
-                                const { pendingCount, manualTaskCount } = getManualCandidateCounts(item);
-                                return (
-                                  <>
-                                    {pendingCount > 0 && (
-                                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                                        手量待确认×{pendingCount}
-                                      </span>
-                                    )}
-                                    {manualTaskCount > 0 && (
-                                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-                                        真实手量×{manualTaskCount}
-                                      </span>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </span>
-                          </div>
-                          <div className="mt-1 truncate text-xs text-slate-400">
-                            {item.fullPath}
-                            {(() => {
-                              const { pendingCount } = getManualCandidateCounts(item);
-                              return pendingCount > 0 ? (
-                                <span className="ml-2 text-amber-600 font-medium">本日内有 {pendingCount} 个手量待确认</span>
-                              ) : null;
-                            })()}
+                              </div>
+                              <div className="mt-1 truncate text-xs text-slate-400">
+                                {item.fullPath}
+                                {(() => {
+                                  const { pendingCount } = getManualCandidateCounts(item);
+                                  return pendingCount > 0 ? (
+                                    <span className="ml-2 font-medium text-amber-600">本日内有 {pendingCount} 个手量待确认</span>
+                                  ) : null;
+                                })()}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 shrink-0 gap-1 px-2 text-xs text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDaySettingsForQueueItem(index);
+                              }}
+                            >
+                              <Settings className="h-3.5 w-3.5" />
+                              设置
+                            </Button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenMultiDayOverview}
+                      disabled={queue.length === 0 || multiDayOverviewLoading}
+                    >
+                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      多日预览总览
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2152,35 +2718,46 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 min-w-[230px] rounded-2xl border border-white/80 bg-white/95 p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.22)] backdrop-blur-sm"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-50 overflow-y-auto overscroll-contain rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.22)] backdrop-blur-sm"
+          style={getContextMenuStyle(contextMenu)}
         >
-          <div className="cursor-default px-3 py-2 text-xs font-medium leading-5 text-slate-500">
+          <button
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm font-medium text-blue-700 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            onClick={() => {
+              if (contextMenu === null) return;
+              openDaySettingsForQueueItem(contextMenu.index);
+              setContextMenu(null);
+            }}
+          >
+            单日设置 / 补时插入位置
+          </button>
+          <div className="my-1 border-t border-slate-200/70" />
+          <div className="cursor-default px-3 py-1.5 text-xs font-medium leading-5 text-slate-500">
             当前审核模式: {queue[contextMenu.index]?.reviewMode === 'A' ? '方案A(弹窗审核)' : queue[contextMenu.index]?.reviewMode === 'B' ? '方案B(留坑自填)' : '默认(跟随全局)'}
           </div>
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('A')}
           >
             方案A：弹窗审核
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode('B')}
           >
             方案B：留坑自填
           </button>
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => handleSetReviewMode(null)}
           >
             恢复默认（跟随全局审核模式）
           </button>
 
           <div className="my-1 border-t border-slate-200/70" />
-          <div className="cursor-default px-3 py-2 text-xs font-medium leading-5 text-slate-500">
+          <div className="cursor-default px-3 py-1.5 text-xs font-medium leading-5 text-slate-500">
             当前下班策略: {(() => {
               const item = queue[contextMenu.index];
               const v = item?.settingsOverride?.leave_strategy ?? leaveStrategy;
@@ -2188,7 +2765,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             })()}
           </div>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'auto' });
@@ -2198,7 +2775,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：智能判断
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'early' });
@@ -2208,7 +2785,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：下早班
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, { leave_strategy: 'normal' });
@@ -2218,7 +2795,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             下班策略：不下早班
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               updateQueueItemOverride(contextMenu.index, {
@@ -2232,7 +2809,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2245,7 +2822,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
             切换手量覆盖
           </button>
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2259,7 +2836,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           </button>
 
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-amber-700 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-amber-700 transition hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-100"
             onClick={() => {
               if (contextMenu === null) return;
               const item = queue[contextMenu.index];
@@ -2273,7 +2850,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
           <div className="my-1 border-t border-slate-200/70" />
           <button
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
+            className="w-full rounded-lg px-3 py-1.5 text-left text-sm text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-100"
             onClick={() => {
               if (contextMenu === null) return;
               clearQueueItemOverride(contextMenu.index);
@@ -2332,10 +2909,25 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       <PreviewDialog
         open={previewOpen}
         data={previewData}
+        decisionSettings={previewIndex >= 0 && previewIndex < queue.length ? buildItemSettings(queue[previewIndex]) : undefined}
+        durationOverrides={previewIndex >= 0 ? queue[previewIndex]?.settingsOverride?.duration_overrides : undefined}
+        durationOverrideDisabledFolders={buildPreviewDurationOverrideDisabledFolders()}
         onClose={() => setPreviewOpen(false)}
         onGenerate={handlePreviewGenerate}
         onOpenManual={handlePreviewOpenManual}
         onOpenDaySettings={handlePreviewOpenDaySettings}
+        onSaveDecisionSettings={handlePreviewDecisionSettingsSave}
+        onSaveDurationOverrides={handlePreviewDurationOverridesSave}
+        onApplyTimeRecommendation={handleApplyTimeAnomalyRecommendation}
+        onMoveOmitItems={handleMoveTimeAnomalyOmitItems}
+      />
+
+      <MultiDayOverviewDialog
+        open={multiDayOverviewOpen}
+        loading={multiDayOverviewLoading}
+        items={multiDayOverviewItems}
+        onClose={() => setMultiDayOverviewOpen(false)}
+        onOpenPreview={handleOpenPreviewFromOverview}
       />
 
       <SettingsCenterDialog
@@ -2350,12 +2942,15 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         currentAccount={currentAccount}
         logCount={logs.length}
         dataStoreInfo={dataStoreInfo}
+        cleanerBackupInfo={cleanerBackupInfo}
         onOpenChange={setSettingsCenterOpen}
         onSave={handleSaveSettingsCenter}
         onBrowseWorkDir={(defaultPath) => selectFolder(defaultPath || configDir)}
         onBrowseOutputDir={(defaultPath) => selectFolder(defaultPath || outputDir || workDir || configDir)}
         onOpenRecognitionRules={() => setRecognitionRulesOpen(true)}
         onOpenSpecialItems={() => setSpecialItemsOpen(true)}
+        onOpenKnownSenders={() => setKnownSendersOpen(true)}
+        onOpenMeasurementPeople={() => setMeasurementPeopleOpen(true)}
         onReplaceTemplate={handleReplaceTemplate}
         onResetTemplate={handleResetTemplate}
         onViewTemplatePaths={handleViewTemplatePaths}
@@ -2367,6 +2962,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         onOpenDataRoot={() => {
           if (dataStoreInfo?.dataRoot) openFolder(dataStoreInfo.dataRoot);
         }}
+        onRefreshCleanerBackups={refreshCleanerBackupInfo}
+        onOpenCleanerBackupRoot={handleOpenCleanerBackupRoot}
+        onCleanCleanerBackups={handleCleanCleanerBackups}
         onOpenHelp={handleHelpOpen}
       />
 
@@ -2432,9 +3030,21 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
 
       <SpecialItemsDialog
         open={specialItemsOpen}
-        items={specialItems}
+        rules={durationRules}
         onClose={() => setSpecialItemsOpen(false)}
-        onSave={handleSaveSpecialItems}
+        onSave={handleSaveDurationRules}
+      />
+
+      <KnownSendersDialog
+        open={knownSendersOpen}
+        onOpenChange={setKnownSendersOpen}
+        onChanged={() => { void refreshDataStoreInfo(); }}
+      />
+
+      <MeasurementPeopleDialog
+        open={measurementPeopleOpen}
+        onOpenChange={setMeasurementPeopleOpen}
+        onChanged={() => { void refreshDataStoreInfo(); }}
       />
 
       {/* Template Paths Dialog */}
@@ -2735,6 +3345,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         }}
         recognitionRules={recognitionRules}
         ownerName={operatorName}
+        suggestion={buildManualTaskSuggestion()}
       />
       <RecognitionRulesDialog
         open={recognitionRulesOpen}
@@ -2743,9 +3354,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         exists={recognitionRulesExists}
         onOpenChange={setRecognitionRulesOpen}
         onReload={() => {
-          refreshRecognitionRules()
-            .then((info) => addLog(`识别补充规则已重新读取: ${info.path}`))
-            .catch((e) => addLog(`识别补充规则读取失败: ${e}`));
+          return refreshRecognitionRules()
+            .then((info) => addLog(`补充规则表已重新读取: ${info.path}`))
+            .catch((e) => addLog(`补充规则表读取失败: ${e}`));
         }}
         onSave={(rules) => {
           saveRecognitionRules(rules)
@@ -2753,9 +3364,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
               setRecognitionRules(info.rules || emptyRecognitionRules());
               setRecognitionRulesPath(info.path);
               setRecognitionRulesExists(info.exists);
-              addLog(`识别补充规则已保存: ${info.path}`);
+              addLog(`补充规则表已保存: ${info.path}`);
             })
-            .catch((e) => addLog(`识别补充规则保存失败: ${e}`));
+            .catch((e) => addLog(`补充规则表保存失败: ${e}`));
         }}
       />
       {/* 单日设置弹窗 */}
@@ -2766,8 +3377,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           leaveStrategy={queue[daySettingsIndex].settingsOverride?.leave_strategy}
           enableHand={queue[daySettingsIndex].settingsOverride?.enable_hand}
           enableOther={queue[daySettingsIndex].settingsOverride?.enable_other}
+          fillerPosition={queue[daySettingsIndex].settingsOverride?.filler_position}
           globalEnableHand={enableHand}
           globalEnableOther={enableOther}
+          globalFillerPosition={DEFAULT_FILLER_POSITION}
           globalLeaveStrategy={leaveStrategy}
           onSave={(settings) => {
             updateQueueItemOverride(daySettingsIndex, settings);

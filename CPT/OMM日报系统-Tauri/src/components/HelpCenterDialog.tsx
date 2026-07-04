@@ -92,7 +92,7 @@ const TOPICS: HelpTopic[] = [
         <ul className={text.ul}>
           <li><strong>使用者姓名：</strong>只处理文件夹名里 <code className={text.code}>-OMM-姓名</code> 与当前使用者匹配的任务。</li>
           <li><strong>默认班次：</strong>日期文件夹没有 A/B 后缀时，会让你手动选择班次。</li>
-          <li><strong>每件时间：</strong>常用范围建议保持在合理区间；设置明显偏低时，预览/生成前会二次确认。</li>
+          <li><strong>每件时间：</strong>常用范围建议保持在合理区间；时间异常会集中在预览页提示和处理。</li>
           <li><strong>模板来源：</strong>优先使用用户自定义模板，其次工作目录模板，最后使用软件内置模板。</li>
           <li><strong>配置位置：</strong>便携版可把配置放在程序目录或 U 盘目录，方便随软件一起带走。</li>
         </ul>
@@ -180,7 +180,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li>内置规则覆盖常见工站、CNC、测试片、烧结盘、焊接号段等。</li>
+          <li>内置规则覆盖常见工站、CNC、测试片、烧结盘、焊接/AOI 括号品名等。</li>
           <li>新增品名、工站或特殊命名时，可在“生成设置”的“识别补充”窗口添加规则。</li>
           <li>用户补充规则保存在 <code className={text.code}>recognition-rules.json</code>，不会随普通配置重置而清空。</li>
           <li>品名识别应优先匹配数据库或补充规则；无法确认时才提示人工确认。</li>
@@ -251,6 +251,58 @@ const TOPICS: HelpTopic[] = [
           <li>件数少时每件时间较长，件数多时每件时间较短。</li>
           <li>如果上限设置得很低，同时当天任务或 PCS 很多，程序会认为总耗时可能被压得过短。</li>
           <li>偏低提醒不会自动修改设置，只要求你在预览/生成前确认。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: "multi-day-overview",
+    categoryId: "daily",
+    title: "多日预览总览",
+    summary: "队列里有多天时，可以先看每一天是否可生成、需审核或时间异常。",
+    keywords: ["多日总览", "多日预览", "队列", "可生成", "需审核", "手量待确认"],
+    body: (
+      <div className="space-y-4">
+        <ul className={text.ul}>
+          <li>队列中有多个日期时，可在待生成队列点击“多日预览总览”。</li>
+          <li>总览只显示每一天/班次的状态：可生成、测料太少、任务量过多、需审核或手量待确认。</li>
+          <li>点击某一天会进入现有单日预览；单包耗时和省略处理仍只作用于当前单日。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: "time-anomaly",
+    categoryId: "schedule",
+    title: "时间异常提示说明",
+    summary: "预览页发现测料太少或任务量过多时，会先给处理建议；省略清单默认只展示。",
+    keywords: ["时间异常", "测料太少", "任务量过多", "省略清单", "6分钟", "按当前结果生成"],
+    body: (
+      <div className="space-y-4">
+        <ul className={text.ul}>
+          <li><strong>测料太少：</strong>当前有效工时低于最低要求时，预览页会显示缺口和普通包调时建议。</li>
+          <li><strong>每颗 6 分钟：</strong>这是普通料建议上限；特殊规则、CNC、真实手量不按普通料上限处理。</li>
+          <li><strong>补充手量/事务：</strong>普通料调到建议上限仍不够时，再补充真实手量或可计入的其他事务。</li>
+          <li><strong>任务量过多：</strong>压缩后仍超过目标结束时间时，默认只展示建议省略清单；只有点击移动按钮并通过二次确认后，才会移入当前日期目录内的新建文件夹A/B。</li>
+          <li><strong>按当前结果生成：</strong>表示接受当前预览结果继续生成，系统不会替你应用推荐清单。</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: "time-anomaly-actions",
+    categoryId: "schedule",
+    title: "应用推荐和省略清单",
+    summary: "测料太少可应用包耗时推荐；任务量过多可确认后移入新建文件夹A/B。",
+    keywords: ["应用推荐", "包耗时覆盖", "省略清单", "新建文件夹A", "新建文件夹B", "移动前确认"],
+    body: (
+      <div className="space-y-4">
+        <ul className={text.ul}>
+          <li><strong>应用推荐：</strong>会把预览页推荐的普通包耗时写入本日包耗时覆盖，并重新预览。</li>
+          <li><strong>不会自动套用：</strong>推荐默认只展示，必须手动点击应用才会写入当前日期。</li>
+          <li><strong>省略清单：</strong>任务量过多时，可确认后把候选包移到当前日期文件夹内的 <code className={text.code}>新建文件夹A</code> 或 <code className={text.code}>新建文件夹B</code>。</li>
+          <li><strong>移动前确认：</strong>默认只展示建议；只有点击移动按钮并通过二次确认后才会移动。确认框会列出将移动的文件夹和目标位置；同名目标不会覆盖，会自动追加序号。</li>
+          <li><strong>不会删除：</strong>省略处理只移动文件夹，不会删除日期资料。</li>
         </ul>
       </div>
     ),
@@ -357,7 +409,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li>本地数据统一收纳在 <code className={text.code}>data</code> 目录；安装版位于 <code className={text.code}>%APPDATA%\OMM日报系统\data</code>，便携版位于程序同级 <code className={text.code}>data</code>。</li>
+          <li>本地数据统一收纳在 <code className={text.code}>data</code> 目录；安装版位于 <code className={text.code}>%APPDATA%\玉衡山科学院管理厅\data</code>，便携版位于程序同级 <code className={text.code}>data</code>。</li>
           <li>账号和登录状态保存在 <code className={text.code}>data/omm.db</code>；PIN 仍只保存加盐哈希，不保存明文。</li>
           <li>账户配置保存在 <code className={text.code}>data/profiles/&lt;账号&gt;/config.json</code>，识别补充规则与该配置同目录。</li>
           <li>便携版仍兼容旧 <code className={text.code}>config.json</code>；新扫描会跳过 <code className={text.code}>data</code> 和旧 <code className={text.code}>.omm</code>，避免把内部 profile 误判为重复配置。</li>
@@ -381,13 +433,13 @@ const TOPICS: HelpTopic[] = [
           <li><strong>运行进程：</strong>可关闭 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi</code> 目录下正在运行的软件进程，并额外包含 Edge 和 Codex 前后台进程；只结束进程，不删除文件。当前 Adobi 根目录包含 AcrobatHelper/OpenCode、AcroUtil/Firefox、Kimi、lmclient 和 PortableGit 等目录，真实执行前会先弹出检测到的进程名、PID 和路径。执行后会清空当前用户系统代理和 WinHTTP 代理，避免代理软件退出后残留代理地址；不会清理 <code className={text.code}>HTTP_PROXY</code> / <code className={text.code}>HTTPS_PROXY</code> 环境变量或 Codex 自身代理配置。</li>
           <li><strong>Edge 标准深度清理：</strong>历史、Cookie、站点存储、缓存、会话、扩展运行缓存、缩略图、安全隐私状态和诊断临时数据；密码和自动填充默认保留，取消勾选“保留密码和自动填充”才会清理。</li>
           <li><strong>危险 Edge 操作：</strong>ResetEdge、清书签、清扩展本体、清微软账户/同步。</li>
-          <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、回收站、私人入口快捷方式、WiFi 配置。回收站清理会保留 <code className={text.code}>.xls</code> / <code className={text.code}>.xlsx</code> / <code className={text.code}>.csv</code>、名称或路径包含 <code className={text.code}>-OMM</code> / <code className={text.code}>送测</code> 的项目，以及 inspec 相关程序文件；快捷方式清理会处理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号入口；WiFi 可忘记匹配模式的私人/临时配置，默认模式为 <code className={text.code}>kaneshiro*</code> 和 <code className={text.code}>cd*</code>，大小写不敏感，也可在清理完成后连接公司 WiFi（默认 <code className={text.code}>cpt3-mobile</code>）并设置自动连接；通知历史会优先打开通知中心并调用“全部清除”，随后开启“请勿打扰”，按钮不可用时会写入当前用户 QuietHours 兜底；如果系统不暴露清除按钮，会暂停通知服务并清空通知数据库兜底，不再重启 Explorer/任务栏。</li>
+          <li><strong>Windows 专项：</strong>通知历史、剪贴板历史、请勿打扰模式、回收站、私人入口快捷方式、WiFi 配置。回收站清理会保留 <code className={text.code}>.xls</code> / <code className={text.code}>.xlsx</code> / <code className={text.code}>.csv</code>、名称或路径包含 <code className={text.code}>-OMM</code> / <code className={text.code}>送测</code> 的项目，以及 inspec 相关程序文件；快捷方式清理会处理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号入口；WiFi 可忘记匹配模式的私人/临时配置，默认模式为 <code className={text.code}>kaneshiro*</code> 和 <code className={text.code}>cd*</code>，大小写不敏感，也可在清理完成后连接公司 WiFi（默认 <code className={text.code}>cpt3-mobile</code>）并设置自动连接；通知历史会优先打开通知中心并调用“全部清除”，不会主动开启或关闭“请勿打扰”；请勿打扰模式可单独勾选，已开启时不重复操作，明确检测到未开启时才开启；如果系统不暴露清除按钮，会暂停通知服务并清空通知数据库兜底，不再重启 Explorer/任务栏。</li>
           <li><strong>截图清理：</strong>按班次时间窗口清理。白班为当日 08:00-20:00，夜班为当日 20:00-次日 08:00；执行前会显示具体是哪一天的时间段。</li>
           <li><strong>火狐浏览记录：</strong>可单独清理 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil</code> 下 Firefox profile 的浏览记录数据库和图标缓存，默认先备份完整 profile；当前实现会处理 <code className={text.code}>places.sqlite*</code>，该库也承载书签，真实执行前请确认备份。</li>
           <li><strong>完整私人浏览器清理：</strong>清理本机 Firefox 便携 profile 的历史、Cookie、缓存、会话、站点存储、表单、保存登录和诊断临时数据。</li>
           <li><strong>权限和日志：</strong>入口、执行和日志读取都限制为管理员账户；访客账户无入口，后端也会拒绝调用。</li>
           <li><strong>启动等待：</strong>真实执行会弹出系统 UAC 管理员确认；如果取消 UAC 或 PowerShell 被阻止，约 60 秒后会停止等待并提示。</li>
-          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>；清理备份统一写入 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups</code>，每次备份单独建文件夹并写入 manifest/README 说明备份类型。</li>
+          <li><strong>日志和备份：</strong>日志写入 <code className={text.code}>data/logs/personal-cleaner</code>；清理备份统一写入 <code className={text.code}>C:\Program Files\Adobe\Acrobat DC\Bin\玉衡山科学院管理厅备份\cleaner-backups</code>，每次备份单独建文件夹并写入 manifest/README 说明备份类型。</li>
         </ul>
       </div>
     ),
@@ -424,7 +476,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.6.3。</li>
+          <li><strong>版本：</strong>5.8.1。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、帮助入口、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常使用：</strong>以当前便携版程序为准；发布物会定期整理，只保留最新可用版本。</li>

@@ -17,16 +17,21 @@ export function ConfigLocationDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-      <Card className="w-[520px] max-w-full rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <Card className="w-[520px] max-w-full overflow-hidden rounded-2xl border-white/70 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <CardHeader className="border-b border-slate-200/70 bg-white/90 px-5 py-4">
-          <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <Settings className="h-4 w-4 text-blue-600" />
-            配置文件位置
+          <CardTitle className="flex items-center gap-3 text-base font-semibold text-slate-950">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
+              <Settings className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-base leading-tight">配置文件位置</span>
+              <span className="mt-1 block text-xs font-medium text-slate-400">玉衡山科学院管理厅</span>
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-5 space-y-5">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-slate-900">欢迎使用 OMM 日报系统</p>
+            <p className="text-sm font-medium text-slate-900">欢迎使用玉衡山科学院管理厅</p>
             <p className="text-sm text-slate-600 leading-relaxed">
               配置文件会保存工作目录、使用者姓名、生成设置等，下次打开时自动恢复。
             </p>
@@ -38,7 +43,8 @@ export function ConfigLocationDialog({
               <div className="text-sm leading-6 text-blue-800">
                 <strong>默认位置：</strong>系统用户配置目录（AppData），通常更稳定，也避免写入日期数据目录。
                 <br />
-                <code className="rounded bg-blue-100/70 px-1.5 py-0.5 text-xs font-mono">%APPDATA%\OMM日报系统\config.json</code>
+                <code className="rounded bg-blue-100/70 px-1.5 py-0.5 text-xs font-mono">%APPDATA%\玉衡山科学院管理厅\config.json</code>
+                <span className="ml-1 text-xs text-blue-700">（旧目录存在时会自动迁移缺失配置）</span>
               </div>
             </div>
             <div className="flex items-start gap-2">

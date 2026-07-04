@@ -1,9 +1,12 @@
-use crate::AppState;
 use super::accounts;
+use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::{State, command};
+use tauri::{command, State};
+
+const APPDATA_DIR_NAME: &str = "玉衡山科学院管理厅";
+const LEGACY_APPDATA_DIR_NAME: &str = "OMM日报系统";
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AppConfig {
@@ -18,7 +21,7 @@ pub struct AppConfig {
     pub operator_name: String,
     pub config_dir: Option<String>,
     pub config_dir_ever_set: Option<bool>,
-    /// 特殊大件物品列表（如烧结盘），每件耗时固定，不参与 tpp 缩放
+    /// 旧版固定件时物品列表，仅用于兼容迁移前配置。
     /// 格式: [{"name": "烧结盘", "minutes": 8}]
     #[serde(default)]
     pub special_items: Vec<SpecialItem>,
@@ -62,16 +65,94 @@ fn default_other_max() -> Option<f64> {
     Some(90.0)
 }
 
+fn appdata_dir(name: &str) -> Option<PathBuf> {
+    let appdata = std::env::var("APPDATA").ok()?;
+    if appdata.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(appdata).join(name))
+}
+
+fn default_appdata_dir() -> Option<PathBuf> {
+    appdata_dir(APPDATA_DIR_NAME)
+}
+
+fn legacy_appdata_dir() -> Option<PathBuf> {
+    appdata_dir(LEGACY_APPDATA_DIR_NAME)
+}
+
+fn normalized_path_text(path: &Path) -> String {
+    path.to_string_lossy()
+        .trim_end_matches(['\\', '/'])
+        .to_lowercase()
+}
+
+fn is_legacy_default_config_dir(dir: &str) -> bool {
+    let Some(legacy_dir) = legacy_appdata_dir() else {
+        return false;
+    };
+    normalized_path_text(&PathBuf::from(dir)) == normalized_path_text(&legacy_dir)
+}
+
+fn normalize_legacy_config_dir(mut config: AppConfig) -> AppConfig {
+    if config
+        .config_dir
+        .as_deref()
+        .is_some_and(is_legacy_default_config_dir)
+    {
+        config.config_dir = None;
+        config.config_dir_ever_set = Some(true);
+    }
+    config
+}
+
+fn copy_legacy_config_file_if_missing(file_name: &str) -> Result<(), String> {
+    let (Some(new_dir), Some(legacy_dir)) = (default_appdata_dir(), legacy_appdata_dir()) else {
+        return Ok(());
+    };
+    let source = legacy_dir.join(file_name);
+    let target = new_dir.join(file_name);
+    if !source.is_file() || target.exists() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&new_dir).map_err(|e| format!("无法创建新配置目录: {}", e))?;
+    if file_name == "config.json" {
+        match read_config_from_path(&source) {
+            Ok(config) => {
+                return write_config_to_path(&target, &normalize_legacy_config_dir(config))
+            }
+            Err(_) => {
+                fs::copy(&source, &target).map_err(|e| format!("无法迁移旧配置文件: {}", e))?;
+                return Ok(());
+            }
+        }
+    }
+
+    fs::copy(&source, &target).map_err(|e| format!("无法迁移旧配置文件: {}", e))?;
+    Ok(())
+}
+
+fn migrate_legacy_appdata_config() -> Result<(), String> {
+    copy_legacy_config_file_if_missing("config.json")?;
+    copy_legacy_config_file_if_missing("recognition-rules.json")?;
+    copy_legacy_config_file_if_missing("user_template.xlsx")?;
+    Ok(())
+}
+
 fn portable_root_from_exe() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let exe_dir = exe.parent()?.to_path_buf();
 
     // Portable package layout:
-    // OMM日报系统.exe
+    // 玉衡山科学院管理厅.exe
     // binaries/generate_report.exe
     // resources/template.xlsx
     let has_portable_resources = exe_dir.join("resources").join("template.xlsx").is_file()
-        && exe_dir.join("binaries").join("generate_report.exe").is_file();
+        && exe_dir
+            .join("binaries")
+            .join("generate_report.exe")
+            .is_file();
     if has_portable_resources {
         return Some(exe_dir);
     }
@@ -100,7 +181,7 @@ impl AppConfig {
     ///
     /// 优先级：
     /// 1. 用户显式指定的 config_dir
-    /// 2. %APPDATA%\OMM日报系统（用户级目录，无需管理员权限，正式安装后稳定可写）
+    /// 2. %APPDATA%\玉衡山科学院管理厅（用户级目录，无需管理员权限，正式安装后稳定可写）
     /// 3. exe 同级目录（dev 模式或便携版回退）
     pub fn effective_config_dir(&self) -> Result<PathBuf, String> {
         // 1. 用户显式指定
@@ -113,19 +194,17 @@ impl AppConfig {
             }
         }
 
-        // 2. %APPDATA%\OMM日报系统（Windows 用户级 AppData 目录）
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            if !appdata.is_empty() {
-                let appdata_dir = PathBuf::from(&appdata).join("OMM日报系统");
-                // 尝试创建目录（首次运行）；已存在则忽略
-                let _ = fs::create_dir_all(&appdata_dir);
-                if appdata_dir.is_dir() {
-                    // 验证可写：尝试创建一个临时文件
-                    let probe = appdata_dir.join(".write_probe");
-                    if fs::File::create(&probe).is_ok() {
-                        let _ = fs::remove_file(&probe);
-                        return Ok(appdata_dir);
-                    }
+        // 2. %APPDATA%\玉衡山科学院管理厅（Windows 用户级 AppData 目录）
+        if let Some(appdata_dir) = default_appdata_dir() {
+            let _ = migrate_legacy_appdata_config();
+            // 尝试创建目录（首次运行）；已存在则忽略
+            let _ = fs::create_dir_all(&appdata_dir);
+            if appdata_dir.is_dir() {
+                // 验证可写：尝试创建一个临时文件
+                let probe = appdata_dir.join(".write_probe");
+                if fs::File::create(&probe).is_ok() {
+                    let _ = fs::remove_file(&probe);
+                    return Ok(appdata_dir);
                 }
             }
         }
@@ -270,8 +349,7 @@ fn find_all_portable_configs(root: &Path) -> Vec<PathBuf> {
 }
 
 fn read_config_from_path(path: &Path) -> Result<AppConfig, String> {
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
     serde_json::from_str::<AppConfig>(&content)
         .map_err(|e| format!("Failed to parse config: {}", e))
 }
@@ -283,8 +361,7 @@ fn write_config_to_path(path: &Path, config: &AppConfig) -> Result<(), String> {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create config directory: {}", e))?;
     }
-    fs::write(path, content)
-        .map_err(|e| format!("Failed to write config: {}", e))
+    fs::write(path, content).map_err(|e| format!("Failed to write config: {}", e))
 }
 
 #[command]
@@ -301,7 +378,7 @@ pub async fn load_config_with_info() -> Result<ConfigLoadInfo, String> {
             .ok_or("无法获取账户配置目录")?
             .to_path_buf();
         if profile_path.exists() {
-            let mut config = read_config_from_path(&profile_path)?;
+            let mut config = normalize_legacy_config_dir(read_config_from_path(&profile_path)?);
             config.config_dir = Some(profile_dir.to_string_lossy().to_string());
             config.config_dir_ever_set = Some(true);
             return Ok(ConfigLoadInfo {
@@ -339,7 +416,8 @@ async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
         let portable_configs = find_all_portable_configs(&portable_root);
         if let Some(first) = portable_configs.first() {
             if let Ok(content) = fs::read_to_string(first) {
-                if let Ok(mut config) = serde_json::from_str::<AppConfig>(&content) {
+                if let Ok(config) = serde_json::from_str::<AppConfig>(&content) {
+                    let mut config = normalize_legacy_config_dir(config);
                     if let Some(parent) = first.parent() {
                         config.config_dir = Some(parent.to_string_lossy().to_string());
                     }
@@ -348,7 +426,11 @@ async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
                         config,
                         source: "portable".to_string(),
                         path: first.to_string_lossy().to_string(),
-                        duplicate_paths: portable_configs.into_iter().map(|p| p.to_string_lossy().to_string()).skip(1).collect(),
+                        duplicate_paths: portable_configs
+                            .into_iter()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .skip(1)
+                            .collect(),
                     });
                 }
             }
@@ -356,23 +438,27 @@ async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
     }
 
     let path = default_config.effective_config_path()?;
-    
+
     if path.exists() {
         // 正常路径：从默认目录（AppData）读取
-        let content = fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        let mut config: AppConfig = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
+        let content =
+            fs::read_to_string(&path).map_err(|e| format!("Failed to read config: {}", e))?;
+        let mut config: AppConfig = normalize_legacy_config_dir(
+            serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?,
+        );
 
         // If config_dir was previously set, try to load from that location
         if let Some(ref dir) = config.config_dir {
-            if !dir.is_empty() {
+            if !dir.is_empty() && !is_legacy_default_config_dir(dir) {
                 let custom_path = PathBuf::from(dir).join("config.json");
                 if custom_path.exists() {
                     let custom_content = fs::read_to_string(&custom_path)
                         .map_err(|e| format!("Failed to read config from custom dir: {}", e))?;
-                    config = serde_json::from_str(&custom_content)
-                        .map_err(|e| format!("Failed to parse config from custom dir: {}", e))?;
+                    config = normalize_legacy_config_dir(
+                        serde_json::from_str(&custom_content).map_err(|e| {
+                            format!("Failed to parse config from custom dir: {}", e)
+                        })?,
+                    );
                     return Ok(ConfigLoadInfo {
                         config,
                         source: "custom".to_string(),
@@ -398,13 +484,15 @@ async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
             if legacy_path.exists() {
                 if let Ok(content) = fs::read_to_string(&legacy_path) {
                     if let Ok(mut legacy_config) = serde_json::from_str::<AppConfig>(&content) {
+                        legacy_config = normalize_legacy_config_dir(legacy_config);
                         // 自动迁移：把旧配置写到新的 AppData 目录
                         // 清除旧的 config_dir 避免循环指向 exe 目录
                         let _ = save_config(AppConfig {
                             config_dir: None,
                             config_dir_ever_set: Some(true), // 标记已设置，避免再弹窗
                             ..legacy_config.clone()
-                        }).await;
+                        })
+                        .await;
                         legacy_config.config_dir_ever_set = Some(true);
                         return Ok(ConfigLoadInfo {
                             config: legacy_config,
@@ -417,7 +505,7 @@ async fn load_config_with_info_base() -> Result<ConfigLoadInfo, String> {
             }
         }
     }
-    
+
     Ok(ConfigLoadInfo {
         config: default_config,
         source: "default".to_string(),
@@ -451,22 +539,20 @@ pub async fn migrate_config(
     state: State<'_, AppState>,
     config: AppConfig,
     new_dir: String,
-    strategy: String,  // "copy" | "overwrite" | "load_existing"
+    strategy: String, // "copy" | "overwrite" | "load_existing"
 ) -> Result<AppConfig, String> {
     let new_path = PathBuf::from(&new_dir).join("config.json");
     let _current_path = config.effective_config_path()?;
 
     // Ensure target directory exists
-    fs::create_dir_all(&new_dir)
-        .map_err(|e| format!("Failed to create directory: {}", e))?;
-    
+    fs::create_dir_all(&new_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+
     let result = match strategy.as_str() {
         "overwrite" => {
             // Copy current config to new location
             let content = serde_json::to_string_pretty(&config)
                 .map_err(|e| format!("Failed to serialize config: {}", e))?;
-            fs::write(&new_path, content)
-                .map_err(|e| format!("Failed to write config: {}", e))?;
+            fs::write(&new_path, content).map_err(|e| format!("Failed to write config: {}", e))?;
             AppConfig {
                 config_dir: Some(new_dir),
                 config_dir_ever_set: Some(true),
@@ -495,8 +581,7 @@ pub async fn migrate_config(
             }
             let content = serde_json::to_string_pretty(&config)
                 .map_err(|e| format!("Failed to serialize config: {}", e))?;
-            fs::write(&new_path, content)
-                .map_err(|e| format!("Failed to write config: {}", e))?;
+            fs::write(&new_path, content).map_err(|e| format!("Failed to write config: {}", e))?;
             AppConfig {
                 config_dir: Some(new_dir),
                 config_dir_ever_set: Some(true),
@@ -522,7 +607,8 @@ pub async fn sync_config_state(
     config: AppConfig,
 ) -> Result<String, String> {
     *state.config.lock().unwrap() = config.clone();
-    let dir = config.effective_config_dir()
+    let dir = config
+        .effective_config_dir()
         .map_err(|e| format!("Failed to resolve config dir: {}", e))?;
     *state.user_template_dir.lock().unwrap() = dir.clone();
     Ok(dir.to_string_lossy().to_string())
@@ -568,8 +654,7 @@ pub async fn save_recognition_rules(
     rules.version = if rules.version <= 0 { 1 } else { rules.version };
     let content = serde_json::to_string_pretty(&rules)
         .map_err(|e| format!("Failed to serialize recognition rules: {}", e))?;
-    fs::write(&path, content)
-        .map_err(|e| format!("Failed to write recognition rules: {}", e))?;
+    fs::write(&path, content).map_err(|e| format!("Failed to write recognition rules: {}", e))?;
 
     Ok(RecognitionRulesLoadInfo {
         rules,

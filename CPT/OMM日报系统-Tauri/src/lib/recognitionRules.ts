@@ -10,6 +10,7 @@ const DEFAULT_IGNORED_TOKENS = [
   "BIN2",
   "BIN4",
   "AOI",
+  "对标",
   "FAI9",
   "CMM",
   "OMM",
@@ -81,7 +82,8 @@ function isLikelyChineseName(value?: string): boolean {
   if (!v) return false;
   if (!/^[\u4e00-\u9fa5]{2,4}$/.test(v)) return false;
   if (KNOWN_STATION_WORDS.some((word) => v.includes(word))) return false;
-  if (["手量", "手测", "送测", "测试", "测试片", "尺寸", "制程", "首件", "复测"].includes(v)) return false;
+  if (["手量", "手测", "送测", "测试", "测试片", "尺寸", "制程", "首件", "复测", "量测", "量测人员", "对标", "对照", "校准", "标准"].includes(v)) return false;
+  if (["量测", "人员", "对标", "对照", "校准", "标准"].some((word) => v.includes(word))) return false;
   return true;
 }
 
@@ -227,20 +229,22 @@ export function recognizeProductCodes(name: string, station?: string, rules?: Re
     return { products, matchedRules, warnings };
   }
 
-  if (station === "焊接" || name.includes("焊接")) {
+  if (station === "焊接" || name.includes("焊接") || name.toUpperCase().includes("AOI")) {
     for (const rule of rules?.welding_rules || []) {
       if (matchPattern(name, rule.pattern)) {
         pushUnique(products, rule.product);
         matchedRules.push(`补充焊接规则：${rule.pattern} -> ${rule.product}`);
       }
     }
-    for (const m of name.matchAll(/(?<!\d)414(2[4-9])(?!\d)/g)) {
-      pushUnique(products, `42${m[1].slice(1)}`);
-      matchedRules.push("内置焊接 41424-41429 规则");
-    }
-    for (const m of name.matchAll(/(?<!\d)(289|290)(?!\d)/g)) {
+    for (const m of name.matchAll(/\((03[4-9])-\d{3}\)/g)) {
       pushUnique(products, m[1]);
-      matchedRules.push("内置焊接 289/290 规则");
+      matchedRules.push("内置焊接/AOI 括号品名规则");
+    }
+    if (products.length === 0) {
+      for (const m of name.matchAll(/(?<!\d)(289|290)(?!\d)/g)) {
+        pushUnique(products, m[1]);
+        matchedRules.push("内置焊接 289/290 规则");
+      }
     }
     return { products, matchedRules, warnings };
   }

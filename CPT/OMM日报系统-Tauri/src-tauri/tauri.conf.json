@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
-  "productName": "OMM日报系统",
-  "version": "5.6.3",
-  "identifier": "com.kaneshiro.omm-report-v5",
+  "productName": "玉衡山科学院管理厅",
+  "version": "5.8.1",
+  "identifier": "com.kaneshiro.yuhengshan.academy.manager",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "OMM日报系统 v5.6.3",
+        "title": "玉衡山科学院管理厅 v5.8.1",
         "width": 700,
         "height": 800,
         "minWidth": 700,

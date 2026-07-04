@@ -2126,25 +2126,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omm-daily-report-v5"
-version = "5.6.3"
-dependencies = [
- "anyhow",
- "once_cell",
- "rand",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-shell",
- "tokio",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4911,6 +4892,25 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "synstructure",
+]
+
+[[package]]
+name = "yuhengshan-academy-manager"
+version = "5.8.1"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "rand",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-shell",
+ "tokio",
 ]
 
 [[package]]

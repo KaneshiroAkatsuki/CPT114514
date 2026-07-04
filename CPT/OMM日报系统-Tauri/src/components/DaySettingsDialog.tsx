@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { FillerPosition } from "@/types/record";
 import { Settings2, X } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -9,13 +10,16 @@ interface DaySettingsDialogProps {
   leaveStrategy: 'auto' | 'early' | 'normal' | undefined;
   enableHand: boolean | undefined;
   enableOther: boolean | undefined;
+  fillerPosition: FillerPosition | undefined;
   globalEnableHand: boolean;
   globalEnableOther: boolean;
+  globalFillerPosition: FillerPosition;
   globalLeaveStrategy: 'auto' | 'early' | 'normal';
   onSave: (settings: {
     leave_strategy?: 'auto' | 'early' | 'normal';
     enable_hand?: boolean;
     enable_other?: boolean;
+    filler_position?: FillerPosition;
   }) => void;
   onClear: () => void;
   onClose: () => void;
@@ -27,8 +31,10 @@ export function DaySettingsDialog({
   leaveStrategy,
   enableHand,
   enableOther,
+  fillerPosition,
   globalEnableHand,
   globalEnableOther,
+  globalFillerPosition,
   globalLeaveStrategy,
   onSave,
   onClear,
@@ -37,18 +43,20 @@ export function DaySettingsDialog({
   const [leave, setLeave] = useState<'auto' | 'early' | 'normal'>(leaveStrategy ?? globalLeaveStrategy);
   const [hand, setHand] = useState<boolean>(enableHand ?? globalEnableHand);
   const [other, setOther] = useState<boolean>(enableOther ?? globalEnableOther);
+  const [position, setPosition] = useState<FillerPosition>(fillerPosition ?? globalFillerPosition);
 
   useEffect(() => {
     if (open) {
       setLeave(leaveStrategy ?? globalLeaveStrategy);
       setHand(enableHand ?? globalEnableHand);
       setOther(enableOther ?? globalEnableOther);
+      setPosition(fillerPosition ?? globalFillerPosition);
     }
-  }, [open, leaveStrategy, enableHand, enableOther, globalEnableHand, globalEnableOther, globalLeaveStrategy]);
+  }, [open, leaveStrategy, enableHand, enableOther, fillerPosition, globalEnableHand, globalEnableOther, globalFillerPosition, globalLeaveStrategy]);
 
   if (!open) return null;
 
-  const hasOverrides = leaveStrategy !== undefined || enableHand !== undefined || enableOther !== undefined;
+  const hasOverrides = leaveStrategy !== undefined || enableHand !== undefined || enableOther !== undefined || fillerPosition !== undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
@@ -107,6 +115,24 @@ export function DaySettingsDialog({
                 className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
             </label>
+            <div className="space-y-2 border-t border-slate-200/70 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-700">补时插入位置</div>
+                  <div className="mt-0.5 text-xs leading-5 text-slate-500">保存后预览/生成会提示插入位置。</div>
+                </div>
+                <select
+                  className="h-8 rounded-lg border border-slate-200/90 bg-white/80 px-2 text-sm text-slate-800 focus-visible:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value as FillerPosition)}
+                >
+                  <option value="head">头部</option>
+                  <option value="middle">中部</option>
+                  <option value="tail">尾部</option>
+                  <option value="random">随机</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-between border-t border-slate-200/70 pt-4">
@@ -138,10 +164,12 @@ export function DaySettingsDialog({
                     leave_strategy?: 'auto' | 'early' | 'normal';
                     enable_hand?: boolean;
                     enable_other?: boolean;
+                    filler_position?: FillerPosition;
                   } = {};
                   if (leave !== globalLeaveStrategy) patch.leave_strategy = leave;
                   if (hand !== globalEnableHand) patch.enable_hand = hand;
                   if (other !== globalEnableOther) patch.enable_other = other;
+                  if (position !== globalFillerPosition) patch.filler_position = position;
                   onSave(patch);
                   onClose();
                 }}

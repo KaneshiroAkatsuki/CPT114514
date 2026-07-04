@@ -25,6 +25,14 @@ interface ManualTaskDialogProps {
   onPreview?: (tasks: RealManualTask[]) => void;
   recognitionRules?: RecognitionRules;
   ownerName?: string;
+  suggestion?: ManualTimeSuggestion | null;
+}
+
+export interface ManualTimeSuggestion {
+  minutes: number;
+  reason: string;
+  taskMinutes?: Record<string, number>;
+  taskReasons?: Record<string, string>;
 }
 
 const EMPTY_TASK: Partial<RealManualTask> = {
@@ -63,6 +71,25 @@ function formatDuration(minutes?: number | null): string {
   if (h > 0 && m > 0) return `${h}小时${m}分钟`;
   if (h > 0) return `${h}小时`;
   return `${m}分钟`;
+}
+
+function sanitizeSuggestedMinutes(minutes?: number | null): number | null {
+  if (!Number.isFinite(minutes || NaN)) return null;
+  return Math.max(1, Math.round(Number(minutes)));
+}
+
+function getQuantityFromText(value?: string | number | null): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
+  const match = String(value || "").match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function normalizeManualSendDate(value?: string): string {
+  const raw = (value || "").trim();
+  if (!raw) return raw;
+  const chinese = raw.match(/^(\d{1,2})月(\d{1,2})日?([AB])?$/i);
+  if (chinese) return `${chinese[1]}.${chinese[2]}${chinese[3] || ""}`;
+  return raw;
 }
 
 function CandidateInfo({ candidate, task, ownerName }: { candidate?: ManualFolderCandidate; task?: RealManualTask; ownerName?: string }) {
@@ -144,6 +171,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   onPreview,
   recognitionRules,
   ownerName = '',
+  suggestion = null,
 }) => {
   const existingTasks = useMemo(() => {
     if (!item) return [];
@@ -156,10 +184,10 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     // 尝试从 6.13A 这种 dateFolder 解析月和日
     const m = item.dateFolder.match(/^(\d+)\.(\d+)/);
     if (m) {
-      return `${m[1]}月${m[2]}日`;
+      return `${m[1]}.${m[2]}`;
     }
     const now = new Date();
-    return `${now.getMonth() + 1}月${now.getDate()}日`;
+    return `${now.getMonth() + 1}.${now.getDate()}`;
   }, [item]);
 
   const patchedExistingTasks = useMemo(() => {
@@ -196,6 +224,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         station: rec.station || '',
         id: nanoid(),
         duration_minutes: rec.duration_minutes ?? (0 as unknown as number),
+        note: rec.note || '手量',
         from_recognition: true,
         source_folder: c.folderName,
       } as RealManualTask);
@@ -222,6 +251,33 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
   const effectiveShift = item?.shiftOverride || item?.shift || null;
   const hasCandidates = (item?.manualCandidates?.length || 0) > 0;
   const autoRecognizedCount = tasks.filter((t) => t.from_recognition && t.duration_minutes && t.duration_minutes > 0).length;
+  const suggestedMinutes = sanitizeSuggestedMinutes(suggestion?.minutes);
+  const suggestedInput = suggestedMinutes ? `${suggestedMinutes}分钟` : "";
+
+  const getTaskSuggestion = (task: RealManualTask) => {
+    const sourceKey = task.source_folder ? `folder:${task.source_folder}` : "";
+    const mapped = sourceKey ? sanitizeSuggestedMinutes(suggestion?.taskMinutes?.[sourceKey]) : null;
+    if (mapped) {
+      return {
+        minutes: mapped,
+        input: `${mapped}分钟`,
+        reason: suggestion?.taskReasons?.[sourceKey] || suggestion?.reason || "根据该条手量件数和日报缺口估算。",
+      };
+    }
+    const qty = getQuantityFromText(task.quantity);
+    if (qty > 0) {
+      const minutes = Math.min(240, Math.max(10, Math.round(qty * 2)));
+      return {
+        minutes,
+        input: `${minutes}分钟`,
+        reason: `按该条 ${qty} PCS 估算，先按约 2 分钟/件给出起点。`,
+      };
+    }
+    if (suggestedMinutes && suggestedInput) {
+      return { minutes: suggestedMinutes, input: suggestedInput, reason: suggestion?.reason || "根据当前日报缺口估算。" };
+    }
+    return null;
+  };
 
   const handleAdd = () => {
     setTasks((prev) => [
@@ -237,6 +293,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         machine: '/',
         send_time: '/',
         counting_mode: 'separate',
+        note: '手量',
         from_recognition: false,
       } as RealManualTask,
     ]);
@@ -265,6 +322,31 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     );
   };
 
+  const applySuggestionToTask = (id: string) => {
+    const task = tasks.find((it) => it.id === id);
+    if (!task) return;
+    const taskSuggestion = getTaskSuggestion(task);
+    if (!taskSuggestion) return;
+    handleUpdate(id, { durationInput: taskSuggestion.input, duration_minutes: taskSuggestion.minutes });
+  };
+
+  const applySuggestionToEmptyTasks = () => {
+    setTasks((prev) =>
+      prev.map((task) => {
+        const raw = (task as RealManualTask & { durationInput?: string }).durationInput || "";
+        if ((task.duration_minutes && task.duration_minutes > 0) || raw.trim()) return task;
+        const taskSuggestion = getTaskSuggestion(task);
+        if (!taskSuggestion) return task;
+        return {
+          ...task,
+          durationInput: taskSuggestion.input,
+          duration_minutes: taskSuggestion.minutes,
+          note: task.note || "手量",
+        };
+      })
+    );
+  };
+
   const handleRecognize = () => {
     const lines = rawInput
       .split(/\r?\n/)
@@ -280,6 +362,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
         id: nanoid(),
         duration_minutes: recognized.duration_minutes ?? 0,
         counting_mode: recognized.counting_mode ?? 'separate',
+        note: recognized.note || '手量',
         from_recognition: true,
       } as RealManualTask);
       const warnings = recognized.recognition_warnings || [];
@@ -289,15 +372,23 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
     setRecognizeLog(logs);
   };
 
+  const normalizeTasksForSave = (source: RealManualTask[]) =>
+    source.map((task) => ({
+      ...task,
+      send_date: normalizeManualSendDate(task.send_date),
+      note: task.note || '手量',
+    }));
+
   const handleSave = () => {
-    onSave(tasks);
+    onSave(normalizeTasksForSave(tasks));
     onOpenChange(false);
   };
 
   const handleSaveAndPreview = () => {
-    onSave(tasks);
+    const normalizedTasks = normalizeTasksForSave(tasks);
+    onSave(normalizedTasks);
     onOpenChange(false);
-    onPreview?.(tasks);
+    onPreview?.(normalizedTasks);
   };
 
   const validationMap = useMemo(() => {
@@ -330,6 +421,17 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
             {autoRecognizedCount > 0 && (
               <span className="ml-1">其中 {autoRecognizedCount} 条耗时已自动识别，仍需人工确认。</span>
             )}
+          </div>
+        )}
+        {suggestedMinutes && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/85 p-3 text-sm text-emerald-800">
+            <div>
+              <div className="font-medium">推荐手量耗时：按每条件数分别估算</div>
+              <div className="mt-1 text-xs leading-5">{suggestion?.reason || "根据当前件数和日报缺口估算；不同件数会得到不同推荐值。"}</div>
+            </div>
+            <Button type="button" size="sm" variant="outline" className="border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50" onClick={applySuggestionToEmptyTasks}>
+              填入空耗时
+            </Button>
           </div>
         )}
         {hasIncomplete && (
@@ -365,6 +467,7 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
               ) : (
               tasks.map((t) => {
                 const errs = validationMap[t.id] || [];
+                const taskSuggestion = getTaskSuggestion(t);
                 const durationInput = (t as RealManualTask & { durationInput?: string }).durationInput ?? (t.duration_minutes > 0 ? t.duration_minutes.toString() : '');
                 const parsedMinutes = parseManualDuration(durationInput);
                 const parsedDurationText = durationInput.trim().length > 0
@@ -426,18 +529,28 @@ export const ManualTaskDialog: React.FC<ManualTaskDialogProps> = ({
                       />
                     </div>
                         <div className="space-y-0.5 col-span-2">
-                          <label className="text-[10px] text-slate-500">{FIELD_NAMES.duration_minutes}</label>
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-[10px] text-slate-500">{FIELD_NAMES.duration_minutes}</label>
+                            {taskSuggestion && (
+                              <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-emerald-700" onClick={() => applySuggestionToTask(t.id)}>
+                                用推荐 {taskSuggestion.minutes} 分钟
+                              </Button>
+                            )}
+                          </div>
                           <Input
                             className="h-7 text-xs"
-                            placeholder="例如 2、2.5、3h、150分钟"
+                            placeholder="例如 90分钟、1.5h、2"
                             value={durationInput}
                             onChange={(e) => handleUpdate(t.id, { durationInput: e.target.value })}
                           />
                           <p className="text-[10px] text-slate-400">
-                            手量耗时默认按小时输入；如需按分钟，请写“90分钟”或“90m”。
+                            裸数字仍按小时理解；推荐值会写成“分钟”，避免误判。
                           </p>
                           {parsedDurationText && (
                             <p className="text-xs text-blue-700 font-medium">{parsedDurationText}</p>
+                          )}
+                          {taskSuggestion && (
+                            <p className="text-[10px] leading-4 text-emerald-700">{taskSuggestion.reason}</p>
                           )}
                         </div>
                     <div className="space-y-0.5">

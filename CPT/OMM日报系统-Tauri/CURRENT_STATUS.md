@@ -1,85 +1,97 @@
-# OMM 日报系统当前状态
+# 玉衡山科学院管理厅当前状态
+
+更新时间：2026-07-04 02:40 +08:00
 
 ## 当前版本
 
-- 应用版本：5.6.3
-- 版本号随实际更新或发布同步升级；三段版本号单段最大为 9，第三段最大为 5。
-- 历史交接、需求稿和 opencode 记录已归档到 `docs/archive/`。
+- 应用版本：5.8.1
+- 应用名称：玉衡山科学院管理厅
+- 包名：`yuhengshan-academy-manager`
+- Tauri 标识：`com.kaneshiro.yuhengshan.academy.manager`
+- 版本号规则：三段版本号；第二位最高为 9，第三位最高为 5。
 
-## 最近重点
+版本信息以以下文件互相复核：
 
-- 模板/WPS 样式已按同事模板口径补齐。
-- 每件时间偏低风险确认已实现。
-- 文件名疑似错误/需确认 warning 已实现。
-- 个人电脑清理功能已集成到单独页面。
-- 个人清理已支持本机私人浏览器 profile 清理和可选备份。
-- 帮助中心已按任务分类重构，并新增关键词搜索；当前布局改为两栏 Apple Settings 风格，减少三栏拥挤。
-- 设置中心已重组为通用软件式分区：账户登录、信息统计局设置、数据管理局设置、关于软件；后续新增模块时按“模块名 + 设置”继续扩展。
-- 个人清理执行入口已从设置中心移出，统一从主页“数据管理局”进入；设置中心只保留数据管理局的治理边界、备份和日志位置说明。
-- 设置中心“关于软件”顶部显示帮助入口，下方显示版本、配置文件、识别补充和模板来源；普通用户界面已移除 dev 打包提示。
-- 主界面已隐藏日志展示；诊断日志收纳到设置中心“关于软件”中按需查看。
-- 本地数据层已新增：账号/session 写入 `data/omm.db`，账户配置迁入 `data/profiles/`，个人清理日志写入 `data/logs`，个人清理备份统一写入 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`，便携版 manifest 打包写入 `data/manifests/`。
-- Apple-inspired UI 收尾阶段已实施：登录页、帮助中心、业务弹窗、表格、设置内部卡片和剩余小窗口继续统一到 Apple-inspired 风格。
-- 预览页已简化结论区：默认只显示是否可生成、有效计入、最低要求、差额和必要建议，休息/缓冲/来源拆分收纳到“查看计算细项”。
-- 登录页已简化：标题下方和底部改为“KANESHIRO·AKATSUKI”淡标签水印，移除“已有账户”列表，账户登录与切换账户入口保留在设置中心。
-- 主界面页头已加入“玉衡山科学院”淡机构标识，作为登录后的界面归属信息。
-- 登录后主界面已新增“玉衡山科学院管理厅”主页外壳，提供“信息统计局”（原 OMM 日报工作台）和“数据管理局”（管理员本机数据维护）两个入口；访客点击数据管理局会显示统一权限提示。
-- 应用图标已重绘：使用蓝色圆角底和白色报表/表格符号，并重新生成多尺寸 ico，提升资源管理器和任务栏清晰度。
-- 个人清理安全性已加固：执行和日志读取均增加后端管理员账户校验，标准清理默认保留密码和自动填充。
-- 个人清理启动等待超时调整为 60 秒；取消 UAC 或 PowerShell 被阻止时更快停止轮询并提示。
-- 个人清理截图功能已改为按班次时间窗口清理：白班 08:00-20:00，夜班 20:00-次日 08:00，执行前显示具体日期范围。
-- 个人清理新增火狐浏览记录单项清理，目标为 `C:\Program Files\Adobe\Acrobat DC\Adobi\AcroUtil` 下 Firefox profile，默认先备份完整 profile。
-- 个人清理中心已收敛为顶部分类 + 左侧项目选择 + 右侧影响/执行清单确认；运行日志仅在执行后显示，减少页面拥挤感。
-- 个人清理 Windows 通知历史已改为优先调用通知中心“全部清除”按钮；按钮不可用时清空通知数据库兜底，不再重启 Explorer/任务栏；清理完成后会弹出结果摘要并清空真实执行清单。
-- 个人清理新增“运行进程”栏目，可关闭 `C:\Program Files\Adobe\Acrobat DC\Adobi` 目录下运行的软件进程，并包含 Edge/Codex 前后台进程；真实执行前会先弹出候选进程名、PID 和路径，该项只结束进程，不删除文件。
-- 个人清理“私人入口快捷方式”会清理开始菜单中的 OpenCode、Firefox 隐私浏览和异常空引号样式入口，不删除程序文件。
-- 个人清理“关闭 Adobi / Edge / Codex 进程”已补充代理残留收尾：会清当前用户系统代理和 WinHTTP 代理，避免 lmclient 等代理软件退出后遗留代理地址；不会清 HTTP_PROXY/HTTPS_PROXY 环境变量或 Codex 自身代理配置。
-- 个人清理已新增“推荐清理 / 自定义清理”方案：推荐清理避开高风险项，自定义清理可保存当前选项和方案名称，并在下次打开时默认套用。
-- 个人清理已新增“切换公司 WiFi”：清理完成后可连接 `cpt3-mobile` 并设为自动连接；这是独立选项，默认关闭，避免误断网。
-- Windows 通知清理会在调用通知中心“全部清除/全部清理”后开启“请勿打扰”；按钮不可用时写入当前用户 QuietHours 兜底，已开启时保持开启。
-- WiFi 配置管理已从“保留前缀、忘记其他”改为“忘记匹配名称”：默认匹配 `kaneshiro*` 和 `cd*`，大小写不敏感，避免误删公司 WiFi。
-- 个人清理新增“回收站清理”：会保留 `.xls/.xlsx/.csv`、名称或路径包含 `-OMM` / `送测` 的项目，以及 inspec 相关程序文件；建议先模拟运行确认清单。
-- 个人清理备份根目录已统一到 `C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups`；每次 Edge/Firefox 备份会单独建小文件夹并写入 manifest/README。
-- 主界面主操作区已居中前置：预览日报和生成报表从左侧模块移到工作台中间，设置中心改为固定外壳 + 左侧导航 + 右侧单滚动内容，避免双滚动条贴边。
-- 主界面左栏已调整顺序：当前设置摘要前置，工作目录选择下移。
-- UI 收尾审查已补齐：通用弹窗外壳改为不滚动，滚动交给内容区；启动页和浏览器标题同步到当前 Apple-inspired 配色。
-- 项目内已生成最新 5.6.3 便携包。
-- 本地账户登录已新增：默认管理员、访客注册、忘记 PIN 管理员重置、每账户独立 profile 配置。
-- sidecar 通讯已增加 180 秒命令超时保护。
+- `package.json`
+- `src-tauri/tauri.conf.json`
+- 最新便携版 `data/manifests/portable-manifest.json`
 
 ## 最新便携版
 
-> 最新便携包版本为 5.6.3，已包含回收站保护清理、“玉衡山科学院管理厅”主页外壳、主页文案收敛调整，以及设置中心模块化分区。
+- 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.1.zip`
+- SHA256：`F9BAD9104B951FE6C92D8D8F9321A336E18B744A2D25A28A30A7BD1DE56D01EC`
+- packaged_at：`2026-07-04T00:58:19`
+- app：`2f6307206ffe2466b9ba731f494bddc934c4387c4f2b90423cb75e984779cd9f`
+- sidecar：`89875ae5cf998a924eda7534cfbc602df925080a9a3e777f8a7e29b978b96492`
+- template：`18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da`
+- personal_cleaner_script：`3feed427724db51f876224f3e93c4e9e7b732aecec55826840ee44c901154a03`
+- personal_cleaner_launcher：`c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac`
 
-- packaged_at：2026-07-02T07:05:16
-- app：05a0e6f5631e8d9fb1822ac5a7520085abbd9d903a6880fc787f6e80c5cff55e
-- sidecar：64c9ecbab9378f464382bd9007cc18a44a60dfb034c60e45e91d70f86b9a9fdf
-- template：18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da
-- personal_cleaner_script：244b4fbc7c853fb1e712f5ffe10a38f2e729a1d5e51d593c7d97f27620eb5e2e
-- personal_cleaner_launcher：c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac
-- 便携包：`releases/OMM日报系统_便携版_5.6.3.zip`
-- 安装包：本轮交付便携包；安装包仅按需使用。
-- 移动性检查：临时解压验证已通过；移动目录中的 sidecar `ping` 和 `get_template_info` 均通过，模板路径解析到移动后的 `resources/template.xlsx`，验证目录已清理。
+## 近期重点
+
+- 登录后主界面是“玉衡山科学院管理厅”主页外壳。
+- 主页模块为“信息统计局”和“数据管理局”。
+- 设置中心按普通软件方式分区：账户登录、信息统计局设置、数据管理局设置、数据库设置、关于软件。
+- 数据库设置包含补充规则表、送测人库、耗时规则库。
+- 数据管理局承接原个人清理入口；设置中心只保留模块设置、备份和说明入口。
+- 个人清理已支持通知清理/勿扰模式、回收站保护、进程处理、WiFi 切换、浏览器 profile 清理和备份。
+- Windows 通知清理会优先使用通知中心清理按钮，并在需要时开启请勿打扰；检测到已开启时不重复处理。
+- 个人清理真实执行前应有清单和确认，执行后要有结果反馈。
+- 手量补录、耗时规则、常见送测人和识别补充正在向数据库规则化迁移。
+- 根 `AGENTS.md` 已更新为 Codex/opencode 共用入口。
+- 三角色协作文件夹已建立：`docs/role-prompts/`。
+- 深度记忆已建立：`docs/role-prompts/core-memory.md`。
+
+## 不可丢失的协作记忆
+
+- 现在的三角色体系是长期协作设计：杰控方向和文档，寇实现，凯验收。
+- 文档必须严格分层，不能把聊天记录、流水账和长历史塞进入口文档。
+- 当前给杰的再交接包含维护方向和三角色启动约束；新窗口或上下文压缩后必须先找回它。
+- 给杰的初学者保护补充包含决策分层、用户解释方式、三角色工作流、完成定义、数据和文档护栏；这也是当前协作基础。
+- 三角色可以在职责范围内直接处理低风险小事项，减少用户来回切换；处理后要写入 `docs/role-prompts/activity-log.md` 或当前交接。
+- 低风险小事项不包括数据库结构、真实清理、发布/升版本、权限、核心算法、大范围 UI 或用户数据操作。
+- 凯当前不要直接开始检查或 UI 自动化；用户正在操作电脑，等用户明确允许后再测试。
+- 信息统计局、数据管理局、设置中心、数据库设置和手量耗时算法的维护方向，以当前给杰交接为准。
+
+## 文档状态
+
+- 当前入口：`AGENTS.md`
+- 新窗口兼容提示：`docs/new-codex-start-prompt.md`
+- 文档治理：`docs/role-prompts/document-governance.md`
+- 深度记忆：`docs/role-prompts/core-memory.md`
+- 工具/网页/Skill/MCP 规则：`docs/role-prompts/tooling-policy.md`
+- 当前给杰主交接：`docs/role-prompts/handoffs/2026-07-04_0205_v5.8.1_to-jay_rehandoff-maintenance.md`
+- 当前给杰交接补充：`docs/role-prompts/handoffs/2026-07-04_0212_v5.8.1_to-jay_beginner-guardrails-addendum.md`
+- 旧根文档已归档到 `docs/archive/legacy-root/`
+- 旧 5.6.x 接力链和 UI 阶段记录已归档到 `docs/archive/legacy-current-layer/`
+- `docs/archive/` 和 `docs/role-prompts/handoffs/archive/` 非必要不读取。
 
 ## 常用验证
 
 ```powershell
 npm.cmd run smoke
 npx.cmd tsc --noEmit
-cargo check --release
+Push-Location src-tauri; cargo check --release; Pop-Location
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
-python sidecar\build_sidecar.py
-npm.cmd run tauri build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.6.3
+npm.cmd run tauri-build
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.1
 ```
+
+## 发布策略
+
+- 数据库规则、帮助文案、预设耗时、清理规则、模板配置：优先考虑热更新/小打包。
+- UI、登录流程、Tauri/React 程序本体、核心逻辑、exe 嵌入资源：需要升版本并完整打便携包。
+- 用户一般只需要便携版，安装包仅在必要时构建。
+- 发布或打包时必须同步更新版本号、帮助/关于界面、状态文档和便携版 manifest。
 
 ## 重要约束
 
 - 不要 `git add .`，只精确 add 修改过的项目文件。
 - 不要移动、删除、重命名 `C:\Users\Administrator\Desktop\勿动\日期文件`。
 - 不要写回原始测试数据目录。
-- 测试输出放到 `test-output`。
+- 测试输出放到 `test-output` 或临时目录。
 - sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` / `--output`。
 - PowerShell 不要用 `< file`。
 - 不要触碰 sidecar 排程核心、CNC/整形 CNC/特殊大件/缺口诊断算法，除非明确要求。
-- `CPT/日期文件夹/` 有更新时需要随代码一起提交上传。
+- `CPT/日期文件夹/` 有更新时需要随代码一起提交或在交接中明确说明。
+- 清理、数据库迁移、登录权限、日报生成和打包发布相关改动要先确认边界，再验证。

@@ -9,7 +9,8 @@ import { MainWindow } from "@/components/MainWindow";
 
 type GateMode = "login" | "register" | "forgot";
 
-const APP_VERSION = "5.6.3";
+const APP_VERSION = "5.8.1";
+const REMEMBER_LOGIN_KEY = "yuhengshan.rememberLogin.v1";
 
 const loginNotes = [
   {
@@ -36,6 +37,26 @@ function roleLabel(account: PublicAccount): string {
 function validatePin(pin: string): string | null {
   if (!/^\d{4,6}$/.test(pin)) return "PIN 必须是 4 到 6 位数字。";
   return null;
+}
+
+function loadRememberedLogin(): { login: string; pin: string } | null {
+  try {
+    const raw = window.localStorage.getItem(REMEMBER_LOGIN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { login?: string; pin?: string };
+    if (!parsed.login || !parsed.pin) return null;
+    return { login: parsed.login, pin: parsed.pin };
+  } catch {
+    return null;
+  }
+}
+
+function saveRememberedLogin(login: string, pin: string) {
+  window.localStorage.setItem(REMEMBER_LOGIN_KEY, JSON.stringify({ login, pin }));
+}
+
+function clearRememberedLogin() {
+  window.localStorage.removeItem(REMEMBER_LOGIN_KEY);
 }
 
 function PinInput({
@@ -81,6 +102,7 @@ export function AccountGate() {
   const [mode, setMode] = React.useState<GateMode>("login");
   const [login, setLogin] = React.useState("");
   const [pin, setPin] = React.useState("");
+  const [rememberLogin, setRememberLogin] = React.useState(false);
   const [nickname, setNickname] = React.useState("");
   const [realName, setRealName] = React.useState("");
   const [newPin, setNewPin] = React.useState("");
@@ -90,6 +112,9 @@ export function AccountGate() {
   const [working, setWorking] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const mountedRef = React.useRef(true);
+  const switchingToMainRef = React.useRef(false);
+  const lastSessionPrefilledRef = React.useRef(false);
 
   const {
     loadAccounts,
@@ -99,22 +124,51 @@ export function AccountGate() {
     resetAccountPin,
   } = useAccountManager();
 
+  React.useEffect(() => {
+    mountedRef.current = true;
+    const remembered = loadRememberedLogin();
+    if (remembered) {
+      setLogin(remembered.login);
+      setPin(remembered.pin);
+      setRememberLogin(true);
+      setMessage("已填入本机记住的账户和 PIN，请手动点击登录。");
+      lastSessionPrefilledRef.current = true;
+    }
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const refreshAccounts = React.useCallback(async () => {
     const info = await loadAccounts();
+    if (!mountedRef.current) return;
     setAccounts(info.accounts);
-    if (info.current_account) {
-      setCurrentAccount(info.current_account);
+    if (info.current_account && !lastSessionPrefilledRef.current) {
+      lastSessionPrefilledRef.current = true;
+      setLogin(info.current_account.nickname || info.current_account.real_name);
+      setMessage("已填入上次使用的账户，请输入 PIN 后手动登录。");
     }
-    if (!targetAccountId && info.accounts.length > 0) {
+    setTargetAccountId((prev) => {
+      if (prev || info.accounts.length === 0) return prev;
       const firstGuest = info.accounts.find((account) => account.role !== "admin") || info.accounts[0];
-      setTargetAccountId(firstGuest.id);
-    }
-  }, [loadAccounts, targetAccountId]);
+      return firstGuest.id;
+    });
+  }, [loadAccounts]);
 
   React.useEffect(() => {
+    let cancelled = false;
     refreshAccounts()
-      .catch((e) => setError(`账户读取失败: ${e}`))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!cancelled && mountedRef.current && !switchingToMainRef.current) {
+          setError(`账户读取失败: ${e}`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled && mountedRef.current) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [refreshAccounts]);
 
   const resetFormState = () => {
@@ -125,7 +179,18 @@ export function AccountGate() {
     setMessage("");
   };
 
+  const handleRememberLoginChange = (checked: boolean) => {
+    setRememberLogin(checked);
+    if (!checked) {
+      clearRememberedLogin();
+      setMessage("已关闭本机记住账户和 PIN。");
+    } else {
+      setMessage("勾选后，登录成功会在本机记住账户和 PIN；下次仍需手动点击登录。");
+    }
+  };
+
   const handleLogin = async () => {
+    if (working) return;
     setError("");
     setMessage("");
     if (!login.trim()) {
@@ -140,11 +205,17 @@ export function AccountGate() {
     setWorking(true);
     try {
       const session = await loginAccount(login.trim(), pin.trim());
+      if (rememberLogin) {
+        saveRememberedLogin(login.trim(), pin.trim());
+      } else {
+        clearRememberedLogin();
+      }
+      switchingToMainRef.current = true;
       setCurrentAccount(session.account);
     } catch (e) {
-      setError(String(e));
+      if (!switchingToMainRef.current) setError(String(e));
     } finally {
-      setWorking(false);
+      if (!switchingToMainRef.current) setWorking(false);
     }
   };
 
@@ -233,7 +304,20 @@ export function AccountGate() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f5f5f7] text-sm text-slate-500">
-        正在读取账户...
+        <div className="prayer-loader" role="status" aria-live="polite" aria-label="正在加载本地账户">
+          <div className="prayer-loader__halo" aria-hidden="true">
+            <span className="prayer-loader__core" />
+            <span className="prayer-loader__spark prayer-loader__spark--one" />
+            <span className="prayer-loader__spark prayer-loader__spark--two" />
+            <span className="prayer-loader__spark prayer-loader__spark--three" />
+          </div>
+          <div className="prayer-loader__text">
+            正在加载本地账户
+            <span className="prayer-loader__dot">.</span>
+            <span className="prayer-loader__dot prayer-loader__dot--two">.</span>
+            <span className="prayer-loader__dot prayer-loader__dot--three">.</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -246,7 +330,7 @@ export function AccountGate() {
             <FileSpreadsheet className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold leading-tight tracking-normal">OMM 日报系统</h1>
+            <h1 className="text-lg font-semibold leading-tight tracking-normal">玉衡山科学院管理厅</h1>
             <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.18em] text-slate-300">
               KANESHIRO·AKATSUKI
             </p>
@@ -285,6 +369,18 @@ export function AccountGate() {
                     <label className="field-label">PIN</label>
                     <PinInput value={pin} onChange={setPin} placeholder="4-6 位数字" />
                   </div>
+                  <label className="flex items-start gap-2 rounded-lg border border-slate-200/80 bg-white/70 px-3 py-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={rememberLogin}
+                      onChange={(event) => handleRememberLoginChange(event.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-100"
+                    />
+                    <span>
+                      <span className="font-medium text-slate-800">记住我和 PIN</span>
+                      <span className="block text-xs leading-5 text-slate-500">仅保存在本机；下次会自动填入，但仍必须手动点击登录。</span>
+                    </span>
+                  </label>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Button variant="ghost" size="sm" onClick={() => { resetFormState(); setMode("forgot"); }}>
                       忘记 PIN
@@ -394,7 +490,7 @@ export function AccountGate() {
               KANESHIRO·AKATSUKI
             </div>
             <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-300/80">
-              OMM Daily Report · Local Workspace
+              Yuhengshan Science Academy · Local Workspace
             </div>
           </footer>
         </div>

@@ -26,7 +26,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { usePersonalCleaner, type PersonalCleanerOptions, type PersonalCleanerProcessCandidate, type PersonalCleanerRunInfo } from "@/hooks/useSidecar";
 
 const PRIVATE_BROWSER_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Adobi\\AcroUtil";
-const CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\OMM日报系统备份\\cleaner-backups";
+const CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\玉衡山科学院管理厅备份\\cleaner-backups";
 const CUSTOM_CLEANER_PROFILE_KEY = "omm.personalCleaner.customProfile.v1";
 
 interface PersonalCleanerDialogProps {
@@ -52,6 +52,7 @@ type BoolKey = keyof Pick<
   | "clearMicrosoftAccount"
   | "closeAdobiProcesses"
   | "clearWindowsNotifications"
+  | "ensureDoNotDisturb"
   | "clearScreenshots"
   | "clearClipboardHistory"
   | "clearRecycleBin"
@@ -74,6 +75,7 @@ interface CleanerFormState {
   clearMicrosoftAccount: boolean;
   closeAdobiProcesses: boolean;
   clearWindowsNotifications: boolean;
+  ensureDoNotDisturb: boolean;
   clearScreenshots: boolean;
   screenshotShift: CleanerShift;
   screenshotDate: string;
@@ -116,9 +118,11 @@ interface CleanerAction {
 interface CleanerSummary {
   status?: string;
   dry_run?: boolean;
+  orchestrated?: boolean;
   finished_at?: string;
   error?: string;
   results?: Record<string, number>;
+  skipped?: Record<string, string>;
 }
 
 interface CleanerProfile {
@@ -138,7 +142,7 @@ const GROUPS: { id: CleanerGroup; title: string; subtitle: string; icon: React.R
   { id: "process", title: "运行进程", subtitle: "Adobi / Edge", icon: <Activity className="h-4 w-4" /> },
   { id: "edge", title: "Edge 浏览器", subtitle: "历史、缓存、书签、账户", icon: <MonitorCog className="h-4 w-4" /> },
   { id: "private", title: "私人 Firefox", subtitle: "AcroUtil profile", icon: <EyeOff className="h-4 w-4" /> },
-  { id: "windows", title: "Windows 痕迹", subtitle: "截图、剪贴板、通知", icon: <ClipboardList className="h-4 w-4" /> },
+  { id: "windows", title: "Windows 痕迹", subtitle: "当班截图、剪贴板、受保护回收站", icon: <ClipboardList className="h-4 w-4" /> },
   { id: "network", title: "WiFi / 工具", subtitle: "网络记录和快捷方式", icon: <Wifi className="h-4 w-4" /> },
   { id: "backup", title: "备份策略", subtitle: "位置和保护规则", icon: <ShieldAlert className="h-4 w-4" /> },
 ];
@@ -167,6 +171,7 @@ const CLEANER_ACTIONS: CleanerAction[] = [
       "正在打开的浏览器、下载、网页编辑或后台任务会被关闭。",
       "未保存内容可能丢失；建议先保存正在编辑的内容，再真实执行。",
       "如果正在依赖系统代理访问网络，真实执行后需要重新打开代理软件。",
+      "真实执行时每个清理项在独立 PowerShell 中运行；关闭当前子窗口会跳过该项并继续后续项目。",
     ],
     backup: "不创建备份；这是进程关闭功能，不涉及文件删除。",
   },
@@ -297,12 +302,24 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     group: "windows",
     formKey: "clearWindowsNotifications",
     title: "Windows 通知历史",
-    summary: "点击通知中心“全部清除”，随后开启“请勿打扰”。",
+    summary: "点击通知中心“全部清除”，并在按钮不可用时清理通知历史数据库。",
     risk: "low",
-    clears: ["通知中心当前显示的通知卡片", "通知历史 API 和通知计数"],
-    keeps: ["不会关闭各应用通知权限"],
-    impacts: ["会短暂打开通知中心，调用“全部清除”并尝试开启“请勿打扰”；按钮不可用时会写入当前用户 QuietHours 兜底，不会重启 Explorer 或让任务栏黑屏。"],
+    clears: ["通知中心当前显示的通知卡片", "通知历史 API、数据库残留和通知计数"],
+    keeps: ["不会关闭各应用通知权限", "不会主动开启或关闭“请勿打扰”"],
+    impacts: ["会短暂打开通知中心并调用“全部清除”；按钮不可用时会暂停通知服务并清理通知数据库，不会重启 Explorer 或让任务栏黑屏。"],
     backup: "不创建备份；通知历史通常不可恢复。",
+  },
+  {
+    id: "doNotDisturb",
+    group: "windows",
+    formKey: "ensureDoNotDisturb",
+    title: "请勿打扰模式",
+    summary: "只检测并确保请勿打扰已开启，不清理通知历史。",
+    risk: "low",
+    clears: ["不清理任何通知内容"],
+    keeps: ["不会关闭请勿打扰", "已开启时不重复操作", "不会关闭各应用通知权限"],
+    impacts: ["会短暂打开通知中心确认状态；未开启且可识别时才会开启，无法判断时会跳过并写入日志。"],
+    backup: "不创建备份；这是系统状态切换项。",
   },
   {
     id: "screenshots",
@@ -322,25 +339,25 @@ const CLEANER_ACTIONS: CleanerAction[] = [
     group: "windows",
     formKey: "clearClipboardHistory",
     title: "剪贴板历史",
-    summary: "清理 Windows 剪贴板历史。",
+    summary: "清空 Win+V 剪贴板历史；不是按日期筛选。",
     risk: "low",
     clears: ["Win+V 剪贴板历史记录"],
     keeps: ["固定项会保留", "不会关闭 Win+V 功能"],
-    impacts: ["之前复制过的文本/图片历史不再显示。"],
+    impacts: ["之前复制过的文本/图片历史不再显示；固定项会尽量保留。"],
     backup: "不创建备份；剪贴板历史通常不可恢复。",
   },
   {
     id: "recycleBin",
     group: "windows",
     formKey: "clearRecycleBin",
-    title: "回收站清理",
-    summary: "清理回收站，保留表格、OMM/送测和 inspec 相关项目。",
+    title: "回收站保护扫描",
+    summary: "只扫描整个回收站并列出项目，不执行永久删除。",
     risk: "high",
     confirmRequired: true,
-    clears: ["回收站中未命中保护规则的项目"],
-    keeps: [".xls / .xlsx / .csv 文件", "名称或路径包含 -OMM / 送测 的项目", "inspec 相关程序文件或文件夹"],
-    impacts: ["回收站项目被清理后通常无法从回收站恢复；执行前建议先模拟运行查看清单。"],
-    backup: "不创建备份；保护规则命中的项目会保留在回收站。",
+    clears: ["不删除任何回收站项目；仅列出原始路径和保护判断"],
+    keeps: [".xls / .xlsx / .csv 文件", "名称或路径包含 -OMM / 送测 的项目", "inspec 相关程序文件或文件夹", "无法识别原始路径的回收站项目"],
+    impacts: ["当前版本启用安全锁，真实执行也只扫描，不再清空回收站项目。", "关闭该项 PowerShell 会跳过扫描并继续后续项目。"],
+    backup: "不创建备份；回收站项目全部保留在回收站。",
   },
   {
     id: "opencodeShortcuts",
@@ -458,6 +475,7 @@ function createDefaultForm(defaultShift: CleanerShift): CleanerFormState {
     clearMicrosoftAccount: false,
     closeAdobiProcesses: false,
     clearWindowsNotifications: false,
+    ensureDoNotDisturb: false,
     clearScreenshots: false,
     screenshotShift: defaultShift,
     screenshotDate: defaultScreenshotDate(defaultShift),
@@ -482,6 +500,7 @@ function createRecommendedForm(defaultShift: CleanerShift): CleanerFormState {
     ...base,
     cleanEdge: true,
     clearWindowsNotifications: true,
+    ensureDoNotDisturb: false,
     clearScreenshots: true,
     clearClipboardHistory: true,
     clearRecycleBin: false,
@@ -638,12 +657,19 @@ function normalizeCleanerSummary(value: unknown): CleanerSummary | null {
     const numeric = typeof count === "number" ? count : Number(count);
     if (Number.isFinite(numeric)) results[key] = numeric;
   });
+  const rawSkipped = raw.skipped && typeof raw.skipped === "object" ? raw.skipped as Record<string, unknown> : {};
+  const skipped: Record<string, string> = {};
+  Object.entries(rawSkipped).forEach(([key, reason]) => {
+    skipped[key] = typeof reason === "string" ? reason : String(reason);
+  });
   return {
     status: typeof raw.status === "string" ? raw.status : undefined,
     dry_run: typeof raw.dry_run === "boolean" ? raw.dry_run : undefined,
+    orchestrated: typeof raw.orchestrated === "boolean" ? raw.orchestrated : undefined,
     finished_at: typeof raw.finished_at === "string" ? raw.finished_at : undefined,
     error: typeof raw.error === "string" ? raw.error : undefined,
     results,
+    skipped,
   };
 }
 
@@ -664,11 +690,30 @@ function buildCleanerResultDialog(summaryValue: unknown, fallbackDryRun: boolean
     };
   }
 
+  if (summary?.orchestrated) {
+    const taskEntries = Object.entries(summary.results || {});
+    const skipped = new Set(Object.keys(summary.skipped || {}));
+    const completed = taskEntries
+      .filter(([name, code]) => code === 0 && !skipped.has(name))
+      .map(([name]) => `${name}：已完成`);
+    const skippedDetails = Array.from(skipped).map((name) => `${name}：已跳过或中断`);
+    return {
+      title: dryRun ? "模拟运行完成" : "清理完成",
+      description: dryRun
+        ? "这次只是模拟，没有真实删除或修改数据。"
+        : "真实清理已经结束，已保留本次勾选，方便复查或再次执行。",
+      details: [...completed, ...skippedDetails].length > 0
+        ? [...completed, ...skippedDetails]
+        : ["脚本已经结束，但没有收到分项结果；请查看运行日志。"],
+      tone: skippedDetails.length > 0 ? "warning" : "info",
+    };
+  }
+
   return {
     title: dryRun ? "模拟运行完成" : "清理完成",
     description: dryRun
       ? "这次只是模拟，没有真实删除或修改数据。"
-      : "真实清理已经结束，本次执行清单已自动清空。",
+      : "真实清理已经结束，已保留本次勾选，方便复查或再次执行。",
     details: processed.length > 0
       ? processed
       : ["没有发现需要处理的项目，或系统当前没有可清理内容。"],
@@ -796,6 +841,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     clearMicrosoftAccount: form.clearMicrosoftAccount,
     closeAdobiProcesses: form.closeAdobiProcesses,
     clearWindowsNotifications: form.clearWindowsNotifications,
+    ensureDoNotDisturb: form.ensureDoNotDisturb,
     clearScreenshots: form.clearScreenshots,
     screenshotWindowStart: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.start) : null,
     screenshotWindowEnd: form.clearScreenshots ? formatDateTimeLocal(screenshotWindow.end) : null,
@@ -864,11 +910,6 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
           handledSummaryPathRef.current = info.summaryPath;
           const result = buildCleanerResultDialog(next.summary, currentRunDryRunRef.current);
           setResultDialog(result);
-          const summary = normalizeCleanerSummary(next.summary);
-          const wasDryRun = summary?.dry_run ?? currentRunDryRunRef.current;
-          if (!wasDryRun && summary?.status !== "failed") {
-            clearSelectedActions();
-          }
         }
       } else if (
         runStartedAt &&
@@ -882,7 +923,7 @@ export function PersonalCleanerDialog({ open, onOpenChange, defaultShift }: Pers
     } catch (e) {
       setError(`读取日志失败: ${e}`);
     }
-  }, [clearSelectedActions, readPersonalCleanerLog, runStartedAt]);
+  }, [readPersonalCleanerLog, runStartedAt]);
 
   React.useEffect(() => {
     if (!runInfo || done || !running) return;

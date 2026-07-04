@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AccountSession, AccountsInfo, Config, ConfigLoadInfo, DataStoreInfo, DisplayNameMode, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo, PublicAccount } from "@/types/record";
+import { useCallback } from "react";
+import type { AccountSession, AccountsInfo, Config, ConfigLoadInfo, DataStoreInfo, DisplayNameMode, DurationRule, GenerateResponse, GenerateSettings, ParseFoldersResponse, PreviewResponse, FolderRecord, TemplateInfo, TemplatePaths, RecognitionRules, RecognitionRulesLoadInfo, PublicAccount, PersonalCleanerBackupInfo, KnownSender, KnownSenderSortBy, MeasurementPerson, MeasurementPersonRole } from "@/types/record";
 
 export interface PersonalCleanerOptions {
   dryRun: boolean;
@@ -12,6 +13,7 @@ export interface PersonalCleanerOptions {
   clearMicrosoftAccount: boolean;
   closeAdobiProcesses: boolean;
   clearWindowsNotifications: boolean;
+  ensureDoNotDisturb: boolean;
   clearScreenshots: boolean;
   screenshotWindowStart?: string | null;
   screenshotWindowEnd?: string | null;
@@ -49,6 +51,12 @@ export interface PersonalCleanerProcessCandidate {
   name: string;
   path: string;
   kind: string;
+}
+
+export interface MovedFolderInfo {
+  folder_name: string;
+  source_path: string;
+  target_path: string;
 }
 
 export function useSidecar() {
@@ -125,7 +133,19 @@ export function useFile() {
     await invoke("open_folder", { path });
   };
 
-  return { selectFolder, selectXlsxFile, openFolder };
+  const moveFoldersToShiftBucket = async (
+    dateDir: string,
+    folderNames: string[],
+    shift: "A" | "B",
+  ): Promise<MovedFolderInfo[]> => {
+    return await invoke<MovedFolderInfo[]>("move_folders_to_shift_bucket", {
+      dateDir,
+      folderNames,
+      shift,
+    });
+  };
+
+  return { selectFolder, selectXlsxFile, openFolder, moveFoldersToShiftBucket };
 }
 
 export function useConfigManager() {
@@ -157,33 +177,51 @@ export function useConfigManager() {
     return await invoke<RecognitionRulesLoadInfo>("save_recognition_rules", { rules });
   };
 
-  return { loadConfigWithInfo, loadConfig, saveConfig, migrateConfig, syncConfigState, loadRecognitionRules, saveRecognitionRules };
+  const loadDurationRules = async (): Promise<DurationRule[]> => {
+    return await invoke<DurationRule[]>("load_duration_rules");
+  };
+
+  const saveDurationRules = async (rules: DurationRule[]): Promise<DurationRule[]> => {
+    return await invoke<DurationRule[]>("save_duration_rules", { rules });
+  };
+
+  return {
+    loadConfigWithInfo,
+    loadConfig,
+    saveConfig,
+    migrateConfig,
+    syncConfigState,
+    loadRecognitionRules,
+    saveRecognitionRules,
+    loadDurationRules,
+    saveDurationRules,
+  };
 }
 
 export function useAccountManager() {
-  const loadAccounts = async (): Promise<AccountsInfo> => {
+  const loadAccounts = useCallback(async (): Promise<AccountsInfo> => {
     return await invoke<AccountsInfo>("load_accounts");
-  };
+  }, []);
 
-  const loginAccount = async (login: string, pin: string): Promise<AccountSession> => {
+  const loginAccount = useCallback(async (login: string, pin: string): Promise<AccountSession> => {
     return await invoke<AccountSession>("login_account", { login, pin });
-  };
+  }, []);
 
-  const registerAccount = async (nickname: string, realName: string, pin: string): Promise<AccountSession> => {
+  const registerAccount = useCallback(async (nickname: string, realName: string, pin: string): Promise<AccountSession> => {
     return await invoke<AccountSession>("register_account", { nickname, realName, pin });
-  };
+  }, []);
 
-  const logoutAccount = async (): Promise<void> => {
+  const logoutAccount = useCallback(async (): Promise<void> => {
     await invoke("logout_account");
-  };
+  }, []);
 
-  const resetAccountPin = async (targetAccountId: string, adminPin: string, newPin: string): Promise<void> => {
+  const resetAccountPin = useCallback(async (targetAccountId: string, adminPin: string, newPin: string): Promise<void> => {
     await invoke("reset_account_pin", { targetAccountId, adminPin, newPin });
-  };
+  }, []);
 
-  const setCurrentAccountDisplayMode = async (mode: DisplayNameMode): Promise<PublicAccount> => {
+  const setCurrentAccountDisplayMode = useCallback(async (mode: DisplayNameMode): Promise<PublicAccount> => {
     return await invoke<PublicAccount>("set_current_account_display_mode", { mode });
-  };
+  }, []);
 
   return { loadAccounts, loginAccount, registerAccount, logoutAccount, resetAccountPin, setCurrentAccountDisplayMode };
 }
@@ -194,6 +232,61 @@ export function useDataStoreManager() {
   };
 
   return { getDataStoreInfo };
+}
+
+export function useKnownSenderManager() {
+  const loadKnownSenders = useCallback(async (
+    sortBy: KnownSenderSortBy = "lastSeenAt",
+    descending = true,
+    includeDisabled = false,
+  ): Promise<KnownSender[]> => {
+    return await invoke<KnownSender[]>("load_known_senders", { sortBy, descending, includeDisabled });
+  }, []);
+
+  const upsertKnownSender = useCallback(async (
+    name: string,
+    source = "user",
+    sampleFolder = "",
+    note = "",
+  ): Promise<KnownSender> => {
+    return await invoke<KnownSender>("upsert_known_sender", { name, source, sampleFolder, note });
+  }, []);
+
+  const updateKnownSender = useCallback(async (
+    id: string,
+    name: string,
+    note = "",
+    enabled = true,
+  ): Promise<KnownSender> => {
+    return await invoke<KnownSender>("update_known_sender", { id, name, note, enabled });
+  }, []);
+
+  const deleteKnownSender = useCallback(async (id: string): Promise<void> => {
+    await invoke("delete_known_sender", { id });
+  }, []);
+
+  return { loadKnownSenders, upsertKnownSender, updateKnownSender, deleteKnownSender };
+}
+
+export function useMeasurementPeopleManager() {
+  const loadMeasurementPeople = useCallback(async (includeDisabled = false): Promise<MeasurementPerson[]> => {
+    return await invoke<MeasurementPerson[]>("load_measurement_people", { includeDisabled });
+  }, []);
+
+  const upsertMeasurementPerson = useCallback(async (
+    name: string,
+    role: MeasurementPersonRole = "ordinary",
+    aliases: string[] = [],
+    note = "",
+  ): Promise<MeasurementPerson> => {
+    return await invoke<MeasurementPerson>("upsert_measurement_person", { name, role, aliases, note });
+  }, []);
+
+  const deleteMeasurementPerson = useCallback(async (id: string): Promise<void> => {
+    await invoke("delete_measurement_person", { id });
+  }, []);
+
+  return { loadMeasurementPeople, upsertMeasurementPerson, deleteMeasurementPerson };
 }
 
 export function usePersonalCleaner() {
@@ -209,5 +302,19 @@ export function usePersonalCleaner() {
     return await invoke<PersonalCleanerProcessCandidate[]>("preview_personal_cleaner_processes");
   };
 
-  return { runPersonalCleaner, readPersonalCleanerLog, previewPersonalCleanerProcesses };
+  const getPersonalCleanerBackupInfo = async (): Promise<PersonalCleanerBackupInfo> => {
+    return await invoke<PersonalCleanerBackupInfo>("get_personal_cleaner_backup_info");
+  };
+
+  const cleanPersonalCleanerBackups = async (olderThanDays = 30): Promise<PersonalCleanerBackupInfo> => {
+    return await invoke<PersonalCleanerBackupInfo>("clean_personal_cleaner_backups", { olderThanDays });
+  };
+
+  return {
+    runPersonalCleaner,
+    readPersonalCleanerLog,
+    previewPersonalCleanerProcesses,
+    getPersonalCleanerBackupInfo,
+    cleanPersonalCleanerBackups,
+  };
 }

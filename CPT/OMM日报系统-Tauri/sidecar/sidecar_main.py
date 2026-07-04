@@ -33,10 +33,17 @@ def handle_command(cmd: dict) -> dict:
         if not os.path.isdir(base_dir):
             return {"success": False, "data": None, "error": f"目录不存在: {base_dir}"}
         operator_name = params.get("operator_name", "禹欣")
+        known_senders = params.get("known_senders") or []
+        measurement_people = params.get("measurement_people") or {}
         # work_dir is parent of base_dir
         work_dir = os.path.dirname(base_dir)
         set_work_dir(work_dir)
-        records, review_map = parse_all_folders(base_dir, operator_name=operator_name)
+        records, review_map = parse_all_folders(
+            base_dir,
+            operator_name=operator_name,
+            known_senders=known_senders,
+            measurement_people=measurement_people,
+        )
         # Convert records to JSON-safe format
         safe_records = []
         for r in records:
@@ -106,14 +113,18 @@ def handle_command(cmd: dict) -> dict:
         enable_other = bool(settings.get("enable_other", False))
         operator_name = settings.get("operator_name", "禹欣")
         output_dir = settings.get("output_dir") or base_dir
-        tpp_min = float(settings.get("tpp_min", 3.0))
-        tpp_max = float(settings.get("tpp_max", 7.0))
+        tpp_min = float(settings.get("tpp_min", 2.0))
+        tpp_max = float(settings.get("tpp_max", 5.0))
         pkg_rest = int(settings.get("pkg_rest", 0))
         special_items = settings.get("special_items") or None
+        duration_rules = settings.get("duration_rules") or None
         hand_max = float(settings.get("hand_max", 120))
         other_max = float(settings.get("other_max", 90))
+        other_note = str(settings.get("other_note") or "其他事务").strip() or "其他事务"
+        filler_position = settings.get("filler_position") or "middle"
 
         real_manual_tasks = settings.get("real_manual_tasks") or None
+        measurement_people = settings.get("measurement_people") or {}
 
         segments, sched_warnings = schedule_tasks(
             valid_records,
@@ -126,9 +137,12 @@ def handle_command(cmd: dict) -> dict:
             enable_hand=enable_hand,
             enable_other=enable_other,
             special_items=special_items,
+            duration_rules=duration_rules,
             hand_max=hand_max,
             other_max=other_max,
             real_manual_tasks=real_manual_tasks,
+            other_note=other_note,
+            filler_position=filler_position,
         )
 
         suffix = f"-{folder_name}"
@@ -198,15 +212,20 @@ def handle_command(cmd: dict) -> dict:
             leave_strategy = "normal"
         enable_hand = bool(settings.get("enable_hand", True))
         enable_other = bool(settings.get("enable_other", False))
-        tpp_min = float(settings.get("tpp_min", 3.0))
-        tpp_max = float(settings.get("tpp_max", 7.0))
+        tpp_min = float(settings.get("tpp_min", 2.0))
+        tpp_max = float(settings.get("tpp_max", 5.0))
         pkg_rest = int(settings.get("pkg_rest", 0))
         operator_name = settings.get("operator_name", "禹欣")
         shift_override = settings.get("shift_override")
         special_items = settings.get("special_items") or None
+        duration_rules = settings.get("duration_rules") or None
         hand_max = float(settings.get("hand_max", 120))
         other_max = float(settings.get("other_max", 90))
+        other_note = str(settings.get("other_note") or "其他事务").strip() or "其他事务"
         real_manual_tasks = settings.get("real_manual_tasks") or None
+        known_senders = settings.get("known_senders") or []
+        measurement_people = settings.get("measurement_people") or {}
+        filler_position = settings.get("filler_position") or "middle"
 
         result = preview(base_dir, early_leave=early_leave, leave_strategy=leave_strategy,
                          tpp_min=tpp_min, tpp_max=tpp_max,
@@ -215,8 +234,13 @@ def handle_command(cmd: dict) -> dict:
                          operator_name=operator_name, records=records,
                          shift_override=shift_override,
                          special_items=special_items,
+                         duration_rules=duration_rules,
                          hand_max=hand_max, other_max=other_max,
-                         real_manual_tasks=real_manual_tasks)
+                         real_manual_tasks=real_manual_tasks,
+                         known_senders=known_senders,
+                         measurement_people=measurement_people,
+                         other_note=other_note,
+                         filler_position=filler_position)
         if result:
             return {"success": True, "data": result, "error": None}
         else:
@@ -328,7 +352,7 @@ def main():
     sys.stdout = sys.stderr
 
     for line in sys.stdin:
-        line = line.strip()
+        line = line.lstrip("\ufeff").strip()
         if not line:
             continue
         try:

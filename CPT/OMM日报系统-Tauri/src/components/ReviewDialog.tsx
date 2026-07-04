@@ -20,6 +20,7 @@ const EDITABLE_FIELDS = [
   "station",
   "product",
   "sender",
+  "operator",
   "work_order",
   "mold",
   "machine",
@@ -88,7 +89,7 @@ export function ReviewDialog({
   useEffect(() => {
     if (open) {
       const folders = Object.keys(reviewMap).filter(
-        (k) => reviewMap[k].missing.length > 0 || reviewMap[k].placeholders.length > 0
+        (k) => reviewMap[k].missing.length > 0 || reviewMap[k].placeholders.length > 0 || (reviewMap[k].warnings || []).length > 0
       );
       setEditedRecords(records.map((r) => ({ ...r })));
       setPendingFolders(folders);
@@ -185,6 +186,7 @@ export function ReviewDialog({
   if (!record) return null;
   const info = reviewMap[currentFolder];
   const problemFields = [...info.missing, ...info.placeholders];
+  const reviewWarnings = info.warnings || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
@@ -202,6 +204,13 @@ export function ReviewDialog({
             <div className="font-medium text-sm text-slate-900">
               {currentFolder}
             </div>
+            {reviewWarnings.length > 0 && (
+              <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {reviewWarnings.map((warning, index) => (
+                  <div key={index}>{warning}</div>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {problemFields.map((field) => {
                 if (!isEditableField(field)) return null;

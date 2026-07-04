@@ -1,6 +1,9 @@
 pub mod accounts;
 pub mod config;
 pub mod data_store;
+pub mod duration_rules;
 pub mod file;
+pub mod known_senders;
+pub mod measurement_people;
 pub mod personal_cleaner;
 pub mod sidecar;

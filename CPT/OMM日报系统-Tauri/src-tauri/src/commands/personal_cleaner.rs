@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{command, AppHandle, Manager, State};
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -20,6 +20,8 @@ pub struct PersonalCleanerOptions {
     pub clear_microsoft_account: bool,
     pub close_adobi_processes: bool,
     pub clear_windows_notifications: bool,
+    #[serde(default)]
+    pub ensure_do_not_disturb: bool,
     pub clear_screenshots: bool,
     pub screenshot_window_start: Option<String>,
     pub screenshot_window_end: Option<String>,
@@ -69,6 +71,17 @@ pub struct PersonalCleanerProcessCandidate {
     pub name: String,
     pub path: String,
     pub kind: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalCleanerBackupInfo {
+    pub root: String,
+    pub exists: bool,
+    pub entry_count: usize,
+    pub total_bytes: u64,
+    pub oldest_modified_ms: Option<u64>,
+    pub newest_modified_ms: Option<u64>,
 }
 
 fn now_millis() -> u128 {
@@ -158,7 +171,7 @@ fn effective_backup_dir(state: &State<AppState>) -> Result<PathBuf, String> {
         .lock()
         .map_err(|_| "无法读取配置状态".to_string())?;
     Ok(PathBuf::from(
-        r"C:\Program Files\Adobe\Acrobat DC\Bin\OMM日报系统备份\cleaner-backups",
+        r"C:\Program Files\Adobe\Acrobat DC\Bin\玉衡山科学院管理厅备份\cleaner-backups",
     ))
 }
 
@@ -240,6 +253,11 @@ fn build_script_args(
         &mut args,
         options.clear_windows_notifications,
         "-ClearWindowsNotifications",
+    );
+    push_switch(
+        &mut args,
+        options.ensure_do_not_disturb,
+        "-EnsureDoNotDisturb",
     );
     if options.clear_screenshots {
         if let (Some(start), Some(end)) = (
@@ -383,12 +401,156 @@ fn parse_process_candidates(json: &str) -> Result<Vec<PersonalCleanerProcessCand
         }
     }
 
-    candidates.sort_by(|a, b| a.kind.cmp(&b.kind).then(a.name.cmp(&b.name)).then(a.pid.cmp(&b.pid)));
+    candidates.sort_by(|a, b| {
+        a.kind
+            .cmp(&b.kind)
+            .then(a.name.cmp(&b.name))
+            .then(a.pid.cmp(&b.pid))
+    });
     Ok(candidates)
 }
 
+fn modified_ms(path: &Path) -> Option<u64> {
+    let modified = fs::metadata(path).ok()?.modified().ok()?;
+    modified
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
+}
+
+fn collect_backup_tree(
+    path: &Path,
+    entry_count: &mut usize,
+    total_bytes: &mut u64,
+    oldest_modified_ms: &mut Option<u64>,
+    newest_modified_ms: &mut Option<u64>,
+) -> Result<(), String> {
+    let entries = fs::read_dir(path).map_err(|e| format!("无法读取个人清理备份目录: {}", e))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("无法读取个人清理备份项: {}", e))?;
+        let entry_path = entry.path();
+        *entry_count += 1;
+
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.is_file() {
+                *total_bytes = total_bytes.saturating_add(metadata.len());
+            }
+        }
+        if let Some(ms) = modified_ms(&entry_path) {
+            *oldest_modified_ms = Some(oldest_modified_ms.map_or(ms, |old| old.min(ms)));
+            *newest_modified_ms = Some(newest_modified_ms.map_or(ms, |new| new.max(ms)));
+        }
+        if entry_path.is_dir() {
+            collect_backup_tree(
+                &entry_path,
+                entry_count,
+                total_bytes,
+                oldest_modified_ms,
+                newest_modified_ms,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn build_backup_info(root: &Path) -> Result<PersonalCleanerBackupInfo, String> {
+    let exists = root.exists();
+    let mut entry_count = 0usize;
+    let mut total_bytes = 0u64;
+    let mut oldest_modified_ms = None;
+    let mut newest_modified_ms = None;
+    if exists {
+        collect_backup_tree(
+            root,
+            &mut entry_count,
+            &mut total_bytes,
+            &mut oldest_modified_ms,
+            &mut newest_modified_ms,
+        )?;
+    }
+    Ok(PersonalCleanerBackupInfo {
+        root: root.to_string_lossy().to_string(),
+        exists,
+        entry_count,
+        total_bytes,
+        oldest_modified_ms,
+        newest_modified_ms,
+    })
+}
+
+fn remove_empty_backup_dirs(path: &Path, remove_self: bool) -> Result<bool, String> {
+    if !path.is_dir() {
+        return Ok(false);
+    }
+    let entries: Vec<PathBuf> = fs::read_dir(path)
+        .map_err(|e| format!("无法读取备份目录: {}", e))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect();
+    for child in entries {
+        if child.is_dir() {
+            let _ = remove_empty_backup_dirs(&child, true)?;
+        }
+    }
+    let is_empty = fs::read_dir(path)
+        .map_err(|e| format!("无法检查空备份目录: {}", e))?
+        .next()
+        .is_none();
+    if remove_self && is_empty {
+        fs::remove_dir(path).map_err(|e| format!("无法删除空备份目录: {}", e))?;
+        return Ok(true);
+    }
+    Ok(is_empty)
+}
+
 #[command]
-pub async fn preview_personal_cleaner_processes() -> Result<Vec<PersonalCleanerProcessCandidate>, String> {
+pub async fn get_personal_cleaner_backup_info(
+    state: State<'_, AppState>,
+) -> Result<PersonalCleanerBackupInfo, String> {
+    require_admin_account()?;
+    let backup_root = effective_backup_dir(&state)?;
+    fs::create_dir_all(&backup_root).map_err(|e| format!("无法创建个人清理备份目录: {}", e))?;
+    build_backup_info(&backup_root)
+}
+
+#[command]
+pub async fn clean_personal_cleaner_backups(
+    state: State<'_, AppState>,
+    older_than_days: Option<u64>,
+) -> Result<PersonalCleanerBackupInfo, String> {
+    require_admin_account()?;
+    let backup_root = effective_backup_dir(&state)?;
+    fs::create_dir_all(&backup_root).map_err(|e| format!("无法创建个人清理备份目录: {}", e))?;
+
+    let days = older_than_days.unwrap_or(30).clamp(1, 3650);
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(days.saturating_mul(24 * 60 * 60)))
+        .unwrap_or(UNIX_EPOCH);
+
+    for entry in
+        fs::read_dir(&backup_root).map_err(|e| format!("无法读取个人清理备份目录: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("无法读取个人清理备份项: {}", e))?;
+        let path = entry.path();
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("无法读取备份项属性: {}", e))?;
+        let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
+        if modified <= cutoff {
+            if metadata.is_dir() {
+                fs::remove_dir_all(&path).map_err(|e| format!("无法删除旧备份目录: {}", e))?;
+            } else {
+                fs::remove_file(&path).map_err(|e| format!("无法删除旧备份文件: {}", e))?;
+            }
+        }
+    }
+
+    let _ = remove_empty_backup_dirs(&backup_root, false)?;
+    build_backup_info(&backup_root)
+}
+
+#[command]
+pub async fn preview_personal_cleaner_processes(
+) -> Result<Vec<PersonalCleanerProcessCandidate>, String> {
     require_admin_account()?;
 
     let adobi_root = r"C:\Program Files\Adobe\Acrobat DC\Adobi";
@@ -454,7 +616,13 @@ pub async fn run_personal_cleaner(
     let log_path = log_dir.join(format!("{}.log", run_id));
     let summary_path = log_dir.join(format!("{}.json", run_id));
 
-    let script_args = build_script_args(&script_path, &log_path, &summary_path, &backup_root, &options);
+    let script_args = build_script_args(
+        &script_path,
+        &log_path,
+        &summary_path,
+        &backup_root,
+        &options,
+    );
     let argument_line = script_args
         .iter()
         .map(|arg| quote_for_windows_command_line(arg))
@@ -511,9 +679,10 @@ pub async fn read_personal_cleaner_log(
         }
     });
 
-    let summary = fs::read_to_string(&summary_path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok());
+    let summary = fs::read_to_string(&summary_path).ok().and_then(|content| {
+        let content = content.trim_start_matches('\u{feff}');
+        serde_json::from_str::<serde_json::Value>(content).ok()
+    });
     let done = summary.is_some();
 
     Ok(PersonalCleanerLogInfo { log, done, summary })

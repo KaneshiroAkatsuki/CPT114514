@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
   "identifier": "default",
-  "description": "Default permissions for OMM日报系统",
+  "description": "Default permissions for 玉衡山科学院管理厅",
   "windows": ["main"],
   "permissions": [
     "core:default",
