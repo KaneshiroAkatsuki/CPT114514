@@ -8,7 +8,7 @@ interface PreviewDialogProps {
   open: boolean;
   data: PreviewData | null;
   onClose: () => void;
-  onGenerate?: () => void;
+  onGenerate?: (decisionPatch?: Partial<QueueItemSettingsOverride>) => void | Promise<void>;
   onOpenManual?: () => void;
   onOpenDaySettings?: () => void;
   decisionSettings?: GenerateSettings;
@@ -304,23 +304,47 @@ export function PreviewDialog({
     }
   };
 
-  const saveDecisionDraft = async () => {
+  const buildDecisionDraftPatch = (): Partial<QueueItemSettingsOverride> | null => {
     const handMax = Number(decisionDraft.handMaxInput);
     const otherMax = Number(decisionDraft.otherMaxInput);
     const otherNote = decisionDraft.otherNote.trim() || DEFAULT_OTHER_NOTE;
     if (!Number.isFinite(handMax) || handMax <= 0) {
       setDecisionError("手量补时上限必须是大于 0 的数字。");
-      return;
+      return null;
     }
     if (!Number.isFinite(otherMax) || otherMax <= 0) {
       setDecisionError("其他事务补时上限必须是大于 0 的数字。");
-      return;
+      return null;
     }
-    await saveDecisionPatch({
-      hand_max: Math.round(handMax * 10) / 10,
-      other_max: Math.round(otherMax * 10) / 10,
-      other_note: otherNote,
-    });
+    const roundedHandMax = Math.round(handMax * 10) / 10;
+    const roundedOtherMax = Math.round(otherMax * 10) / 10;
+    const patch: Partial<QueueItemSettingsOverride> = {};
+    if ((decisionSettings?.hand_max ?? 120) !== roundedHandMax) patch.hand_max = roundedHandMax;
+    if ((decisionSettings?.other_max ?? 90) !== roundedOtherMax) patch.other_max = roundedOtherMax;
+    if ((decisionSettings?.other_note || DEFAULT_OTHER_NOTE) !== otherNote) patch.other_note = otherNote;
+    return patch;
+  };
+
+  const saveDecisionDraft = async () => {
+    const patch = buildDecisionDraftPatch();
+    if (!patch) return;
+    await saveDecisionPatch(patch);
+  };
+
+  const handleGenerateClick = async () => {
+    if (!onGenerate) return;
+    const patch = buildDecisionDraftPatch();
+    if (!patch) return;
+    setDecisionSaving(true);
+    setDecisionError(null);
+    try {
+      onClose();
+      await onGenerate(patch);
+    } catch (error) {
+      setDecisionError(`生成前保存补时设置失败: ${error}`);
+    } finally {
+      setDecisionSaving(false);
+    }
   };
 
   if (!open || !data) return null;
@@ -570,9 +594,9 @@ export function PreviewDialog({
                 </p>
               </div>
               {onGenerate && (
-                <Button size="sm" onClick={() => { onClose(); onGenerate(); }} className="h-8 gap-1.5">
+                <Button size="sm" onClick={handleGenerateClick} disabled={decisionSaving} className="h-8 gap-1.5">
                   <FileSpreadsheet className="h-3.5 w-3.5" />
-                  按当前结果生成
+                  保存设置并生成
                 </Button>
               )}
             </div>
@@ -674,7 +698,7 @@ export function PreviewDialog({
                       onClick={saveDecisionDraft}
                       className="h-8 w-full"
                     >
-                      {decisionSaving ? "应用中" : "应用"}
+                      {decisionSaving ? "保存中" : "保存"}
                     </Button>
                   </div>
                 </div>

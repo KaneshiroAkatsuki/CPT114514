@@ -1,6 +1,6 @@
 # 玉衡山科学院管理厅 - AGENTS.md
 
-更新时间：2026-07-04 02:40 +08:00
+更新时间：2026-07-10 18:10 +08:00
 当前应用版本：5.8.1
 适用范围：Codex、opencode，以及其他会读取 `AGENTS.md` 的代码代理。
 
@@ -57,6 +57,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable
 ```
 
 sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。PowerShell 验证不要使用 `< file`。
+
+## 换电脑 / 上传前 AI 部署检查
+
+每次准备 `git push` 或打包前，先确认这轮改动在另一台电脑可恢复：
+
+1. `git status --short`：只精确暂存本轮文件，不要 `git add .`；不要把 `node_modules/`、`dist/`、`src-tauri/target/`、`releases/` 加入提交。
+2. 若改到依赖、模板、打包或测试样本，确认对应文件已被 git 跟踪：`package-lock.json`、`src-tauri/Cargo.lock`、`src-tauri/resources/template.xlsx`、`scripts/*.ps1`、必要的 `CPT/日期文件夹/` 回归样本。
+3. 新电脑本机工具链先检测再安装：`node -v`、`npm -v`、`rustc -V`、`cargo -V`、`python --version`；Python 还需能 `import PyInstaller, openpyxl, lxml, PIL`。
+4. 新电脑首次构建建议顺序：`npm ci`，缺 Python 包时再装 `pyinstaller openpyxl lxml pillow`，然后运行 `python sidecar\build_sidecar.py`、`npm.cmd run smoke`、`npm.cmd run tauri-build`、便携包脚本。
+5. 如果本机能跑、另一台电脑不行，优先检查未提交资源、Python 包、Rust/MSVC/WebView2 工具链、sidecar exe 是否重建，而不是先改业务逻辑。
 
 ## 硬性约束
 

@@ -1126,6 +1126,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     successCount: number;
     failCount: number;
     currentRecords: FolderRecord[];
+    currentItem?: QueueItem;
     single?: boolean;
   } | null>(null);
 
@@ -1518,7 +1519,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const state = generateStateRef.current;
     if (!state) return;
     const { currentIndex, successCount, failCount } = state;
-    const item = queue[currentIndex];
+    const item = state.currentItem ?? queue[currentIndex];
 
     if (effectiveRecords.length === 0) {
       addLog(`  本日期所有任务都被跳过，未生成报表: ${item.dateFolder}`);
@@ -1555,7 +1556,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const state = generateStateRef.current;
     if (!state) return;
     const { currentIndex, successCount, failCount } = state;
-    const item = queue[currentIndex];
+    const item = state.currentItem ?? queue[currentIndex];
 
     if (effectiveRecords.length === 0) {
       addLog(`  本日期所有任务都被跳过，未生成报表: ${item.dateFolder}`);
@@ -1970,14 +1971,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
   };
 
-  const handleGenerateSingleFromPreview = async (index: number) => {
+  const handleGenerateSingleFromPreview = async (index: number, itemOverride?: QueueItem) => {
     const err = validateGlobalSettings();
     if (err) {
       addLog(`生成已阻止: ${err}`);
       return;
     }
     if (index < 0 || index >= queue.length) return;
-    const item = queue[index];
+    const item = itemOverride ?? queue[index];
     setIsGenerating(true);
     setProgress(0);
     outputPathsRef.current = [];
@@ -2067,6 +2068,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           successCount: 0,
           failCount: 0,
           currentRecords: durationAppliedRecords,
+          currentItem: item,
           single: true,
         };
         return;
@@ -2094,9 +2096,23 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
   };
 
-  const handlePreviewGenerate = () => {
+  const handlePreviewGenerate = (decisionPatch?: Partial<QueueItemSettingsOverride>) => {
     if (previewIndex >= 0 && previewIndex < queue.length) {
-      handleGenerateSingleFromPreview(previewIndex);
+      const patchEntries = Object.entries(decisionPatch || {}).filter(([, value]) => value !== undefined);
+      if (patchEntries.length === 0) {
+        handleGenerateSingleFromPreview(previewIndex);
+        return;
+      }
+      const item = queue[previewIndex];
+      const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}), ...decisionPatch };
+      if (nextOverride.other_note !== undefined) {
+        const normalizedOtherNote = String(nextOverride.other_note).trim();
+        nextOverride.other_note = normalizedOtherNote || DEFAULT_OTHER_NOTE;
+      }
+      const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
+      setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+      addLog(`已保存 ${item.dateFolder} 的生成前补时设置，并用于本次生成`);
+      handleGenerateSingleFromPreview(previewIndex, nextItem);
     }
   };
 
