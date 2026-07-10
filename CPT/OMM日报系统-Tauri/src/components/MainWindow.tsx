@@ -1112,8 +1112,9 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   const detectShift = (folderName: string): 'A' | 'B' | null => {
-    if (folderName.endsWith('A')) return 'A';
-    if (folderName.endsWith('B')) return 'B';
+    const normalized = folderName.toUpperCase();
+    if (normalized.endsWith('A')) return 'A';
+    if (normalized.endsWith('B')) return 'B';
     return null;
   };
 

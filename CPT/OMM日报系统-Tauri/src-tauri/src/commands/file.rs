@@ -57,7 +57,7 @@ fn is_date_folder(name: &str) -> bool {
     while i < chars.len() && chars[i].is_ascii_digit() {
         i += 1;
     }
-    if i < chars.len() && (chars[i] == 'A' || chars[i] == 'B') {
+    if i < chars.len() && matches!(chars[i], 'A' | 'B' | 'a' | 'b') {
         i += 1;
     }
     i == chars.len()
