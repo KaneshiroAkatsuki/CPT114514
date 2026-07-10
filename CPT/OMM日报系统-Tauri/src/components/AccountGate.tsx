@@ -7,9 +7,9 @@ import { useAccountManager } from "@/hooks/useSidecar";
 import type { PublicAccount } from "@/types/record";
 import { MainWindow } from "@/components/MainWindow";
 
-type GateMode = "login" | "register" | "forgot";
+type GateMode = "login" | "register" | "forgot" | "changePin";
 
-const APP_VERSION = "5.8.4";
+const APP_VERSION = "5.8.5";
 const REMEMBER_LOGIN_KEY = "yuhengshan.rememberLogin.v1";
 
 const loginNotes = [
@@ -99,6 +99,7 @@ function PinInput({
 export function AccountGate() {
   const [accounts, setAccounts] = React.useState<PublicAccount[]>([]);
   const [currentAccount, setCurrentAccount] = React.useState<PublicAccount | null>(null);
+  const [pendingPinAccount, setPendingPinAccount] = React.useState<PublicAccount | null>(null);
   const [mode, setMode] = React.useState<GateMode>("login");
   const [login, setLogin] = React.useState("");
   const [pin, setPin] = React.useState("");
@@ -122,6 +123,7 @@ export function AccountGate() {
     registerAccount,
     logoutAccount,
     resetAccountPin,
+    changeCurrentAccountPin,
   } = useAccountManager();
 
   React.useEffect(() => {
@@ -205,6 +207,15 @@ export function AccountGate() {
     setWorking(true);
     try {
       const session = await loginAccount(login.trim(), pin.trim());
+      if (session.account.must_change_pin) {
+        clearRememberedLogin();
+        setRememberLogin(false);
+        setPendingPinAccount(session.account);
+        setMode("changePin");
+        setNewPin("");
+        setMessage("管理员仍在使用初始 PIN，请先修改后再进入主页。");
+        return;
+      }
       if (rememberLogin) {
         saveRememberedLogin(login.trim(), pin.trim());
       } else {
@@ -214,6 +225,36 @@ export function AccountGate() {
       setCurrentAccount(session.account);
     } catch (e) {
       if (!switchingToMainRef.current) setError(String(e));
+    } finally {
+      if (!switchingToMainRef.current) setWorking(false);
+    }
+  };
+
+  const handleChangeCurrentPin = async () => {
+    setError("");
+    setMessage("");
+    if (!pendingPinAccount) {
+      setError("当前没有需要修改 PIN 的账户。");
+      return;
+    }
+    const pinError = validatePin(newPin);
+    if (pinError) {
+      setError(pinError);
+      return;
+    }
+    setWorking(true);
+    try {
+      const account = await changeCurrentAccountPin(pin.trim(), newPin.trim());
+      if (rememberLogin) {
+        saveRememberedLogin(login.trim(), newPin.trim());
+      } else {
+        clearRememberedLogin();
+      }
+      setPendingPinAccount(null);
+      switchingToMainRef.current = true;
+      setCurrentAccount(account);
+    } catch (e) {
+      setError(String(e));
     } finally {
       if (!switchingToMainRef.current) setWorking(false);
     }
@@ -344,7 +385,8 @@ export function AccountGate() {
                 {mode === "login" && <LockKeyhole className="h-4 w-4 text-blue-600" />}
                 {mode === "register" && <UserPlus className="h-4 w-4 text-blue-600" />}
                 {mode === "forgot" && <RotateCcw className="h-4 w-4 text-blue-600" />}
-                {mode === "login" ? "登录账户" : mode === "register" ? "注册员工账户" : "重置 PIN"}
+                {mode === "changePin" && <KeyRound className="h-4 w-4 text-blue-600" />}
+                {mode === "login" ? "登录账户" : mode === "register" ? "注册员工账户" : mode === "forgot" ? "重置 PIN" : "修改管理员 PIN"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 p-5">
@@ -458,6 +500,35 @@ export function AccountGate() {
                     </Button>
                     <Button onClick={handleResetPin} disabled={working}>
                       重置 PIN
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {mode === "changePin" && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm leading-6 text-amber-800">
+                    {pendingPinAccount?.nickname || "管理员"} 仍在使用初始 PIN。为避免发布版继续沿用公开初始 PIN，请先设置一个新的 4-6 位数字 PIN。
+                  </div>
+                  <div className="space-y-2">
+                    <label className="field-label">新管理员 PIN</label>
+                    <PinInput value={newPin} onChange={setNewPin} placeholder="4-6 位数字" />
+                    <p className="form-hint">新 PIN 不能和当前 PIN 相同；修改后会进入主页。</p>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        await handleSwitchAccount();
+                        setPendingPinAccount(null);
+                        setMode("login");
+                      }}
+                      disabled={working}
+                    >
+                      返回登录
+                    </Button>
+                    <Button onClick={handleChangeCurrentPin} disabled={working}>
+                      修改 PIN 并进入
                     </Button>
                   </div>
                 </div>

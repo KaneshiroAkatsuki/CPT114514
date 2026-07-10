@@ -1,9 +1,7 @@
 import sys
 import json
 import os
-import re
 import shutil
-from datetime import datetime
 
 # Ensure sidecar can import generate_report.py from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +12,7 @@ from generate_report import (
     read_xlsx_quantity,
     schedule_tasks,
     generate_report,
+    infer_report_date,
     preview,
     set_work_dir,
     get_work_dir,
@@ -149,11 +148,7 @@ def handle_command(cmd: dict) -> dict:
         if leave_strategy == "early":
             suffix += "-下早班"
 
-        m = re.match(r"(\d+)\.(\d+)", folder_name)
-        if m:
-            test_date = datetime(datetime.now().year, int(m.group(1)), int(m.group(2)))
-        else:
-            test_date = datetime.now()
+        test_date = infer_report_date(base_dir)
 
         output_path = generate_report(
             valid_records,

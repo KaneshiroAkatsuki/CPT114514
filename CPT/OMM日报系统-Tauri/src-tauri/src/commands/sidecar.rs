@@ -123,10 +123,11 @@ pub async fn sidecar_parse_folders(
     operator_name: String,
 ) -> Result<serde_json::Value, String> {
     ensure_sidecar_started(&state)?;
-    let known_senders =
-        crate::commands::known_senders::active_known_sender_names().unwrap_or_default();
+    let known_senders = crate::commands::known_senders::active_known_sender_names()
+        .map_err(|e| format!("送测人库读取失败: {}", e))?;
     let measurement_people =
-        crate::commands::measurement_people::active_measurement_people_payload().ok();
+        crate::commands::measurement_people::active_measurement_people_payload()
+            .map_err(|e| format!("测量人库读取失败: {}", e))?;
 
     let cmd = serde_json::json!({
         "command": "parse_folders",
@@ -157,14 +158,14 @@ pub async fn sidecar_generate(
     if let Some(obj) = settings.as_object_mut() {
         obj.insert(
             "known_senders".to_string(),
-            serde_json::json!(
-                crate::commands::known_senders::active_known_sender_names().unwrap_or_default()
-            ),
+            serde_json::json!(crate::commands::known_senders::active_known_sender_names()
+                .map_err(|e| format!("送测人库读取失败: {}", e))?),
         );
         obj.insert(
             "measurement_people".to_string(),
             serde_json::json!(
-                crate::commands::measurement_people::active_measurement_people_payload().ok()
+                crate::commands::measurement_people::active_measurement_people_payload()
+                    .map_err(|e| format!("测量人库读取失败: {}", e))?
             ),
         );
     }
@@ -197,14 +198,14 @@ pub async fn sidecar_preview(
     if let Some(obj) = settings.as_object_mut() {
         obj.insert(
             "known_senders".to_string(),
-            serde_json::json!(
-                crate::commands::known_senders::active_known_sender_names().unwrap_or_default()
-            ),
+            serde_json::json!(crate::commands::known_senders::active_known_sender_names()
+                .map_err(|e| format!("送测人库读取失败: {}", e))?),
         );
         obj.insert(
             "measurement_people".to_string(),
             serde_json::json!(
-                crate::commands::measurement_people::active_measurement_people_payload().ok()
+                crate::commands::measurement_people::active_measurement_people_payload()
+                    .map_err(|e| format!("测量人库读取失败: {}", e))?
             ),
         );
     }

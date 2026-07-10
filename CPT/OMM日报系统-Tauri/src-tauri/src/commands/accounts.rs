@@ -54,6 +54,7 @@ pub struct PublicAccount {
     pub role: AccountRole,
     pub display_name_mode: DisplayNameMode,
     pub display_name: String,
+    pub must_change_pin: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -225,6 +226,7 @@ fn public_account(account: &AccountRecord) -> PublicAccount {
         role: account.role.clone(),
         display_name_mode: account.display_name_mode.clone(),
         display_name,
+        must_change_pin: account.id == ADMIN_ID && verify_pin(account, ADMIN_INITIAL_PIN),
     }
 }
 
@@ -641,6 +643,38 @@ pub async fn reset_account_pin(
     target.pin_salt = pin_salt;
     target.pin_hash = pin_hash;
     write_store(&store)
+}
+
+#[command]
+pub async fn change_current_account_pin(
+    current_pin: String,
+    new_pin: String,
+) -> Result<PublicAccount, String> {
+    validate_pin(&current_pin)?;
+    validate_pin(&new_pin)?;
+    let session = read_session()?;
+    let account_id = session.current_account_id.ok_or("尚未登录。".to_string())?;
+    let mut store = read_store()?;
+    let account = store
+        .accounts
+        .iter_mut()
+        .find(|account| account.id == account_id)
+        .ok_or("当前账户不存在。".to_string())?;
+    if !verify_pin(account, current_pin.trim()) {
+        return Err("当前 PIN 不正确。".to_string());
+    }
+    if verify_pin(account, new_pin.trim()) {
+        return Err("新 PIN 不能和当前 PIN 相同。".to_string());
+    }
+    if account.id == ADMIN_ID && new_pin.trim() == ADMIN_INITIAL_PIN {
+        return Err("管理员不能继续使用初始 PIN。".to_string());
+    }
+    let (pin_salt, pin_hash) = new_pin_hash(new_pin.trim());
+    account.pin_salt = pin_salt;
+    account.pin_hash = pin_hash;
+    let public = public_account(account);
+    write_store(&store)?;
+    Ok(public)
 }
 
 #[command]

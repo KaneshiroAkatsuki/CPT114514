@@ -137,6 +137,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [previewItemPath, setPreviewItemPath] = useState("");
   const [multiDayOverviewOpen, setMultiDayOverviewOpen] = useState(false);
   const [multiDayOverviewLoading, setMultiDayOverviewLoading] = useState(false);
   const [multiDayOverviewItems, setMultiDayOverviewItems] = useState<MultiDayOverviewItem[]>([]);
@@ -144,6 +145,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   // Day settings dialog state
   const [daySettingsOpen, setDaySettingsOpen] = useState(false);
   const [daySettingsIndex, setDaySettingsIndex] = useState<number>(-1);
+  const [daySettingsItemPath, setDaySettingsItemPath] = useState("");
 
   // Help center dialog state
   const [helpOpen, setHelpOpen] = useState(false);
@@ -959,6 +961,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       if (previewResponse.success && previewResponse.data) {
         setPreviewData(previewResponse.data);
         setPreviewIndex(targetIndex ?? queue.findIndex((q) => q.fullPath === targetItem.fullPath));
+        setPreviewItemPath(targetItem.fullPath);
         setPreviewOpen(true);
         addLog(`预览已打开: ${targetItem.dateFolder}`);
       } else {
@@ -967,6 +970,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     } catch (e) {
       addLog(`预览错误: ${e}`);
     }
+  };
+
+  const getActivePreviewEntry = (): { index: number; item: QueueItem } | null => {
+    if (previewItemPath) {
+      const index = queue.findIndex((item) => item.fullPath === previewItemPath);
+      return index >= 0 ? { index, item: queue[index] } : null;
+    }
+    if (previewIndex >= 0 && previewIndex < queue.length) {
+      return { index: previewIndex, item: queue[previewIndex] };
+    }
+    return null;
   };
 
   const handleHelpOpen = (section: string) => {
@@ -1366,8 +1380,22 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   const openDaySettingsForQueueItem = (index: number) => {
+    const item = queue[index];
+    if (!item) return;
     setDaySettingsIndex(index);
+    setDaySettingsItemPath(item.fullPath);
     setDaySettingsOpen(true);
+  };
+
+  const getActiveDaySettingsEntry = (): { index: number; item: QueueItem } | null => {
+    if (daySettingsItemPath) {
+      const index = queue.findIndex((item) => item.fullPath === daySettingsItemPath);
+      return index >= 0 ? { index, item: queue[index] } : null;
+    }
+    if (daySettingsIndex >= 0 && daySettingsIndex < queue.length) {
+      return { index: daySettingsIndex, item: queue[daySettingsIndex] };
+    }
+    return null;
   };
 
   const handleSetReviewMode = (mode: 'A' | 'B' | null) => {
@@ -2097,37 +2125,46 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   const handlePreviewGenerate = (decisionPatch?: Partial<QueueItemSettingsOverride>) => {
-    if (previewIndex >= 0 && previewIndex < queue.length) {
+    const activePreview = getActivePreviewEntry();
+    if (activePreview) {
+      const { index, item } = activePreview;
       const patchEntries = Object.entries(decisionPatch || {}).filter(([, value]) => value !== undefined);
       if (patchEntries.length === 0) {
-        handleGenerateSingleFromPreview(previewIndex);
+        handleGenerateSingleFromPreview(index);
         return;
       }
-      const item = queue[previewIndex];
       const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}), ...decisionPatch };
       if (nextOverride.other_note !== undefined) {
         const normalizedOtherNote = String(nextOverride.other_note).trim();
         nextOverride.other_note = normalizedOtherNote || DEFAULT_OTHER_NOTE;
       }
       const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
-      setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+      setQueue((prev) => prev.map((queueItem) => queueItem.fullPath === item.fullPath ? nextItem : queueItem));
       addLog(`已保存 ${item.dateFolder} 的生成前补时设置，并用于本次生成`);
-      handleGenerateSingleFromPreview(previewIndex, nextItem);
+      handleGenerateSingleFromPreview(index, nextItem);
+    } else {
+      addLog("预览项已不在队列中，生成已取消；请重新打开预览");
     }
   };
 
   const handlePreviewOpenManual = () => {
-    if (previewIndex >= 0 && previewIndex < queue.length) {
-      const item = queue[previewIndex];
-      setManualTaskItem(item);
+    const activePreview = getActivePreviewEntry();
+    if (activePreview) {
+      setManualTaskItem(activePreview.item);
       setManualTaskOpen(true);
+    } else {
+      addLog("预览项已不在队列中，请重新打开预览后再补录手量");
     }
   };
 
   const handlePreviewOpenDaySettings = () => {
-    if (previewIndex >= 0 && previewIndex < queue.length) {
-      setDaySettingsIndex(previewIndex);
+    const activePreview = getActivePreviewEntry();
+    if (activePreview) {
+      setDaySettingsIndex(activePreview.index);
+      setDaySettingsItemPath(activePreview.item.fullPath);
       setDaySettingsOpen(true);
+    } else {
+      addLog("预览项已不在队列中，请重新打开预览后再设置本日参数");
     }
   };
 
@@ -2139,8 +2176,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   };
 
   const handlePreviewDurationOverridesSave = async (overrides: Record<string, DurationOverride>) => {
-    if (previewIndex < 0 || previewIndex >= queue.length) return;
-    const item = queue[previewIndex];
+    const activePreview = getActivePreviewEntry();
+    if (!activePreview) {
+      addLog("预览项已不在队列中，包耗时覆盖未保存");
+      return;
+    }
+    const { index, item } = activePreview;
     const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}) };
     if (Object.keys(overrides).length > 0) {
       nextOverride.duration_overrides = overrides;
@@ -2148,22 +2189,23 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       delete nextOverride.duration_overrides;
     }
     const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
-    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    setQueue((prev) => prev.map((queueItem) => queueItem.fullPath === item.fullPath ? nextItem : queueItem));
     addLog(Object.keys(overrides).length > 0
       ? `已保存 ${item.dateFolder} 的本日包耗时覆盖，重新预览`
       : `已清除 ${item.dateFolder} 的本日包耗时覆盖，重新预览`);
-    await handlePreviewForItem(nextItem, previewIndex);
+    await handlePreviewForItem(nextItem, index);
   };
 
   const handleApplyTimeAnomalyRecommendation = async () => {
-    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return;
+    const activePreview = getActivePreviewEntry();
+    if (!activePreview || !previewData) return;
     const anomaly = previewData.summary.time_anomaly || previewData.summary.decision?.time_anomaly;
     const items = anomaly?.kind === "too_little" ? (anomaly.adjustment_items || []) : [];
     if (items.length === 0) {
       addLog("应用推荐已跳过: 当前没有可应用的普通包调时建议");
       return;
     }
-    const currentOverrides = queue[previewIndex]?.settingsOverride?.duration_overrides || {};
+    const currentOverrides = activePreview.item.settingsOverride?.duration_overrides || {};
     const nextOverrides: Record<string, DurationOverride> = { ...currentOverrides };
     for (const item of items) {
       const minutes = Math.min(6, Math.max(0, item.recommended_per_piece));
@@ -2175,13 +2217,14 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         computed_total_minutes: Math.round(item.recommended_total_minutes * 10) / 10,
       };
     }
-    addLog(`应用时间异常推荐: ${queue[previewIndex].dateFolder} 写入 ${items.length} 个包耗时覆盖`);
+    addLog(`应用时间异常推荐: ${activePreview.item.dateFolder} 写入 ${items.length} 个包耗时覆盖`);
     await handlePreviewDurationOverridesSave(nextOverrides);
   };
 
   const handleMoveTimeAnomalyOmitItems = async () => {
-    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return;
-    const item = queue[previewIndex];
+    const activePreview = getActivePreviewEntry();
+    if (!activePreview || !previewData) return;
+    const { index, item } = activePreview;
     const anomaly = previewData.summary.time_anomaly || previewData.summary.decision?.time_anomaly;
     const omitItems = anomaly?.kind === "too_much" ? (anomaly.omit_items || []) : [];
     const folderNames = omitItems.map((omit) => omit.folder).filter(Boolean);
@@ -2220,28 +2263,33 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       nextOverride.duration_overrides = Object.keys(nextDurationOverrides).length > 0 ? nextDurationOverrides : undefined;
     }
     const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
-    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    setQueue((prev) => prev.map((queueItem) => queueItem.fullPath === item.fullPath ? nextItem : queueItem));
     moved.forEach((entry) => addLog(`省略清单已移动: ${entry.folder_name} -> ${entry.target_path}`));
-    await handlePreviewForItem(nextItem, previewIndex);
+    await handlePreviewForItem(nextItem, index);
   };
 
   const handlePreviewDecisionSettingsSave = async (patch: Partial<QueueItemSettingsOverride>) => {
-    if (previewIndex < 0 || previewIndex >= queue.length) return;
-    const item = queue[previewIndex];
+    const activePreview = getActivePreviewEntry();
+    if (!activePreview) {
+      addLog("预览项已不在队列中，生成前排程决策未保存");
+      return;
+    }
+    const { index, item } = activePreview;
     const nextOverride: QueueItemSettingsOverride = { ...(item.settingsOverride || {}), ...patch };
     if (nextOverride.other_note !== undefined) {
       const normalizedOtherNote = String(nextOverride.other_note).trim();
       nextOverride.other_note = normalizedOtherNote || DEFAULT_OTHER_NOTE;
     }
     const nextItem: QueueItem = { ...item, settingsOverride: nextOverride };
-    setQueue((prev) => prev.map((queueItem, index) => index === previewIndex ? nextItem : queueItem));
+    setQueue((prev) => prev.map((queueItem) => queueItem.fullPath === item.fullPath ? nextItem : queueItem));
     addLog(`已更新 ${item.dateFolder} 的生成前排程决策，重新预览`);
-    await handlePreviewForItem(nextItem, previewIndex);
+    await handlePreviewForItem(nextItem, index);
   };
 
   const buildPreviewDurationOverrideDisabledFolders = (): Record<string, string> => {
-    if (previewIndex < 0 || previewIndex >= queue.length || !previewData) return {};
-    const item = queue[previewIndex];
+    const activePreview = getActivePreviewEntry();
+    if (!activePreview || !previewData) return {};
+    const item = activePreview.item;
     const settings = buildItemSettings(item);
     const disabled: Record<string, string> = {};
     for (const record of previewData.records) {
@@ -2286,6 +2334,12 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
     return labels;
   };
+
+  const activePreviewEntry = getActivePreviewEntry();
+  const activePreviewSettings = activePreviewEntry ? buildItemSettings(activePreviewEntry.item) : undefined;
+  const activePreviewDurationOverrides = activePreviewEntry?.item.settingsOverride?.duration_overrides;
+  const activeDaySettingsEntry = getActiveDaySettingsEntry();
+  const activeDaySettingsItem = activeDaySettingsEntry?.item;
 
   return (
     <div className="flex h-screen flex-col bg-[#f5f5f7] text-slate-950">
@@ -2926,10 +2980,13 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       <PreviewDialog
         open={previewOpen}
         data={previewData}
-        decisionSettings={previewIndex >= 0 && previewIndex < queue.length ? buildItemSettings(queue[previewIndex]) : undefined}
-        durationOverrides={previewIndex >= 0 ? queue[previewIndex]?.settingsOverride?.duration_overrides : undefined}
+        decisionSettings={activePreviewSettings}
+        durationOverrides={activePreviewDurationOverrides}
         durationOverrideDisabledFolders={buildPreviewDurationOverrideDisabledFolders()}
-        onClose={() => setPreviewOpen(false)}
+        onClose={() => {
+          setPreviewOpen(false);
+          setPreviewItemPath("");
+        }}
         onGenerate={handlePreviewGenerate}
         onOpenManual={handlePreviewOpenManual}
         onOpenDaySettings={handlePreviewOpenDaySettings}
@@ -3387,29 +3444,30 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         }}
       />
       {/* 单日设置弹窗 */}
-      {daySettingsIndex >= 0 && daySettingsIndex < queue.length && (
+      {activeDaySettingsEntry && activeDaySettingsItem && (
         <DaySettingsDialog
           open={daySettingsOpen}
-          folderName={queue[daySettingsIndex].dateFolder}
-          leaveStrategy={queue[daySettingsIndex].settingsOverride?.leave_strategy}
-          enableHand={queue[daySettingsIndex].settingsOverride?.enable_hand}
-          enableOther={queue[daySettingsIndex].settingsOverride?.enable_other}
-          fillerPosition={queue[daySettingsIndex].settingsOverride?.filler_position}
+          folderName={activeDaySettingsItem.dateFolder}
+          leaveStrategy={activeDaySettingsItem.settingsOverride?.leave_strategy}
+          enableHand={activeDaySettingsItem.settingsOverride?.enable_hand}
+          enableOther={activeDaySettingsItem.settingsOverride?.enable_other}
+          fillerPosition={activeDaySettingsItem.settingsOverride?.filler_position}
           globalEnableHand={enableHand}
           globalEnableOther={enableOther}
           globalFillerPosition={DEFAULT_FILLER_POSITION}
           globalLeaveStrategy={leaveStrategy}
           onSave={(settings) => {
-            updateQueueItemOverride(daySettingsIndex, settings);
-            addLog(`单日设置已更新: ${queue[daySettingsIndex].dateFolder}`);
+            updateQueueItemOverride(activeDaySettingsEntry.index, settings);
+            addLog(`单日设置已更新: ${activeDaySettingsItem.dateFolder}`);
           }}
           onClear={() => {
-            clearQueueItemOverride(daySettingsIndex);
-            addLog(`单日设置已恢复默认: ${queue[daySettingsIndex].dateFolder}`);
+            clearQueueItemOverride(activeDaySettingsEntry.index);
+            addLog(`单日设置已恢复默认: ${activeDaySettingsItem.dateFolder}`);
           }}
           onClose={() => {
             setDaySettingsOpen(false);
             setDaySettingsIndex(-1);
+            setDaySettingsItemPath("");
           }}
         />
       )}

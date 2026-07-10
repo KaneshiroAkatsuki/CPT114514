@@ -2243,18 +2243,46 @@ def schedule_tasks(records, shift_label='A', early_leave=False,
     return best_segs, schedule_warnings
 
 
+def unique_report_path(out_dir, base_name):
+    first_path = os.path.join(out_dir, f"{base_name}.xlsx")
+    if not os.path.exists(first_path):
+        return first_path
+    for index in range(1, 1000):
+        candidate = os.path.join(out_dir, f"{base_name}（{index}）.xlsx")
+        if not os.path.exists(candidate):
+            return candidate
+    timestamp = datetime.now().strftime("_%H%M%S")
+    return os.path.join(out_dir, f"{base_name}{timestamp}.xlsx")
+
+
+def infer_year_from_path(path):
+    parts = re.split(r'[\\/]+', os.path.normpath(path))
+    for part in reversed(parts):
+        for match in re.finditer(r'(20\d{2})', part):
+            year = int(match.group(1))
+            if 2020 <= year <= 2100:
+                return year
+    return datetime.now().year
+
+
+def infer_report_date(base_dir):
+    folder_name = os.path.basename(base_dir.rstrip('\\/'))
+    match = re.match(r'(\d+)\.(\d+)', folder_name)
+    if not match:
+        return datetime.now()
+    year = infer_year_from_path(base_dir)
+    try:
+        return datetime(year, int(match.group(1)), int(match.group(2)))
+    except ValueError:
+        return datetime.now()
+
+
 def generate_report(records, tasks, test_date, output_name_suffix="", operator_name=OPERATOR_NAME, output_dir=None):
     base_name = f"滁州量测室总体日报汇总表-OMM-{operator_name}{output_name_suffix}"
     out_dir = output_dir if output_dir else OUTPUT_DIR
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir, exist_ok=True)
-    output_path = os.path.join(out_dir, f"{base_name}.xlsx")
-
-    if os.path.exists(output_path):
-        try:
-            os.remove(output_path)
-        except PermissionError:
-            output_path = os.path.join(out_dir, f"{base_name}{datetime.now().strftime('_%H%M%S')}.xlsx")
+    output_path = unique_report_path(out_dir, base_name)
 
     if not TEMPLATE_PATH or not os.path.isfile(TEMPLATE_PATH):
         print("错误：未找到模板文件。请在工作目录中放置模板：数据源备份/滁州量测室总体日报汇总表-OMM-禹欣1.xlsx")
@@ -2459,8 +2487,7 @@ def run(base_dir, early_leave=False, leave_strategy=None,
     if leave_strategy == 'early' or (leave_strategy is None and early_leave):
         suffix += "-下早班"
 
-    m = re.match(r'(\d+)\.(\d+)', folder_name)
-    test_date = datetime(datetime.now().year, int(m.group(1)), int(m.group(2))) if m else datetime.now()
+    test_date = infer_report_date(base_dir)
 
     # 默认输出到源文件夹
     if output_dir is None:

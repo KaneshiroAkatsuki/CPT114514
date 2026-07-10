@@ -1,10 +1,10 @@
 # 玉衡山科学院管理厅当前状态
 
-更新时间：2026-07-10 19:05 +08:00
+更新时间：2026-07-10 19:39 +08:00
 
 ## 当前版本
 
-- 应用版本：5.8.4
+- 应用版本：5.8.5
 - 应用名称：玉衡山科学院管理厅
 - 包名：`yuhengshan-academy-manager`
 - Tauri 标识：`com.kaneshiro.yuhengshan.academy.manager`
@@ -18,11 +18,11 @@
 
 ## 最新便携版
 
-- 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.4.zip`
-- SHA256：`00261DD8DB021DC1F0400DEFA3223937EE55FEC59B8EEF69B6832BE7670654AE`
-- packaged_at：`2026-07-10T18:50:15`
-- app：`4a6c1f28e270678a399e0870e6b6e84819282198044572001c6ca8d9e518cfa0`
-- sidecar：`5419dc66339d44ab13ac89d486933825c158c75b3bf6086b40ca2c9638811b24`
+- 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.5.zip`
+- SHA256：`35857B0D1C124C27CFCAC995E6DF19ED0EAF9FE21929BE53C73B27315E91E032`
+- packaged_at：`2026-07-10T19:38:58`
+- app：`685b3e1d4c243074c9dce32dc5400cc5dd3f7ae31bdeff11e24e0d1c23508114`
+- sidecar：`4448e68b4b2261b7ad001d005bd36b8d1680952d621cbe34477a978f845751d1`
 - template：`18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da`
 - personal_cleaner_script：`3feed427724db51f876224f3e93c4e9e7b732aecec55826840ee44c901154a03`
 - personal_cleaner_launcher：`c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac`
@@ -74,7 +74,7 @@ npx.cmd tsc --noEmit
 Push-Location src-tauri; cargo check --release; Pop-Location
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 npm.cmd run tauri-build-portable
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.4
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.5
 ```
 
 ## 发布策略

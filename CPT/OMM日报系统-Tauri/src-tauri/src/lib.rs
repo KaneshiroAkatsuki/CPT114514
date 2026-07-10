@@ -154,6 +154,7 @@ pub fn run() {
             commands::accounts::register_account,
             commands::accounts::logout_account,
             commands::accounts::reset_account_pin,
+            commands::accounts::change_current_account_pin,
             commands::accounts::set_current_account_display_mode,
             commands::data_store::get_data_store_info,
             commands::duration_rules::load_duration_rules,

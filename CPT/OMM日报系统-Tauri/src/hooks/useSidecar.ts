@@ -219,11 +219,15 @@ export function useAccountManager() {
     await invoke("reset_account_pin", { targetAccountId, adminPin, newPin });
   }, []);
 
+  const changeCurrentAccountPin = useCallback(async (currentPin: string, newPin: string): Promise<PublicAccount> => {
+    return await invoke<PublicAccount>("change_current_account_pin", { currentPin, newPin });
+  }, []);
+
   const setCurrentAccountDisplayMode = useCallback(async (mode: DisplayNameMode): Promise<PublicAccount> => {
     return await invoke<PublicAccount>("set_current_account_display_mode", { mode });
   }, []);
 
-  return { loadAccounts, loginAccount, registerAccount, logoutAccount, resetAccountPin, setCurrentAccountDisplayMode };
+  return { loadAccounts, loginAccount, registerAccount, logoutAccount, resetAccountPin, changeCurrentAccountPin, setCurrentAccountDisplayMode };
 }
 
 export function useDataStoreManager() {

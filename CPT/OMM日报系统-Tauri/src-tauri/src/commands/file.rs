@@ -1,5 +1,6 @@
-use tauri::{command, AppHandle};
 use serde::Serialize;
+use std::collections::HashSet;
+use tauri::{command, AppHandle};
 
 #[command]
 pub async fn select_folder(
@@ -150,13 +151,18 @@ pub fn move_folders_to_shift_bucket(
     }
     let target_dir = date_path.join(format!("新建文件夹{}", shift));
     if target_dir.exists() && !target_dir.is_dir() {
-        return Err(format!("目标位置已存在但不是文件夹: {}", target_dir.display()));
+        return Err(format!(
+            "目标位置已存在但不是文件夹: {}",
+            target_dir.display()
+        ));
     }
     if !target_dir.exists() {
         std::fs::create_dir_all(&target_dir).map_err(|e| format!("无法创建目标文件夹: {}", e))?;
     }
 
-    let mut moved = Vec::new();
+    let mut planned = Vec::new();
+    let mut seen_sources = HashSet::new();
+    let mut reserved_destinations = HashSet::new();
     for raw_name in folder_names {
         let folder_name = raw_name.trim();
         if folder_name.is_empty() || folder_name == "." || folder_name == ".." {
@@ -169,17 +175,57 @@ pub fn move_folders_to_shift_bucket(
             return Err(format!("源路径不是文件夹: {}", folder_name));
         }
         if source_canonical.parent() != Some(date_path.as_path()) {
-            return Err(format!("只允许移动当前日期目录的直接子文件夹: {}", folder_name));
+            return Err(format!(
+                "只允许移动当前日期目录的直接子文件夹: {}",
+                folder_name
+            ));
         }
         if source_canonical == target_dir {
             return Err(format!("不能移动目标文件夹本身: {}", folder_name));
         }
+        if !seen_sources.insert(source_canonical.clone()) {
+            return Err(format!("省略清单包含重复文件夹: {}", folder_name));
+        }
 
         let destination = safe_unique_destination(&target_dir, folder_name);
-        std::fs::rename(&source_canonical, &destination)
-            .map_err(|e| format!("移动 {} 失败: {}", folder_name, e))?;
+        if !reserved_destinations.insert(destination.clone()) {
+            return Err(format!(
+                "目标路径重复，请刷新后重试: {}",
+                destination.display()
+            ));
+        }
+        planned.push((folder_name.to_string(), source_canonical, destination));
+    }
+
+    let mut moved = Vec::new();
+    let mut moved_paths: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    for (folder_name, source_canonical, destination) in planned {
+        std::fs::rename(&source_canonical, &destination).map_err(|e| {
+            let mut rollback_errors = Vec::new();
+            for (source, target) in moved_paths.iter().rev() {
+                if let Err(rollback_error) = std::fs::rename(target, source) {
+                    rollback_errors.push(format!(
+                        "{} -> {}: {}",
+                        target.display(),
+                        source.display(),
+                        rollback_error
+                    ));
+                }
+            }
+            if rollback_errors.is_empty() {
+                format!("移动 {} 失败，已回滚本次已移动文件夹: {}", folder_name, e)
+            } else {
+                format!(
+                    "移动 {} 失败，且部分文件夹回滚失败: {}；原始错误: {}",
+                    folder_name,
+                    rollback_errors.join("；"),
+                    e
+                )
+            }
+        })?;
+        moved_paths.push((source_canonical.clone(), destination.clone()));
         moved.push(MovedFolderInfo {
-            folder_name: folder_name.to_string(),
+            folder_name,
             source_path: source_canonical.to_string_lossy().to_string(),
             target_path: destination.to_string_lossy().to_string(),
         });

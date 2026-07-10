@@ -229,6 +229,7 @@ export interface PublicAccount {
   role: AccountRole;
   display_name_mode: DisplayNameMode;
   display_name: string;
+  must_change_pin?: boolean;
 }
 
 export interface AccountsInfo {

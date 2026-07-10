@@ -1,6 +1,6 @@
 [package]
 name = "yuhengshan-academy-manager"
-version = "5.8.4"
+version = "5.8.5"
 description = "玉衡山科学院管理厅 - Tauri + React + Python sidecar"
 authors = ["Kaneshiro"]
 edition = "2021"

@@ -367,8 +367,9 @@ const TOPICS: HelpTopic[] = [
       <div className="space-y-4">
         <ul className={text.ul}>
           <li><strong>默认管理员：</strong>首次使用会内置一个管理员账户，初始 PIN 由部署者保管。</li>
+          <li><strong>初始 PIN 保护：</strong>管理员若仍在使用初始 PIN，登录后会先要求修改 PIN，完成后才能进入主页。</li>
           <li><strong>新员工注册：</strong>输入昵称、真实姓名和 4-6 位数字 PIN，注册后默认为访客账户。</li>
-          <li><strong>登录方式：</strong>可以用昵称或真实姓名登录；PIN 只保存加盐哈希，不保存明文。</li>
+          <li><strong>登录方式：</strong>可以用昵称或真实姓名登录；账户数据库里的 PIN 只保存加盐哈希。若勾选“记住我和 PIN”，PIN 会额外保存在本机用于自动填入，请只在可信电脑开启。</li>
           <li><strong>忘记 PIN：</strong>访客可输入管理员 PIN 重置；管理员 PIN 忘记时不会提供普通重置入口。</li>
           <li><strong>账户数据：</strong>账号、PIN 哈希和当前登录状态保存在本地 <code className={text.code}>data/omm.db</code>，旧 <code className={text.code}>.omm</code> 文件只作为首次导入来源保留。</li>
           <li><strong>账户配置：</strong>每个账户使用独立 profile，默认规则、工作目录、输出目录和识别补充规则收纳在 <code className={text.code}>data/profiles</code>。</li>
@@ -410,7 +411,7 @@ const TOPICS: HelpTopic[] = [
       <div className="space-y-4">
         <ul className={text.ul}>
           <li>本地数据统一收纳在 <code className={text.code}>data</code> 目录；安装版位于 <code className={text.code}>%APPDATA%\玉衡山科学院管理厅\data</code>，便携版位于程序同级 <code className={text.code}>data</code>。</li>
-          <li>账号和登录状态保存在 <code className={text.code}>data/omm.db</code>；PIN 仍只保存加盐哈希，不保存明文。</li>
+          <li>账号和登录状态保存在 <code className={text.code}>data/omm.db</code>；账户 PIN 在数据库中保存为加盐哈希。“记住我和 PIN”属于本机自动填入功能，会单独保存在当前电脑。</li>
           <li>账户配置保存在 <code className={text.code}>data/profiles/&lt;账号&gt;/config.json</code>，识别补充规则与该配置同目录。</li>
           <li>便携版仍兼容旧 <code className={text.code}>config.json</code>；新扫描会跳过 <code className={text.code}>data</code> 和旧 <code className={text.code}>.omm</code>，避免把内部 profile 误判为重复配置。</li>
         </ul>
@@ -476,7 +477,7 @@ const TOPICS: HelpTopic[] = [
     body: (
       <div className="space-y-4">
         <ul className={text.ul}>
-          <li><strong>版本：</strong>5.8.4。</li>
+          <li><strong>版本：</strong>5.8.5。</li>
           <li><strong>界面：</strong>已完成 Apple-inspired UI 收尾阶段；帮助中心改为两栏布局，主界面当前设置摘要前置，预览页详细计算默认收纳到细项中。</li>
           <li><strong>关于软件：</strong>设置中心最后一个栏目会显示版本、帮助入口、配置文件、识别补充、模板来源和本地数据管理；诊断日志也收纳在这里。</li>
           <li><strong>日常使用：</strong>以当前便携版程序为准；发布物会定期整理，只保留最新可用版本。</li>

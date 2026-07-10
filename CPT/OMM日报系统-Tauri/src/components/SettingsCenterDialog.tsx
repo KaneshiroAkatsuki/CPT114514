@@ -83,7 +83,7 @@ interface SettingsCenterDialogProps {
   onOpenHelp: (section: string) => void;
 }
 
-const APP_VERSION = "5.8.4";
+const APP_VERSION = "5.8.5";
 const PERSONAL_CLEANER_BACKUP_ROOT = "C:\\Program Files\\Adobe\\Acrobat DC\\Bin\\玉衡山科学院管理厅备份\\cleaner-backups";
 
 type SettingsTab = "account" | "daily" | "data" | "about";
