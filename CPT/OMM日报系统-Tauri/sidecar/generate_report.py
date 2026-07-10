@@ -758,14 +758,14 @@ def _count_sheet_quantity(ws):
     """统计标准模板中实际测量的件数（按列统计，每列存在有效 OMM 测量数据即算 1 件）。
 
     模板理解：
-    - 每个 sheet 中有一个主测量表。
+    - 每个 sheet 中可能有一个主测量表，也可能纵向复制多段同结构测量表。
     - EVT/全尺寸等模板优先以短"检测工具"列锚定，只统计检测工具为 OMM 的行。
     - 测量列头可能是 1-1、1-2、2-1、2-2，不能用前缀数字递增/回退判断边界。
     - 部分模板（如 CNC）没有"检测工具"列，直接统计主测量表中有数据的列。
     - 列头含复测/掉料/丢料/丢失/损坏/残废/报废/缺料等字样时跳过。
 
     核心逻辑：
-    1. 若存在短"检测工具"列，定位真正的测量列头行并统计 OMM 行下有数值的列。
+    1. 若存在短"检测工具"列，按每个"检测工具"锚点拆成独立测量块，统计 OMM 行下有数值的列并累加。
     2. 否则定位"测量值"单元格，按旧模板方式估算主测量表区域。
     3. 每列有数据即 1 件。
 
@@ -833,45 +833,61 @@ def _count_sheet_quantity(ws):
         return any(k in s for k in ('量测分析', '判断', '判定', '备注'))
 
     # ── 优先路径：短"检测工具"列锚定 ──
-    tool_candidates = []
-    for row in range(1, min(30, ws.max_row + 1)):
+    # 同一个 sheet 里可能纵向复制多个测量表（如首件 FAI 表格上半段 7 件、下半段 4 件）。
+    # 不能只选一个最佳"检测工具"锚点；每段应独立统计后累加。
+    tool_headers = []
+    for row in range(1, ws.max_row + 1):
         for col in range(1, min(ws.max_column + 1, 80)):
             text = _compact_text(ws.cell(row=row, column=col).value)
             if '检测' not in text or '工具' not in text:
                 continue
-            tool_rows = []
-            for r in range(row + 1, min(ws.max_row + 1, row + 500)):
-                if _is_tool_marker(ws.cell(row=r, column=col).value):
-                    tool_rows.append(r)
-            if tool_rows:
-                tool_candidates.append((len(tool_rows), row, col, tool_rows))
+            tool_headers.append((row, col))
 
-    if tool_candidates:
-        _, tool_header_row, tool_col, tool_rows = max(tool_candidates, key=lambda item: item[0])
-        first_tool_row = min(tool_rows)
-        header_candidates = []
-        for row in range(tool_header_row + 1, first_tool_row):
-            measure_end_col = ws.max_column
-            for col in range(tool_col + 1, ws.max_column + 1):
-                if any(
-                    _is_measurement_block_boundary(ws.cell(row=header_row, column=col).value)
-                    for header_row in range(tool_header_row, row)
-                ):
-                    measure_end_col = col - 1
-                    break
-            valid_cols = [
-                col for col in range(tool_col + 1, measure_end_col + 1)
-                if _valid_measure_header(ws.cell(row=row, column=col).value)
+    if tool_headers:
+        block_counts = []
+        for tool_header_row, tool_col in sorted(set(tool_headers)):
+            next_header_rows = [
+                row for row, col in tool_headers
+                if col == tool_col and row > tool_header_row
             ]
-            if valid_cols:
-                header_candidates.append((len(valid_cols), row, valid_cols))
+            block_end_row = (min(next_header_rows) - 1) if next_header_rows else min(ws.max_row, tool_header_row + 500)
 
-        if header_candidates:
+            tool_rows = [
+                row for row in range(tool_header_row + 1, block_end_row + 1)
+                if _is_tool_marker(ws.cell(row=row, column=tool_col).value)
+            ]
+            if not tool_rows:
+                continue
+
+            first_tool_row = min(tool_rows)
+            header_candidates = []
+            for row in range(tool_header_row + 1, first_tool_row):
+                measure_end_col = ws.max_column
+                for col in range(tool_col + 1, ws.max_column + 1):
+                    if any(
+                        _is_measurement_block_boundary(ws.cell(row=header_row, column=col).value)
+                        for header_row in range(tool_header_row, row)
+                    ):
+                        measure_end_col = col - 1
+                        break
+                valid_cols = [
+                    col for col in range(tool_col + 1, measure_end_col + 1)
+                    if _valid_measure_header(ws.cell(row=row, column=col).value)
+                ]
+                if valid_cols:
+                    header_candidates.append((len(valid_cols), row, valid_cols))
+
+            if not header_candidates:
+                continue
+
             _, id_row, measure_cols = max(header_candidates, key=lambda item: item[0])
             omm_rows = [
                 row for row in tool_rows
                 if _is_omm_tool(ws.cell(row=row, column=tool_col).value)
             ]
+            if not omm_rows:
+                continue
+
             count = 0
             for col in measure_cols:
                 header_val = ws.cell(row=id_row, column=col).value
@@ -879,7 +895,11 @@ def _count_sheet_quantity(ws):
                     continue
                 if any(_is_numeric_data(ws.cell(row=row, column=col).value) for row in omm_rows):
                     count += 1
-            return count if count > 0 else None
+            if count > 0:
+                block_counts.append(count)
+
+        if block_counts:
+            return sum(block_counts)
 
     # ── 步骤 1：定位主测量表区域 ──
     measure_row = measure_col = None

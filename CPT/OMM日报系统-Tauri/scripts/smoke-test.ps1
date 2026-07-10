@@ -51,6 +51,7 @@ Invoke-SmokeStep "Fixture recognition regression" {
     $fixtureCheck = @'
 import os
 import sys
+import tempfile
 
 from openpyxl import Workbook
 
@@ -71,9 +72,9 @@ if not any("24PCS" in folder for folder in folders):
 if not any("14PCS" in folder for folder in folders):
     raise SystemExit(f"missing 14PCS \u79b9\u6b23 fixture record: {folders}")
 
-warning_items = [v for v in review_map.values() if v.get("warnings")]
-if not any("\u9ed8\u8ba4\u91c7\u7528\u6587\u4ef6\u5939\u4ef6\u6570" in warning for item in warning_items for warning in item.get("warnings", [])):
-    raise SystemExit("expected folder PCS priority warning for 7.8A fixture")
+qty_pairs = [(r.get("folder"), r.get("quantity"), r.get("actual_quantity")) for r in records if r.get("operator") == "\u79b9\u6b23"]
+if any(quantity != actual for _, quantity, actual in qty_pairs):
+    raise SystemExit(f"expected 7.8A fixture xlsx quantities to match folder PCS after multi-block recognition, got {qty_pairs}")
 
 wb = Workbook()
 ws = wb.active
@@ -101,6 +102,43 @@ for row in range(12, 18):
 qty = gr._count_sheet_quantity(ws)
 if qty != 12:
     raise SystemExit(f"expected mixed CMM/OMM synthetic fixture to count 12 OMM columns, got {qty}")
+
+multi_wb = Workbook()
+multi_ws = multi_wb.active
+multi_ws["A1"] = "\u5b89\u5fbd\u4e2d\u8000\u667a\u80fd\u79d1\u6280\u6709\u9650\u516c\u53f8\u9996\u4ef6\u5c3a\u5bf8\u62a5\u544a"
+
+def add_measure_block(sheet, start_row, measured_count):
+    tool_col = 9
+    measure_start_col = 10
+    sheet.cell(row=start_row, column=tool_col).value = "\u68c0\u6d4b\n\u5de5\u5177"
+    sheet.cell(row=start_row, column=measure_start_col).value = "\u68c0\u6d4b\u7ed3\u679c"
+    sheet.cell(row=start_row + 1, column=measure_start_col).value = "\u6d4b\u91cf\u503c"
+    for index in range(1, 17):
+        sheet.cell(row=start_row + 2, column=measure_start_col + index - 1).value = index
+    sheet.cell(row=start_row + 3, column=tool_col).value = "OMM"
+    for index in range(1, measured_count + 1):
+        sheet.cell(row=start_row + 3, column=measure_start_col + index - 1).value = float(index)
+
+add_measure_block(multi_ws, 4, 7)
+add_measure_block(multi_ws, 11, 4)
+multi_qty = gr._count_sheet_quantity(multi_ws)
+if multi_qty != 11:
+    raise SystemExit(f"expected vertical multi-block fixture to count 11 OMM columns, got {multi_qty}")
+
+with tempfile.TemporaryDirectory() as tmp_dir:
+    warn_folder = os.path.join(tmp_dir, "X806-65035-04_EVT-ALT-2_\u5c04\u51fa-\u9996\u4ef6-WW115-260707001-C25#-MD-7.8A-10\uff1a23-\u5218\u8273\u4e3d\u9001\u6d4b-12PCS-OMM-\u79b9\u6b23")
+    os.makedirs(warn_folder, exist_ok=True)
+    warn_wb = Workbook()
+    warn_ws = warn_wb.active
+    warn_ws["A1"] = "\u5b89\u5fbd\u4e2d\u8000\u667a\u80fd\u79d1\u6280\u6709\u9650\u516c\u53f8\u9996\u4ef6\u5c3a\u5bf8\u62a5\u544a"
+    add_measure_block(warn_ws, 4, 3)
+    warn_xlsx = os.path.join(warn_folder, "fixture.xlsx")
+    warn_wb.save(warn_xlsx)
+    warn_wb.close()
+    _, warn_map = gr.parse_all_folders(tmp_dir, operator_name="\u79b9\u6b23")
+    warning_items = [v for v in warn_map.values() if v.get("warnings")]
+    if not any("\u9ed8\u8ba4\u91c7\u7528\u6587\u4ef6\u5939\u4ef6\u6570" in warning for item in warning_items for warning in item.get("warnings", [])):
+        raise SystemExit(f"expected folder PCS priority warning for synthetic mismatch fixture, got {warn_map}")
 
 folder = "613-41428-(035-625)-\u710a\u63a5 -AOI-\u5bf9\u6807-FAI6,11,12-6.30B-7\uff1a55\u5f20\u9896\u9f99\u9001\u6d4b-20PCS-CMM-\u5f20\u5143\u5e86-OMM-\u79b9\u6b23"
 parsed, missing, placeholders = gr.parse_folder_name(folder)

@@ -1,7 +1,7 @@
 # 玉衡山科学院管理厅 - AGENTS.md
 
-更新时间：2026-07-10 18:10 +08:00
-当前应用版本：5.8.3
+更新时间：2026-07-10 19:05 +08:00
+当前应用版本：5.8.4
 适用范围：Codex、opencode，以及其他会读取 `AGENTS.md` 的代码代理。
 
 ## 入口原则
@@ -37,7 +37,7 @@
 
 - 项目目录：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri`
 - Git 根目录：`D:\KSoftware\KMAA`
-- 当前便携包：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\releases\玉衡山科学院管理厅_便携版_5.8.3.zip`
+- 当前便携包：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\releases\玉衡山科学院管理厅_便携版_5.8.4.zip`
 
 ## 技术栈
 
@@ -52,8 +52,8 @@
 npm.cmd run smoke
 npx.cmd tsc --noEmit
 Push-Location src-tauri; cargo check --release; Pop-Location
-npm.cmd run tauri-build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.3
+npm.cmd run tauri-build-portable
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.4
 ```
 
 sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。PowerShell 验证不要使用 `< file`。
@@ -65,7 +65,7 @@ sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。Pow
 1. `git status --short`：只精确暂存本轮文件，不要 `git add .`；不要把 `node_modules/`、`dist/`、`src-tauri/target/`、`releases/` 加入提交。
 2. 若改到依赖、模板、打包或测试样本，确认对应文件已被 git 跟踪：`package-lock.json`、`src-tauri/Cargo.lock`、`src-tauri/resources/template.xlsx`、`scripts/*.ps1`、必要的 `CPT/日期文件夹/` 回归样本。
 3. 新电脑本机工具链先检测再安装：`node -v`、`npm -v`、`rustc -V`、`cargo -V`、`python --version`；Python 还需能 `import PyInstaller, openpyxl, lxml, PIL`。
-4. 新电脑首次构建建议顺序：`npm ci`，缺 Python 包时再装 `pyinstaller openpyxl lxml pillow`，然后运行 `python sidecar\build_sidecar.py`、`npm.cmd run smoke`、`npm.cmd run tauri-build`、便携包脚本。
+4. 新电脑首次构建建议顺序：`npm ci`，缺 Python 包时再装 `pyinstaller openpyxl lxml pillow`，然后运行 `python sidecar\build_sidecar.py`、`npm.cmd run smoke`、`npm.cmd run tauri-build-portable`、便携包脚本。
 5. 如果本机能跑、另一台电脑不行，优先检查未提交资源、Python 包、Rust/MSVC/WebView2 工具链、sidecar exe 是否重建，而不是先改业务逻辑。
 
 ## 硬性约束
@@ -102,4 +102,5 @@ sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。Pow
 
 - 数据库规则、帮助文案、预设耗时、清理规则、模板配置：优先考虑热更新/小打包。
 - UI、登录流程、Tauri/React 程序本体、核心逻辑、exe 嵌入资源：需要升版本并完整打便携包。
+- 默认只交付便携包；除非用户明确要求安装包，否则不要运行会产出 NSIS/MSI 的完整安装包构建。
 - 版本号三段均需同步；第二位最高为 9，第三位最高为 5。
