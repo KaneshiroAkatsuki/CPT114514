@@ -52,6 +52,8 @@ Invoke-SmokeStep "Fixture recognition regression" {
 import os
 import sys
 
+from openpyxl import Workbook
+
 sys.path.insert(0, os.path.join(os.getcwd(), "sidecar"))
 import generate_report as gr
 
@@ -72,6 +74,33 @@ if not any("14PCS" in folder for folder in folders):
 warning_items = [v for v in review_map.values() if v.get("warnings")]
 if not any("\u9ed8\u8ba4\u91c7\u7528\u6587\u4ef6\u5939\u4ef6\u6570" in warning for item in warning_items for warning in item.get("warnings", [])):
     raise SystemExit("expected folder PCS priority warning for 7.8A fixture")
+
+wb = Workbook()
+ws = wb.active
+ws["A1"] = "\u5b89\u5fbd\u4e2d\u8000\u667a\u80fd\u79d1\u6280\u6709\u9650\u516c\u53f8\u9996\u4ef6\u5c3a\u5bf8\u62a5\u544a"
+ws["I4"] = "\u68c0\u6d4b\n\u5de5\u5177"
+ws["J4"] = "\u68c0\u6d4b\u7ed3\u679c"
+ws["J5"] = "\u6d4b\u91cf\u503c"
+for offset, header in enumerate(list(range(1, 14)) + ["\u590d\u6d4b2", 15, 16], start=10):
+    ws.cell(row=6, column=offset).value = header
+ws["Z4"] = "\u91cf\u6d4b\u5206\u6790"
+ws["Z5"] = "\u5224\u65ad\uff08\u221a OR DEV)"
+for offset, header in enumerate(range(1, 13), start=26):
+    ws.cell(row=6, column=offset).value = header
+for row in range(7, 12):
+    ws.cell(row=row, column=9).value = "OMM"
+    for col in range(10, 22):
+        ws.cell(row=row, column=col).value = 1.0
+    for col in range(26, 38):
+        ws.cell(row=row, column=col).value = 0.1 if col in (26, 27, 37) else "\u221a"
+for row in range(12, 18):
+    ws.cell(row=row, column=9).value = "CMM"
+    for col in range(10, 23):
+        ws.cell(row=row, column=col).value = 2.0
+
+qty = gr._count_sheet_quantity(ws)
+if qty != 12:
+    raise SystemExit(f"expected mixed CMM/OMM synthetic fixture to count 12 OMM columns, got {qty}")
 '@
     $fixtureCheck | & python -X utf8 -
     Assert-LastExitCode "Fixture recognition regression"

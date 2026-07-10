@@ -819,6 +819,13 @@ def _count_sheet_quantity(ws):
         # 真正的测量列头通常是 1、1-1、2-2、01 等纯数字/短横组合；中文列头不参与件数统计。
         return bool(re.match(r'^\d+(?:-\d+)?$', s))
 
+    def _is_measurement_block_boundary(val):
+        s = _compact_text(val)
+        if not s:
+            return False
+        # "检测结果/测量值"是测量区本身；"量测分析/判断"开始后面的分析区，不参与件数统计。
+        return any(k in s for k in ('量测分析', '判断', '判定', '备注'))
+
     # ── 优先路径：短"检测工具"列锚定 ──
     tool_candidates = []
     for row in range(1, min(30, ws.max_row + 1)):
@@ -838,8 +845,16 @@ def _count_sheet_quantity(ws):
         first_tool_row = min(tool_rows)
         header_candidates = []
         for row in range(tool_header_row + 1, first_tool_row):
+            measure_end_col = ws.max_column
+            for col in range(tool_col + 1, ws.max_column + 1):
+                if any(
+                    _is_measurement_block_boundary(ws.cell(row=header_row, column=col).value)
+                    for header_row in range(tool_header_row, row)
+                ):
+                    measure_end_col = col - 1
+                    break
             valid_cols = [
-                col for col in range(tool_col + 1, ws.max_column + 1)
+                col for col in range(tool_col + 1, measure_end_col + 1)
                 if _valid_measure_header(ws.cell(row=row, column=col).value)
             ]
             if valid_cols:
