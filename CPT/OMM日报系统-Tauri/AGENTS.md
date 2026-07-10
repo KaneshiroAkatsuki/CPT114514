@@ -64,9 +64,11 @@ sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。Pow
 
 1. `git status --short`：只精确暂存本轮文件，不要 `git add .`；不要把 `node_modules/`、`dist/`、`src-tauri/target/`、`releases/` 加入提交。
 2. 若改到依赖、模板、打包或测试样本，确认对应文件已被 git 跟踪：`package-lock.json`、`src-tauri/Cargo.lock`、`src-tauri/resources/template.xlsx`、`scripts/*.ps1`、必要的 `CPT/日期文件夹/` 回归样本。
-3. 新电脑本机工具链先检测再安装：`node -v`、`npm -v`、`rustc -V`、`cargo -V`、`python --version`；Python 还需能 `import PyInstaller, openpyxl, lxml, PIL`。
-4. 新电脑首次构建建议顺序：`npm ci`，缺 Python 包时再装 `pyinstaller openpyxl lxml pillow`，然后运行 `python sidecar\build_sidecar.py`、`npm.cmd run smoke`、`npm.cmd run tauri-build-portable`、便携包脚本。
-5. 如果本机能跑、另一台电脑不行，优先检查未提交资源、Python 包、Rust/MSVC/WebView2 工具链、sidecar exe 是否重建，而不是先改业务逻辑。
+3. 只运行便携版时，不需要 Node/Rust/Python；把最新 zip 整包复制到新电脑并解压，目录内必须同时存在 `玉衡山科学院管理厅.exe`、`binaries/generate_report.exe`、`resources/template.xlsx`、`resources/tools/edge-cleaner/`、`data/manifests/portable-manifest.json`。Windows 需要 WebView2 Runtime；若启动白屏或打不开，先检查 WebView2。
+4. 从源码构建时，新电脑先检测工具链：`node -v`、`npm -v`、`rustc -V`、`cargo -V`、`python --version`。Rust 必须是 MSVC toolchain，并安装 Visual Studio Build Tools 的 “Desktop development with C++”/Windows SDK；Python 建议 3.10+，当前 3.12 可用。
+5. 源码首次构建顺序：`npm ci`，`python -m pip install -r sidecar\requirements.txt`，`python sidecar\build_sidecar.py`，`npm.cmd run smoke`，`npm.cmd run tauri-build-portable`，最后运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version <当前版本>`。
+6. Git 不会携带这些可再生成或交付产物：`releases/`、`src-tauri/binaries/*.exe`、`dist/`、`src-tauri/target/`、`node_modules/`。另一台电脑如果从源码开始，必须重建 sidecar exe 和 Tauri release exe；如果要直接交付给凯/现场，则单独复制最新便携 zip。
+7. 如果本机能跑、另一台电脑不行，优先检查：未提交资源文件、`sidecar/requirements.txt` 是否已安装、Rust/MSVC/WebView2 是否齐全、`src-tauri/binaries/generate_report.exe` 是否由当前源码重建、便携包 manifest 中 app/sidecar hash 是否和 `CURRENT_STATUS.md` 一致。
 
 ## 硬性约束
 
