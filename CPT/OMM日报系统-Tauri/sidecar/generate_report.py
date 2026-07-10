@@ -336,7 +336,10 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
     has_quantity_placeholder = has_placeholder('数量', '数', '量')
     has_test_type_placeholder = has_placeholder('检测类型', '类型')
 
-    if 'CNC' in folder_name:
+    folder_upper = folder_name.upper()
+    if 'FAI' in folder_upper or any(k in folder_name for k in ('测试片', '测试', '孔内直径', '外径', '内径', '直径', '圆度', 'cam件')):
+        result['station'] = '开发'
+    elif 'CNC' in folder_name:
         result['station'] = 'CNC'
     elif '射出' in folder_name:
         result['station'] = '射出'
@@ -348,16 +351,12 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
         result['station'] = '烧结'
     elif '焊接' in folder_name:
         result['station'] = '焊接'
-    elif 'IQC' in folder_name.upper():
+    elif 'IQC' in folder_upper:
         result['station'] = 'IQC'
-    elif 'OQC' in folder_name.upper():
+    elif 'OQC' in folder_upper:
         result['station'] = 'OQC'
-    elif re.search(r'\b[A-Z]QC\b', folder_name.upper()):
-        result['station'] = re.search(r'\b([A-Z]QC)\b', folder_name.upper()).group(1)
-    elif 'FAI' in folder_name.upper():
-        result['station'] = '开发'
-    elif any(k in folder_name for k in ('测试片', '测试', '孔内直径', '外径', '内径', '直径', '圆度', 'cam件')):
-        result['station'] = '开发'
+    elif re.search(r'\b[A-Z]QC\b', folder_upper):
+        result['station'] = re.search(r'\b([A-Z]QC)\b', folder_upper).group(1)
 
     # 没有任何生产工站特征时，默认归为开发，避免大量无意义弹窗
     if result['station'] == '/' and not _field_strong_pattern_detected('station', folder_name, parts):
@@ -484,8 +483,9 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
                     continue
                 prev_part = parts[idx - 1].strip() if idx > 0 else ''
                 next_part = parts[idx + 1].strip() if idx + 1 < len(parts) else ''
-                prev_upper = prev_part.upper()
                 if any(token in candidate or token in prev_part or token in next_part for token in role_tokens):
+                    continue
+                if _is_measurement_marker_token(prev_part) or _is_measurement_marker_token(next_part):
                     continue
                 if candidate.upper() in tool_tokens or _is_measurement_marker_token(candidate):
                     continue
@@ -496,10 +496,6 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
     known_sender_match = _match_known_sender_near_action()
     if known_sender_match:
         result['sender'] = known_sender_match
-    elif known_sender_list:
-        known_sender_match = _match_known_sender_without_action()
-        if known_sender_match:
-            result['sender'] = known_sender_match
 
     # 策略1：姓名(时间)?送测关键词 —— "张三送测" / "张三14:00送测" / "张三生成"
     sender_match = re.search(
@@ -535,6 +531,11 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
         )
         if m_name_pcs and _is_valid_sender(m_name_pcs.group(1)):
             result['sender'] = m_name_pcs.group(1)
+
+    if result['sender'] == '/' and known_sender_list:
+        known_sender_match = _match_known_sender_without_action()
+        if known_sender_match:
+            result['sender'] = known_sender_match
 
     if result['sender'] == '/':
         # 策略5：回退 —— 在 OMM/CMM 之前找中文或英文名，跳过工站名和短代码
@@ -609,10 +610,15 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
     # 送测时间
     m = re.search(r'\d+\.\d+[a-zA-Z]?-([\d.：:；;点]+?)-', folder_name)
     if not m:
+        m = re.search(r'\d+\.\d+[a-zA-Z]?-(\d{1,2}[点:]\d{0,2}(?:分)?)(?=[\u4e00-\u9fa5A-Za-z])', folder_name.replace('：', ':'))
+    if not m:
         m = re.search(r'-(\d{1,2}点\d{0,2}(?:分)?)-', folder_name)
     if not m:
         # 刘前程2点30送测 / 彭立娜14:00送测 这类无前后横杠的时间
         m = re.search(r'(\d{1,2}[点:]\d{0,2}(?:分)?)送测', folder_name.replace('：', ':'))
+    if not m:
+        # 7:55张颖龙送测 / 7点55张颖龙送测 这类时间紧贴送测人的写法
+        m = re.search(r'(\d{1,2}[点:]\d{0,2}(?:分)?)[\s\-]*[\u4e00-\u9fa5]{2,4}送测', folder_name.replace('：', ':'))
     if m:
         candidate = m.group(1).replace('：', ':').replace('；', ';').replace('点', ':')
         if re.match(r'^\d{1,2}[:;]\d{2}$', candidate) or re.match(r'^\d+\.\d+$', candidate):

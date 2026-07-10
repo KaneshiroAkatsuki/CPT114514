@@ -101,6 +101,20 @@ for row in range(12, 18):
 qty = gr._count_sheet_quantity(ws)
 if qty != 12:
     raise SystemExit(f"expected mixed CMM/OMM synthetic fixture to count 12 OMM columns, got {qty}")
+
+folder = "613-41428-(035-625)-\u710a\u63a5 -AOI-\u5bf9\u6807-FAI6,11,12-6.30B-7\uff1a55\u5f20\u9896\u9f99\u9001\u6d4b-20PCS-CMM-\u5f20\u5143\u5e86-OMM-\u79b9\u6b23"
+parsed, missing, placeholders = gr.parse_folder_name(folder)
+expected = {
+    "station": "\u5f00\u53d1",
+    "product": "035",
+    "sender": "\u5f20\u9896\u9f99",
+    "send_time": "7:55",
+}
+for key, value in expected.items():
+    if parsed.get(key) != value:
+        raise SystemExit(f"expected {key}={value!r} for FAI/AOI fixture, got {parsed.get(key)!r}; parsed={parsed}")
+if missing or placeholders:
+    raise SystemExit(f"expected no missing/placeholders for FAI/AOI fixture, got missing={missing}, placeholders={placeholders}, parsed={parsed}")
 '@
     $fixtureCheck | & python -X utf8 -
     Assert-LastExitCode "Fixture recognition regression"

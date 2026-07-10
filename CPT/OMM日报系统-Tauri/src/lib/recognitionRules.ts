@@ -158,6 +158,10 @@ export function recognizeStation(name: string, rules?: RecognitionRules): { stat
     matchedRules.push("内置测试片工站规则：测试片 -> 开发");
     return { station: "开发", matchedRules, warnings };
   }
+  if (name.toUpperCase().includes("FAI")) {
+    matchedRules.push("内置 FAI 工站规则：FAI -> 开发");
+    return { station: "开发", matchedRules, warnings };
+  }
 
   const keywordStations = KNOWN_STATION_WORDS;
   for (const keyword of keywordStations) {
@@ -315,6 +319,18 @@ function applySenderRecognition(folderName: string, result: Partial<RealManualTa
       pushWarning(warnings, `送测人“${sender}”不像有效姓名，请人工确认`);
     }
     result.send_time = normalizeSendTime(inlineWithTime[2], warnings) || result.send_time;
+    return;
+  }
+
+  const timeThenSender = folderName.match(/(\d{1,2}(?:点\d{0,2}|[:：]\d{1,2}))[\s\-_]*([\u4e00-\u9fa5]{2,6})送测/);
+  if (timeThenSender) {
+    const sender = timeThenSender[2].trim();
+    if (isLikelyChineseName(sender)) {
+      result.sender = sender;
+    } else {
+      pushWarning(warnings, `送测人“${sender}”不像有效姓名，请人工确认`);
+    }
+    result.send_time = normalizeSendTime(timeThenSender[1], warnings) || result.send_time;
     return;
   }
 

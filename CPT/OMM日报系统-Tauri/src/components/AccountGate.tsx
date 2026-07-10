@@ -9,7 +9,7 @@ import { MainWindow } from "@/components/MainWindow";
 
 type GateMode = "login" | "register" | "forgot";
 
-const APP_VERSION = "5.8.1";
+const APP_VERSION = "5.8.2";
 const REMEMBER_LOGIN_KEY = "yuhengshan.rememberLogin.v1";
 
 const loginNotes = [

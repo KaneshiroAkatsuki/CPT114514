@@ -1,7 +1,7 @@
 # 玉衡山科学院管理厅 - AGENTS.md
 
 更新时间：2026-07-10 18:10 +08:00
-当前应用版本：5.8.1
+当前应用版本：5.8.2
 适用范围：Codex、opencode，以及其他会读取 `AGENTS.md` 的代码代理。
 
 ## 入口原则
@@ -37,7 +37,7 @@
 
 - 项目目录：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri`
 - Git 根目录：`D:\KSoftware\KMAA`
-- 当前便携包：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\releases\玉衡山科学院管理厅_便携版_5.8.1.zip`
+- 当前便携包：`D:\KSoftware\KMAA\CPT\OMM日报系统-Tauri\releases\玉衡山科学院管理厅_便携版_5.8.2.zip`
 
 ## 技术栈
 
@@ -53,7 +53,7 @@ npm.cmd run smoke
 npx.cmd tsc --noEmit
 Push-Location src-tauri; cargo check --release; Pop-Location
 npm.cmd run tauri-build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.2
 ```
 
 sidecar exe 只从 stdin 读取 JSONL，不支持 `--input` 或 `--output`。PowerShell 验证不要使用 `< file`。

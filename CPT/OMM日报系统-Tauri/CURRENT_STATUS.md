@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- 应用版本：5.8.1
+- 应用版本：5.8.2
 - 应用名称：玉衡山科学院管理厅
 - 包名：`yuhengshan-academy-manager`
 - Tauri 标识：`com.kaneshiro.yuhengshan.academy.manager`
@@ -18,7 +18,7 @@
 
 ## 最新便携版
 
-- 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.1.zip`
+- 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.2.zip`
 - SHA256：`F9BAD9104B951FE6C92D8D8F9321A336E18B744A2D25A28A30A7BD1DE56D01EC`
 - packaged_at：`2026-07-04T00:58:19`
 - app：`2f6307206ffe2466b9ba731f494bddc934c4387c4f2b90423cb75e984779cd9f`
@@ -74,7 +74,7 @@ npx.cmd tsc --noEmit
 Push-Location src-tauri; cargo check --release; Pop-Location
 python -m py_compile sidecar\generate_report.py sidecar\sidecar_main.py
 npm.cmd run tauri-build
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-portable.ps1 -Version 5.8.2
 ```
 
 ## 发布策略

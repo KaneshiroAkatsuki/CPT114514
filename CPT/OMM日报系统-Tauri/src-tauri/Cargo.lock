@@ -4896,7 +4896,7 @@ dependencies = [
 
 [[package]]
 name = "yuhengshan-academy-manager"
-version = "5.8.1"
+version = "5.8.2"
 dependencies = [
  "anyhow",
  "once_cell",
