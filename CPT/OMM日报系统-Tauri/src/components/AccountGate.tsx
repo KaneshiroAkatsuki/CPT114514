@@ -9,7 +9,7 @@ import { MainWindow } from "@/components/MainWindow";
 
 type GateMode = "login" | "register" | "forgot";
 
-const APP_VERSION = "5.8.2";
+const APP_VERSION = "5.8.3";
 const REMEMBER_LOGIN_KEY = "yuhengshan.rememberLogin.v1";
 
 const loginNotes = [
@@ -304,7 +304,7 @@ export function AccountGate() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f5f5f7] text-sm text-slate-500">
-        <div className="prayer-loader" role="status" aria-live="polite" aria-label="正在加载本地账户">
+        <div className="prayer-loader" role="status" aria-live="polite" aria-label="少女祈祷中">
           <div className="prayer-loader__halo" aria-hidden="true">
             <span className="prayer-loader__core" />
             <span className="prayer-loader__spark prayer-loader__spark--one" />
@@ -312,10 +312,10 @@ export function AccountGate() {
             <span className="prayer-loader__spark prayer-loader__spark--three" />
           </div>
           <div className="prayer-loader__text">
-            正在加载本地账户
-            <span className="prayer-loader__dot">.</span>
-            <span className="prayer-loader__dot prayer-loader__dot--two">.</span>
-            <span className="prayer-loader__dot prayer-loader__dot--three">.</span>
+            少女祈祷中
+            <span className="prayer-loader__dot">。</span>
+            <span className="prayer-loader__dot prayer-loader__dot--two">。</span>
+            <span className="prayer-loader__dot prayer-loader__dot--three">。</span>
           </div>
         </div>
       </div>
