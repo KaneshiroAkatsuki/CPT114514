@@ -670,7 +670,7 @@ def parse_folder_name(folder_name, parent_shift_suffix='', parent_date='', known
         if has_quantity_placeholder:
             placeholders.append('quantity')
         elif result['station'] == 'CNC':
-            # CNC 固定 20 分钟，没写数量时直接标 "/"，不弹窗
+            # CNC 件数由 xlsx 或 parse_all_folders 的 4 件/包默认值补全，不在此处弹窗
             result['quantity_str'] = '/'
         else:
             missing.append('quantity')
@@ -836,9 +836,23 @@ def _count_sheet_quantity(ws):
     # 同一个 sheet 里可能纵向复制多个测量表（如首件 FAI 表格上半段 7 件、下半段 4 件）。
     # 不能只选一个最佳"检测工具"锚点；每段应独立统计后累加。
     tool_headers = []
-    for row in range(1, ws.max_row + 1):
-        for col in range(1, min(ws.max_column + 1, 80)):
-            text = _compact_text(ws.cell(row=row, column=col).value)
+    # 缓存边界并顺序读取单元格。部分现场表格虽然只有几十行有效内容，
+    # 但样式会把 used range 扩到上万行；在每一行里重复读取 ws.max_column
+    # 会反复扫描整张工作表，导致预览和生成长时间没有返回。
+    scan_max_row = ws.max_row
+    scan_max_col = min(ws.max_column, 79)
+    for row, values in enumerate(
+        ws.iter_rows(
+            min_row=1,
+            max_row=scan_max_row,
+            min_col=1,
+            max_col=scan_max_col,
+            values_only=True,
+        ),
+        start=1,
+    ):
+        for col, value in enumerate(values, start=1):
+            text = _compact_text(value)
             if '检测' not in text or '工具' not in text:
                 continue
             tool_headers.append((row, col))
@@ -1178,7 +1192,7 @@ def parse_all_folders(base_dir, operator_name=OPERATOR_NAME, known_senders=None,
                 missing.append('operator')
         review_map[folder] = {'missing': missing, 'placeholders': placeholders, 'warnings': review_warnings}
 
-        # 数量优先级：文件夹名 PCS > xlsx 实际计数 > 缺失/弹窗
+        # 数量优先级：文件夹名 PCS > xlsx 实际计数 > CNC 默认 4 件 > 缺失/弹窗
         actual_quantity = None
         nonstandard_xlsx = False
         qs = parsed['quantity_str']
@@ -1196,6 +1210,16 @@ def parse_all_folders(base_dir, operator_name=OPERATOR_NAME, known_senders=None,
             if actual_quantity is not None and actual_quantity > 0:
                 quantity = actual_quantity
                 # xlsx 已统计出数量，不再因数量缺失弹窗
+                if 'quantity' in missing:
+                    missing.remove('quantity')
+                if 'quantity' in placeholders:
+                    placeholders.remove('quantity')
+            elif parsed['station'] == 'CNC':
+                # 普通 CNC 通常固定 4 件/包。文件夹和非标准 xlsx 都没有可用件数时，
+                # 采用业务默认值，避免把本可直接排程的 CNC 包误送入审核或跳过。
+                quantity = 4
+                if actual_quantity == 0:
+                    nonstandard_xlsx = True
                 if 'quantity' in missing:
                     missing.remove('quantity')
                 if 'quantity' in placeholders:
@@ -1679,7 +1703,7 @@ def schedule_tasks(records, shift_label='A', early_leave=False,
                 durations.append(dur)
                 duration_sources.append('zhengxing_cnc')
             elif r.get('station') == 'CNC':
-                durations.append(20.0)
+                durations.append(30.0)
                 duration_sources.append('cnc')
             elif r.get('manual_duration') is not None and r['manual_duration'] > 0:
                 durations.append(float(r['manual_duration']))

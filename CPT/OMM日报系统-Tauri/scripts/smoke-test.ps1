@@ -52,6 +52,7 @@ Invoke-SmokeStep "Fixture recognition regression" {
 import os
 import sys
 import tempfile
+import time
 
 from openpyxl import Workbook
 
@@ -75,6 +76,65 @@ if not any("14PCS" in folder for folder in folders):
 qty_pairs = [(r.get("folder"), r.get("quantity"), r.get("actual_quantity")) for r in records if r.get("operator") == "\u79b9\u6b23"]
 if any(quantity != actual for _, quantity, actual in qty_pairs):
     raise SystemExit(f"expected 7.8A fixture xlsx quantities to match folder PCS after multi-block recognition, got {qty_pairs}")
+
+# The 7.9A fixture has little real content, but styles expand its used range to 13,327 rows.
+# Guard against preview/generate appearing stuck while scanning that workbook.
+bloated_base = os.path.abspath(os.path.join(os.getcwd(), "..", "\u65e5\u671f\u6587\u4ef6\u5939", "7.9A"))
+bloated_matches = []
+for folder_name in os.listdir(bloated_base):
+    if "260628003" not in folder_name or "3FC09#" not in folder_name:
+        continue
+    folder_path = os.path.join(bloated_base, folder_name)
+    bloated_matches.extend(
+        os.path.join(folder_path, name)
+        for name in os.listdir(folder_path)
+        if name.lower().endswith(".xlsx")
+    )
+if len(bloated_matches) != 1:
+    raise SystemExit(f"expected one bloated 7.9A xlsx fixture, got {bloated_matches}")
+
+bloated_started = time.perf_counter()
+bloated_qty = gr.read_xlsx_quantity(bloated_matches[0])
+bloated_elapsed = time.perf_counter() - bloated_started
+if bloated_qty != 14:
+    raise SystemExit(f"expected bloated 7.9A fixture quantity 14, got {bloated_qty}")
+if bloated_elapsed > 10:
+    raise SystemExit(f"bloated 7.9A fixture took too long: {bloated_elapsed:.2f}s")
+
+# One 7.9A CNC first-piece workbook has no readable quantity. CNC should still
+# use the business default of 4 pieces/package and remain directly schedulable.
+cnc_records, cnc_review_map = gr.parse_all_folders(bloated_base, operator_name="\u79b9\u6b23")
+cnc_matches = [
+    record for record in cnc_records
+    if record.get("folder", "").startswith("035-CNC-\u9996\u4ef6-9#-ww132-260701100-")
+]
+if len(cnc_matches) != 1:
+    raise SystemExit(f"expected one 7.9A CNC missing-quantity fixture, got {cnc_matches}")
+cnc_record = cnc_matches[0]
+if cnc_record.get("actual_quantity") != 0 or cnc_record.get("quantity") != 4:
+    raise SystemExit(
+        "expected unreadable CNC xlsx quantity to default to 4 pieces, "
+        f"got actual={cnc_record.get('actual_quantity')} quantity={cnc_record.get('quantity')}"
+    )
+cnc_review = cnc_review_map.get(cnc_record["folder"], {})
+if "quantity" in cnc_review.get("missing", []) or "quantity" in cnc_review.get("placeholders", []):
+    raise SystemExit(f"expected CNC default quantity to bypass quantity review, got {cnc_review}")
+cnc_tasks, _ = gr.schedule_tasks(
+    [cnc_record],
+    shift_label="A",
+    leave_strategy="normal",
+    enable_hand=False,
+    enable_other=False,
+    duration_rules=[],
+)
+cnc_work_tasks = [task for task in cnc_tasks if task.get("duration_source") == "cnc"]
+cnc_minutes = (
+    cnc_work_tasks[0].get("_schedule_meta", {}).get("cnc_effective", 0.0)
+    if cnc_work_tasks
+    else 0.0
+)
+if abs(cnc_minutes - 30.0) > 0.001:
+    raise SystemExit(f"expected ordinary CNC fallback duration 30 minutes/package, got {cnc_minutes}")
 
 wb = Workbook()
 ws = wb.active

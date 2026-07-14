@@ -1,6 +1,6 @@
 # 玉衡山科学院管理厅当前状态
 
-更新时间：2026-07-10 19:39 +08:00
+更新时间：2026-07-14 14:24 +08:00
 
 ## 当前版本
 
@@ -19,13 +19,13 @@
 ## 最新便携版
 
 - 便携包：`releases/玉衡山科学院管理厅_便携版_5.8.5.zip`
-- SHA256：`35857B0D1C124C27CFCAC995E6DF19ED0EAF9FE21929BE53C73B27315E91E032`
-- packaged_at：`2026-07-10T19:38:58`
-- app：`685b3e1d4c243074c9dce32dc5400cc5dd3f7ae31bdeff11e24e0d1c23508114`
-- sidecar：`4448e68b4b2261b7ad001d005bd36b8d1680952d621cbe34477a978f845751d1`
+- SHA256：`5d25a3d595265aa32f666710f4060c33d7b5e16ded2fff2651b37d08da4db9b6`
+- packaged_at：`2026-07-14T14:23:42`
+- app：`2ec580d66d25383125e468337c418861292ab79d3c6f379e6de57503080a3ac6`
+- sidecar：`d7fbe12f95cd213e29f384e0478b24d22cb20abcfd8cdeee9f960485ceedf376`
 - template：`18fa2857aad258bf517583f9263fb552cf397a8e0bbb8c1ee43e65b64a0894da`
-- personal_cleaner_script：`3feed427724db51f876224f3e93c4e9e7b732aecec55826840ee44c901154a03`
-- personal_cleaner_launcher：`c7781e5792081bf24e1d0264fdfa25ff5cc08b817639f451f70fe8eb361071ac`
+- personal_cleaner_script：`07cdaa16f275c7cd4c7ad514d865d8083c084419334726fcd12fe83e19db48c3`
+- personal_cleaner_launcher：`e9c24103e5a4042aed0cc5a6e774428be71e79523e0ce73f7e0652d8ee94cfc7`
 
 ## 近期重点
 
