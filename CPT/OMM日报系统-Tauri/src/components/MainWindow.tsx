@@ -58,6 +58,12 @@ type AppConfirmRequest = {
   resolve: (confirmed: boolean) => void;
 };
 
+type OperationNotice = {
+  title: string;
+  description: string;
+  tone?: "info" | "warning" | "danger";
+};
+
 type ModuleView = "home" | "daily" | "dataManagement";
 type QueueContextMenu = { x: number; y: number; index: number };
 const DEFAULT_FILLER_POSITION: FillerPosition = "middle";
@@ -100,7 +106,10 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
   const [logs, setLogs] = useState<string[]>([]);
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [operationStatus, setOperationStatus] = useState("");
+  const [operationNotice, setOperationNotice] = useState<OperationNotice | null>(null);
   const [lastOutputPath, setLastOutputPath] = useState<string | null>(null);
 
   // Date folder selector
@@ -911,12 +920,22 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const err = validateGlobalSettings();
     if (err) {
       addLog(`预览已阻止: ${err}`);
+      setOperationNotice({
+        title: "暂时无法预览",
+        description: err,
+        tone: "warning",
+      });
       return;
     }
     const targetIndex = Array.from(selectedQueueItems).sort((a, b) => a - b)[0] ?? 0;
     const targetItem = queue[targetIndex];
     if (!targetItem) {
       addLog("队列为空，无法预览");
+      setOperationNotice({
+        title: "暂时无法预览",
+        description: "请先把一个日期文件夹加入待生成队列。",
+        tone: "info",
+      });
       return;
     }
     await handlePreviewForItem(targetItem, targetIndex);
@@ -926,12 +945,26 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const err = validateGlobalSettings();
     if (err) {
       addLog(`预览已阻止: ${err}`);
+      setOperationNotice({
+        title: "暂时无法预览",
+        description: err,
+        tone: "warning",
+      });
       return;
     }
+    setIsPreviewing(true);
+    setOperationStatus(`正在扫描 ${targetItem.dateFolder}...`);
+    setOperationNotice(null);
     try {
       const parseResponse = await parseFolders(targetItem.fullPath, operatorName);
       if (!parseResponse.success) {
-        addLog(`预览扫描失败: ${parseResponse.error}`);
+        const message = parseResponse.error || "日期文件夹扫描失败，请确认目录仍可访问。";
+        addLog(`预览扫描失败: ${message}`);
+        setOperationNotice({
+          title: "预览未完成",
+          description: message,
+          tone: "danger",
+        });
         return;
       }
       const records = parseResponse.data.records;
@@ -957,6 +990,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         targetItem.settingsOverride?.duration_overrides,
         settings.duration_rules
       );
+      setOperationStatus(`正在计算 ${targetItem.dateFolder} 的日报预览...`);
       const previewResponse = await preview(targetItem.fullPath, durationAppliedRecords, settings);
       if (previewResponse.success && previewResponse.data) {
         setPreviewData(previewResponse.data);
@@ -965,10 +999,25 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         setPreviewOpen(true);
         addLog(`预览已打开: ${targetItem.dateFolder}`);
       } else {
-        addLog(`预览失败: ${previewResponse.error}`);
+        const message = previewResponse.error || "sidecar 未返回预览结果，请打开诊断日志查看详情。";
+        addLog(`预览失败: ${message}`);
+        setOperationNotice({
+          title: "预览未完成",
+          description: message,
+          tone: "danger",
+        });
       }
     } catch (e) {
+      const message = `程序调用失败：${e}`;
       addLog(`预览错误: ${e}`);
+      setOperationNotice({
+        title: "预览未完成",
+        description: message,
+        tone: "danger",
+      });
+    } finally {
+      setIsPreviewing(false);
+      setOperationStatus("");
     }
   };
 
@@ -1617,6 +1666,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     addLog("审核已取消，停止生成");
     setIsGenerating(false);
     setProgress(0);
+    setOperationStatus("");
     generateStateRef.current = null;
   };
 
@@ -1657,6 +1707,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       });
       setIsGenerating(false);
       setProgress(0);
+      setOperationStatus("");
       return;
     }
 
@@ -1668,6 +1719,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
 
     try {
+      setOperationStatus(`正在写入 ${item.dateFolder} 的报表文件...`);
       const genResponse = await generate(item.fullPath, records, settings);
       if (genResponse.success) {
         addLog(`  生成完成: ${genResponse.data.output_path}`);
@@ -1741,6 +1793,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       persistConfig();
       setIsGenerating(false);
       setProgress(100);
+      setOperationStatus("");
 
       // Auto-open output directory on success —— 打开所有报表的公共父目录
       const allPaths = outputPathsRef.current.slice();
@@ -1778,6 +1831,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const totalSteps = queue.length;
     setProgress(Math.round((currentStep / totalSteps) * 100));
     addLog(`[${currentStep}/${totalSteps}] 处理: ${item.dateFolder}`);
+    setOperationStatus(`正在扫描 ${item.dateFolder} (${currentStep}/${totalSteps})...`);
 
     try {
       const parseResponse = await parseFolders(item.fullPath, operatorName);
@@ -1825,6 +1879,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         });
         setIsGenerating(false);
         setProgress(0);
+        setOperationStatus("");
         return;
       }
 
@@ -1852,6 +1907,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         setPendingRecords(durationAppliedRecords);
         setReviewMap(filteredReviewMap);
         setReviewOpen(true);
+        setOperationStatus(`等待确认 ${item.dateFolder} 的识别结果...`);
         generateStateRef.current = {
           currentIndex: index,
           successCount,
@@ -1877,15 +1933,27 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const err = validateGlobalSettings();
     if (err) {
       addLog(`生成已阻止: ${err}`);
+      setOperationNotice({
+        title: "暂时无法生成",
+        description: err,
+        tone: "warning",
+      });
       return;
     }
     if (queue.length === 0) {
       addLog("队列为空，请先添加日期文件夹");
+      setOperationNotice({
+        title: "暂时无法生成",
+        description: "请先把一个日期文件夹加入待生成队列。",
+        tone: "info",
+      });
       return;
     }
 
     setIsGenerating(true);
     setProgress(0);
+    setOperationStatus("正在准备生成报表...");
+    setOperationNotice(null);
     addLog("开始生成...");
     outputPathsRef.current = []; // 清空上一轮的输出路径列表
     schedWarningsRef.current = []; // 清空上一轮的排程警告
@@ -1931,6 +1999,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
       });
       setIsGenerating(false);
       setProgress(0);
+      setOperationStatus("");
       return;
     }
 
@@ -1941,6 +2010,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     }
 
     try {
+      setOperationStatus(`正在写入 ${item.dateFolder} 的报表文件...`);
       const genResponse = await generate(item.fullPath, records, settings);
       if (genResponse.success) {
         addLog(`  生成完成: ${genResponse.data.output_path}`);
@@ -1996,6 +2066,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     } finally {
       setIsGenerating(false);
       setProgress(100);
+      setOperationStatus("");
     }
   };
 
@@ -2003,12 +2074,19 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
     const err = validateGlobalSettings();
     if (err) {
       addLog(`生成已阻止: ${err}`);
+      setOperationNotice({
+        title: "暂时无法生成",
+        description: err,
+        tone: "warning",
+      });
       return;
     }
     if (index < 0 || index >= queue.length) return;
     const item = itemOverride ?? queue[index];
     setIsGenerating(true);
     setProgress(0);
+    setOperationStatus(`正在扫描 ${item.dateFolder}...`);
+    setOperationNotice(null);
     outputPathsRef.current = [];
     schedWarningsRef.current = [];
     failureDetailsRef.current = [];
@@ -2031,6 +2109,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           pendingItems: [],
         });
         setIsGenerating(false);
+        setOperationStatus("");
         return;
       }
       const records = parseResponse.data.records;
@@ -2067,6 +2146,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
           pendingItems: queue.slice(index).map((it) => it.dateFolder),
         });
         setIsGenerating(false);
+        setOperationStatus("");
         return;
       }
 
@@ -2091,6 +2171,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         setPendingRecords(durationAppliedRecords);
         setReviewMap(filteredReviewMap);
         setReviewOpen(true);
+        setOperationStatus(`等待确认 ${item.dateFolder} 的识别结果...`);
         generateStateRef.current = {
           currentIndex: index,
           successCount: 0,
@@ -2121,6 +2202,7 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         pendingItems: [],
       });
       setIsGenerating(false);
+      setOperationStatus("");
     }
   };
 
@@ -2497,21 +2579,22 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                     variant="outline"
                     size="lg"
                     onClick={handlePreview}
-                    disabled={isGenerating || queue.length === 0}
+                    disabled={isGenerating || isPreviewing || queue.length === 0}
                     className="min-w-[132px] gap-1.5"
                   >
-                    预览日报
+                    {isPreviewing && <RefreshCw className="h-4 w-4 animate-spin" />}
+                    {isPreviewing ? "正在预览" : "预览日报"}
                   </Button>
                   <Button
                     size="lg"
                     onClick={handleGenerate}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isPreviewing}
                     className="min-w-[148px] gap-2 shadow-[0_12px_28px_rgba(10,132,255,0.22)]"
                   >
-                    <Play className="h-4 w-4" />
-                    生成报表
+                    {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    {isGenerating ? "正在生成" : "生成报表"}
                   </Button>
-                  {lastOutputPath && !isGenerating && (
+                  {lastOutputPath && !isGenerating && !isPreviewing && (
                     <Button variant="secondary" size="lg" onClick={() => openFolder(lastOutputPath)} className="gap-1.5">
                       <FolderOpen className="h-4 w-4" />
                       打开输出文件夹
@@ -2519,15 +2602,20 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
                   )}
                 </div>
               </div>
-              {isGenerating && (
+              {(isGenerating || isPreviewing) && (
                 <div className="mx-auto mt-4 max-w-md">
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className="h-full bg-blue-500 transition-all"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-center text-sm font-medium text-slate-600">{progress}%</p>
+                  {isGenerating && (
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full bg-blue-500 transition-all"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-center text-sm font-medium text-slate-600">
+                    {operationStatus || (isPreviewing ? "正在准备预览..." : "正在生成报表...")}
+                    {isGenerating ? ` · ${progress}%` : ""}
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -2943,6 +3031,17 @@ export function MainWindow({ currentAccount, onAccountUpdated, onSwitchAccount }
         tone={appConfirm?.tone}
         onConfirm={() => resolveAppConfirm(true)}
         onCancel={() => resolveAppConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(operationNotice)}
+        title={operationNotice?.title || ""}
+        description={operationNotice?.description}
+        confirmLabel="知道了"
+        cancelLabel={null}
+        tone={operationNotice?.tone}
+        onConfirm={() => setOperationNotice(null)}
+        onCancel={() => setOperationNotice(null)}
       />
 
       <ConfirmDialog
